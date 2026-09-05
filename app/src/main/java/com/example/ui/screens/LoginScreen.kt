@@ -27,7 +27,7 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit
 ) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
-    var ip by remember { mutableStateOf("192.168.88.1") }
+    var ip by remember { mutableStateOf("10.10.10.1") }
     var user by remember { mutableStateOf("admin") }
     var pass by remember { mutableStateOf("") }
 

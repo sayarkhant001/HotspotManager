@@ -25,6 +25,14 @@ data class ActiveUser(
     val bytesOut: String
 )
 
+data class RouterProfileInfo(
+    val id: String,
+    val name: String,
+    val rateLimit: String = "",
+    val sharedUsers: String = "1",
+    val onLogin: String = ""
+)
+
 class MikrotikClient {
     private var connection: ApiConnection? = null
 
@@ -51,10 +59,13 @@ class MikrotikClient {
     suspend fun disconnect() = withContext(Dispatchers.IO) {
         try {
             connection?.close()
+            connection = null
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
+
+    fun isConnected(): Boolean = connection != null && connection?.isConnected == true
 
     suspend fun getRouterStats(): RouterStats? = withContext(Dispatchers.IO) {
         try {
@@ -73,6 +84,32 @@ class MikrotikClient {
         } catch (e: Exception) {
             e.printStackTrace()
             null
+        }
+    }
+
+    suspend fun getInterfaceTraffic(interfaceName: String = "hotspot-bridge"): Pair<Long, Long> = withContext(Dispatchers.IO) {
+        try {
+            // /interface/monitor-traffic interface=<name> once=
+            val res = connection?.execute("/interface/monitor-traffic =interface=$interfaceName =once=")
+            if (!res.isNullOrEmpty()) {
+                val data = res[0]
+                val rx = data["rx-bits-per-second"]?.toLongOrNull() ?: 0L
+                val tx = data["tx-bits-per-second"]?.toLongOrNull() ?: 0L
+                Pair(rx, tx)
+            } else Pair(0L, 0L)
+        } catch (e: Exception) {
+            // Fallback: try ether1 if hotspot-bridge is not directly named
+            try {
+                val resFallback = connection?.execute("/interface/monitor-traffic =interface=ether1 =once=")
+                if (!resFallback.isNullOrEmpty()) {
+                    val data = resFallback[0]
+                    val rx = data["rx-bits-per-second"]?.toLongOrNull() ?: 0L
+                    val tx = data["tx-bits-per-second"]?.toLongOrNull() ?: 0L
+                    Pair(rx, tx)
+                } else Pair(0L, 0L)
+            } catch (ex: Exception) {
+                Pair(0L, 0L)
+            }
         }
     }
 
@@ -97,16 +134,85 @@ class MikrotikClient {
         }
     }
 
+    suspend fun removeActiveSession(id: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            connection?.execute("/ip/hotspot/active/remove =.id=$id")
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
     suspend fun banMacAddress(mac: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            // Drop from active
-            val active = connection?.execute("/ip/hotspot/active/print where mac-address=$mac")
-            if (!active.isNullOrEmpty()) {
-                val id = active[0][".id"]
-                connection?.execute("/ip/hotspot/active/remove .id=$id")
+            // Drop active session if any
+            val active = connection?.execute("/ip/hotspot/active/print")
+            active?.forEach {
+                if (it["mac-address"].equals(mac, ignoreCase = true)) {
+                    val id = it[".id"]
+                    if (!id.isNullOrEmpty()) {
+                        connection?.execute("/ip/hotspot/active/remove =.id=$id")
+                    }
+                }
             }
             // Add to IP binding as blocked
-            connection?.execute("/ip/hotspot/ip-binding/add mac-address=$mac type=blocked comment=\"Banned via App\"")
+            connection?.execute("/ip/hotspot/ip-binding/add =mac-address=$mac =type=blocked =comment=Banned via App")
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    suspend fun getRouterProfiles(): List<RouterProfileInfo> = withContext(Dispatchers.IO) {
+        try {
+            val res = connection?.execute("/ip/hotspot/user/profile/print")
+            res?.map {
+                RouterProfileInfo(
+                    id = it[".id"] ?: "",
+                    name = it["name"] ?: "",
+                    rateLimit = it["rate-limit"] ?: "",
+                    sharedUsers = it["shared-users"] ?: "1",
+                    onLogin = it["on-login"] ?: ""
+                )
+            } ?: emptyList()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    suspend fun addRouterProfile(name: String, rateLimit: String, sharedUsers: Int = 1): Boolean = withContext(Dispatchers.IO) {
+        try {
+            var cmd = "/ip/hotspot/user/profile/add =name=$name =shared-users=$sharedUsers"
+            if (rateLimit.isNotBlank()) {
+                cmd += " =rate-limit=$rateLimit"
+            }
+            connection?.execute(cmd)
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    suspend fun addHotspotUser(
+        name: String,
+        password: String,
+        profile: String,
+        comment: String,
+        limitBytesTotal: Long = 0L
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            var cmd = "/ip/hotspot/user/add =name=$name =password=$password =profile=$profile"
+            if (comment.isNotBlank()) {
+                cmd += " =comment=$comment"
+            }
+            if (limitBytesTotal > 0L) {
+                cmd += " =limit-bytes-total=$limitBytesTotal"
+            }
+            connection?.execute(cmd)
             true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -114,3 +220,4 @@ class MikrotikClient {
         }
     }
 }
+

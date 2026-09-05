@@ -9,12 +9,16 @@ import kotlinx.serialization.Serializable
 data class UserProfile(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val name: String,
-    val downloadLimitMbps: Int,
-    val uploadLimitMbps: Int,
-    val dataLimitMb: Int,
-    val durationMinutes: Int,
-    val price: Double,
-    val validityDays: Int
+    val sharedUsers: Int = 1,
+    val rateLimit: String = "5M/5M",
+    val downloadLimitMbps: Int = 5,
+    val uploadLimitMbps: Int = 5,
+    val dataLimitMb: Int = 0, // 0 = unlimited
+    val durationMinutes: Int = 0, // 0 = unlimited
+    val price: Double = 0.0,
+    val sellingPrice: Double = 0.0,
+    val validityDays: Int = 1,
+    val lockUser: Boolean = false
 )
 
 @Entity(tableName = "vouchers")
@@ -22,15 +26,21 @@ data class UserProfile(
 data class Voucher(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val code: String,
-    val profileId: Int,
+    val username: String = code,
+    val password: String = "",
+    val isAccount: Boolean = false,
+    val profileId: Int = 0,
     val profileName: String,
-    val downloadLimitMbps: Int,
-    val uploadLimitMbps: Int,
-    val dataLimitMb: Int,
-    val durationMinutes: Int,
+    val downloadLimitMbps: Int = 0,
+    val uploadLimitMbps: Int = 0,
+    val dataLimitMb: Int = 0,
+    val durationMinutes: Int = 0,
+    val validityDays: Int = 1,
+    val price: Double = 0.0,
     val generatedAt: Long = System.currentTimeMillis(),
     val isUsed: Boolean = false,
-    val styleType: Int = 1
+    val styleType: Int = 1,
+    val comment: String = ""
 )
 
 @Entity(tableName = "sessions")
@@ -39,9 +49,14 @@ data class RouterSessionLog(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val macAddress: String,
     val ipAddress: String,
-    val voucherCode: String?,
-    val dataUsedMb: Double,
-    val sessionStartTime: Long,
-    val sessionEndTime: Long?,
-    val isBanned: Boolean = false
+    val voucherCode: String? = null,
+    val uptime: String = "",
+    val bytesIn: Long = 0L,
+    val bytesOut: Long = 0L,
+    val dataUsedMb: Double = 0.0,
+    val sessionStartTime: Long = System.currentTimeMillis(),
+    val sessionEndTime: Long? = null,
+    val isBanned: Boolean = false,
+    val dateKey: String = "" // format: YYYY-MM-DD
 )
+

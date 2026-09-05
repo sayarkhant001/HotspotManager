@@ -3,35 +3,51 @@ package com.example.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.ui.components.GlassCard
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.data.remote.ActiveUser
+import com.example.ui.components.GlassCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController) {
     val users by viewModel.activeUsers.collectAsStateWithLifecycle()
+    var searchQuery by remember { mutableStateOf("") }
+    var userToBan by remember { mutableStateOf<ActiveUser?>(null) }
+    var userToKick by remember { mutableStateOf<ActiveUser?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.fetchRouterData()
+    }
+
+    val filteredUsers = remember(users, searchQuery) {
+        if (searchQuery.isBlank()) users
+        else users.filter {
+            it.user.contains(searchQuery, ignoreCase = true) ||
+            it.address.contains(searchQuery, ignoreCase = true) ||
+            it.macAddress.contains(searchQuery, ignoreCase = true)
+        }
     }
 
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
-                title = { Text("Active Sessions") },
+                title = { Text("Active Sessions (${users.size})", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
@@ -40,48 +56,224 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                 },
                 actions = {
                     TextButton(onClick = { viewModel.fetchRouterData() }) {
-                        Text("Refresh", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text("Refresh", fontWeight = FontWeight.Bold)
                     }
                 }
             )
         }
     ) { innerPadding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp)
         ) {
-            items(users) { user ->
-                ActiveUserCard(user, onBan = { viewModel.banMac(user.macAddress) })
-            }
-            if (users.isEmpty()) {
-                item {
-                    Text("No active users.", modifier = Modifier.padding(16.dp))
+            // Search field
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                placeholder = { Text("Search by user, IP, or MAC...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true
+            )
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                items(filteredUsers) { user ->
+                    ActiveUserCard(
+                        user = user,
+                        onKick = { userToKick = user },
+                        onBan = { userToBan = user }
+                    )
+                }
+                if (filteredUsers.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 40.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (searchQuery.isEmpty()) "No active clients connected." else "No clients match \"$searchQuery\"",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
+        }
+
+        // Kick Confirmation Dialog
+        if (userToKick != null) {
+            AlertDialog(
+                onDismissRequest = { userToKick = null },
+                title = { Text("Disconnect Session") },
+                text = { Text("Are you sure you want to disconnect user \"${userToKick?.user}\" (${userToKick?.address})?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            userToKick?.id?.let { viewModel.kickUser(it) }
+                            userToKick = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Disconnect")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { userToKick = null }) { Text("Cancel") }
+                }
+            )
+        }
+
+        // Ban MAC Confirmation Dialog
+        if (userToBan != null) {
+            AlertDialog(
+                onDismissRequest = { userToBan = null },
+                title = { Text("Ban MAC Address") },
+                text = {
+                    Text("Are you sure you want to permanently BAN MAC \"${userToBan?.macAddress}\" from the network?\n\nThis will terminate their session and block future connections on the router.")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            userToBan?.macAddress?.let { viewModel.banMac(it) }
+                            userToBan = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Ban Client")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { userToBan = null }) { Text("Cancel") }
+                }
+            )
         }
     }
 }
 
 @Composable
-fun ActiveUserCard(user: ActiveUser, onBan: () -> Unit) {
-    GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(user.user, style = MaterialTheme.typography.titleMedium)
-                Text("IP: ${user.address}")
-                Text("MAC: ${user.macAddress}")
-                Text("Uptime: ${user.uptime}")
-                Text("In: ${user.bytesIn} B / Out: ${user.bytesOut} B")
+fun ActiveUserCard(user: ActiveUser, onKick: () -> Unit, onBan: () -> Unit) {
+    GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = user.user,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "IP: ${user.address}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Row {
+                    // Kick button
+                    IconButton(onClick = onKick) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Disconnect Client",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    // Ban MAC button
+                    IconButton(onClick = onBan) {
+                        Icon(
+                            Icons.Default.Block,
+                            contentDescription = "Ban Client MAC",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
             }
-            IconButton(onClick = onBan) {
-                Icon(Icons.Default.Block, contentDescription = "Ban User", tint = MaterialTheme.colorScheme.error)
+
+            Spacer(modifier = Modifier.height(10.dp))
+            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "MAC: ${user.macAddress}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Uptime: ${user.uptime}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            val bytesIn = user.bytesIn.toLongOrNull() ?: 0L
+            val bytesOut = user.bytesOut.toLongOrNull() ?: 0L
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Download: ${formatBytesVal(bytesOut)}",
+                    style = MaterialTheme.typography.labelSmall
+                )
+                Text(
+                    text = "Upload: ${formatBytesVal(bytesIn)}",
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
         }
     }
 }
+
+private fun formatBytesVal(bytes: Long): String {
+    if (bytes <= 0) return "0 B"
+    val kb = bytes / 1024.0
+    val mb = kb / 1024.0
+    val gb = mb / 1024.0
+    return when {
+        gb >= 1.0 -> String.format("%.2f GB", gb)
+        mb >= 1.0 -> String.format("%.1f MB", mb)
+        kb >= 1.0 -> String.format("%.0f KB", kb)
+        else -> "$bytes B"
+    }
+}
+
