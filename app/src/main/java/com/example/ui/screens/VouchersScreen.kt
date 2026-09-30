@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
 import android.provider.Settings
 import android.widget.Toast
@@ -37,6 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.domain.models.UserProfile
@@ -811,690 +817,842 @@ fun MikhmonGenerateVouchersDialog(
     val strings = LanguageManager.strings
 
     val numberStyles = listOf(
-        "Hyphenated Numbers (1819-9733)",
-        "Numbers Only (18199733)",
-        "Alphanumeric (AG3H-G6Q4)",
-        "Uppercase Letters (ABCDEFGH)",
-        "Lowercase Letters (abcdefgh)",
-        "Mixed Letters & Numbers (aB3k-E8q9)"
+        "Numbers Only",
+        "Alphabet Only",
+        "Numbers + Alphabet"
     )
     var selectedNumberStyle by remember { mutableStateOf(numberStyles[0]) }
     var profileExpanded by remember { mutableStateOf(false) }
-    var styleExpanded by remember { mutableStateOf(false) }
 
     // Live preview code computation
     val previewCode = remember(prefix, length, selectedNumberStyle) {
         val len = (length.toIntOrNull() ?: 8).coerceIn(4, 16)
         val sampleDigits = "8492015372189420"
-        val sampleUpper = "H7W8K4M2PX9Y3B5Q"
-        val sampleLower = "h7w8k4m2px9y3b5q"
-        val raw = when {
-            selectedNumberStyle.startsWith("Numbers Only") -> sampleDigits.take(len)
-            selectedNumberStyle.startsWith("Uppercase") -> sampleUpper.filter { it.isLetter() }.take(len)
-            selectedNumberStyle.startsWith("Lowercase") -> sampleLower.filter { it.isLetter() }.take(len)
-            selectedNumberStyle.startsWith("Hyphenated Numbers") -> {
-                val half = (len / 2).coerceAtLeast(2)
-                val part1 = sampleDigits.take(half)
-                val part2 = sampleDigits.substring(half, len.coerceAtMost(sampleDigits.length))
-                "$part1-$part2"
-            }
-            selectedNumberStyle.startsWith("Alphanumeric") -> {
-                val half = (len / 2).coerceAtLeast(2)
-                val part1 = sampleUpper.take(half)
-                val part2 = sampleUpper.substring(half, len.coerceAtMost(sampleUpper.length))
-                "$part1-$part2"
-            }
-            else -> sampleUpper.take(len)
+        val sampleAlpha = "ABCDEFGHJKLMNPQR"
+        val sampleAlphanumeric = "A3B8K9M2PX7Y4W6Q"
+        val raw = when (selectedNumberStyle) {
+            "Numbers Only" -> sampleDigits.take(len)
+            "Alphabet Only" -> sampleAlpha.take(len)
+            "Numbers + Alphabet" -> sampleAlphanumeric.take(len)
+            else -> sampleDigits.take(len)
         }
         prefix + raw
     }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(36.dp)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.92f)
+                .imePadding(),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Pinned Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f, fill = false)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Default.ConfirmationNumber,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.ConfirmationNumber,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                strings.generateVouchers,
+                                fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                "Mikhmon POS Engine",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                    Spacer(Modifier.width(10.dp))
-                    Column {
-                        Text(strings.generateVouchers, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
-                        Text("Mikhmon POS Engine", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                if (profiles.isEmpty()) {
-                    Text("No profiles configured. Please create a user profile first.", color = MaterialTheme.colorScheme.error)
-                } else {
-                    // 1. LIVE TICKET PREVIEW CARD (Matches physical 58mm 2-compartment box)
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                        border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                // Scrollable Form Content
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    if (profiles.isEmpty()) {
+                        Text("No profiles configured. Please create a user profile first.", color = MaterialTheme.colorScheme.error)
+                    } else {
+                        // 1. LIVE TICKET PREVIEW CARD (Matches physical 58mm 2-compartment box)
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ReceiptLong,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(15.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            "TICKET LIVE PREVIEW (58mm Box)",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.primary
+                                    ) {
+                                        Text(
+                                            text = selectedProfile?.name ?: "Default",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(Modifier.height(8.dp))
+
+                                // 2-Compartment Box Render
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Left Compartment: Big Bold Code
+                                        Column(
+                                            modifier = Modifier
+                                                .weight(1.05f)
+                                                .padding(8.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            Text(
+                                                text = if (isAccountMode) "ACCOUNT CODE" else "VOUCHER CODE",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontSize = 9.sp
+                                            )
+                                            Spacer(Modifier.height(2.dp))
+                                            Text(
+                                                text = previewCode,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Black,
+                                                fontFamily = FontFamily.Monospace,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            if (isAccountMode) {
+                                                Text(
+                                                    text = "P: " + previewCode.reversed().take(previewCode.length.coerceAtMost(6)),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontFamily = FontFamily.Monospace,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            } else {
+                                                Text(
+                                                    text = "(User = Pass)",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontSize = 9.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+
+                                        // Vertical Box Divider
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxHeight()
+                                                .width(1.dp)
+                                                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                                        )
+
+                                        // Right Compartment: Profile & Limits
+                                        Column(
+                                            modifier = Modifier
+                                                .weight(0.95f)
+                                                .padding(8.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            Text(
+                                                text = selectedProfile?.name ?: "Profile",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            val quotaStr = when {
+                                                (selectedProfile?.dataLimitMb ?: 0) <= 0 -> "Unlim"
+                                                (selectedProfile?.dataLimitMb ?: 0) >= 1024 && (selectedProfile?.dataLimitMb ?: 0) % 1024 == 0 -> "${(selectedProfile?.dataLimitMb ?: 0) / 1024}GB"
+                                                (selectedProfile?.dataLimitMb ?: 0) >= 1024 -> "${"%.1f".format((selectedProfile?.dataLimitMb ?: 0) / 1024.0)}GB"
+                                                else -> "${selectedProfile?.dataLimitMb}MB"
+                                            }
+                                            val validityStr = when {
+                                                (selectedProfile?.durationMinutes ?: 0) in 1..59 -> "${selectedProfile?.durationMinutes}M"
+                                                (selectedProfile?.durationMinutes ?: 0) in 60..1439 && (selectedProfile?.durationMinutes ?: 0) % 60 == 0 -> "${(selectedProfile?.durationMinutes ?: 0) / 60}H"
+                                                (selectedProfile?.durationMinutes ?: 0) in 60..1439 -> "${selectedProfile?.durationMinutes}M"
+                                                (selectedProfile?.durationMinutes ?: 0) >= 1440 && (selectedProfile?.durationMinutes ?: 0) % 1440 == 0 -> "${(selectedProfile?.durationMinutes ?: 0) / 1440}D"
+                                                (selectedProfile?.durationMinutes ?: 0) >= 1440 -> "${selectedProfile?.durationMinutes}M"
+                                                (selectedProfile?.validityDays ?: 0) > 0 -> "${selectedProfile?.validityDays}D"
+                                                else -> "1D"
+                                            }
+                                            Text(
+                                                text = "$quotaStr • $validityStr",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            val price = selectedProfile?.price ?: 0.0
+                                            Text(
+                                                text = if (price > 0) "%,d Ks".format(price.toInt()) else "FREE",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Black,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 2. SEGMENTED MODE SELECTOR (Voucher vs Account)
+                        Column {
+                            Text(
+                                text = "Generation Mode (ထုတ်ယူမည့် ပုံစံ):",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Voucher Option (DEFAULT)
+                                Surface(
+                                    onClick = { isAccountMode = false },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (!isAccountMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        if (!isAccountMode) 2.dp else 1.dp,
+                                        if (!isAccountMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                Icons.Default.ConfirmationNumber,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(17.dp),
+                                                tint = if (!isAccountMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(Modifier.width(5.dp))
+                                            Text(
+                                                text = "Voucher",
+                                                fontWeight = FontWeight.ExtraBold,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = if (!isAccountMode) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                            )
+                                            if (!isAccountMode) {
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                                            }
+                                        }
+                                        Spacer(Modifier.height(3.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = if (!isAccountMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent
+                                        ) {
+                                            Text(
+                                                text = "Username = Password",
+                                                fontSize = 10.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (!isAccountMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(
+                                            text = "Single Code (ကုတ်တစ်ခုတည်း)",
+                                            fontSize = 9.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                }
+
+                                // Account Option
+                                Surface(
+                                    onClick = { isAccountMode = true },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (isAccountMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        if (isAccountMode) 2.dp else 1.dp,
+                                        if (isAccountMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                Icons.Default.Person,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(17.dp),
+                                                tint = if (isAccountMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(Modifier.width(5.dp))
+                                            Text(
+                                                text = "Account",
+                                                fontWeight = FontWeight.ExtraBold,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = if (isAccountMode) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                            )
+                                            if (isAccountMode) {
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                                            }
+                                        }
+                                        Spacer(Modifier.height(3.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = if (isAccountMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent
+                                        ) {
+                                            Text(
+                                                text = "Username + Password",
+                                                fontSize = 10.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isAccountMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(
+                                            text = "Separate (အမည် + စကားဝှက်)",
+                                            fontSize = 9.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // 3. QUICK PROFILE CAROUSEL + DROPDOWN
+                        Column {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.ReceiptLong,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(15.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(
-                                        "TICKET LIVE PREVIEW (58mm Box)",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        letterSpacing = 0.5.sp
-                                    )
-                                }
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
+                                Text(
+                                    "Profile (Package):",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
-                                ) {
-                                    Text(
-                                        text = selectedProfile?.name ?: "Default",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
+                                )
+                                if (profiles.size > 3) {
+                                    TextButton(
+                                        onClick = { profileExpanded = true },
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Text("More...", style = MaterialTheme.typography.labelSmall)
+                                    }
                                 }
                             }
 
-                            Spacer(Modifier.height(8.dp))
-
-                            // 2-Compartment Box Render
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                                modifier = Modifier.fillMaxWidth()
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // Left Compartment: Big Bold Code
-                                    Column(
-                                        modifier = Modifier
-                                            .weight(1.05f)
-                                            .padding(8.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
+                                items(profiles) { p ->
+                                    val isSelected = selectedProfile?.name == p.name
+                                    Surface(
+                                        onClick = { selectedProfile = p },
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                        ),
+                                        modifier = Modifier.width(IntrinsicSize.Min)
                                     ) {
-                                        Text(
-                                            text = if (isAccountMode) "ACCOUNT CODE" else "VOUCHER CODE",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontSize = 9.sp
-                                        )
-                                        Spacer(Modifier.height(2.dp))
-                                        Text(
-                                            text = previewCode,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Black,
-                                            fontFamily = FontFamily.Monospace,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        if (isAccountMode) {
+                                        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (isSelected) {
+                                                    Icon(
+                                                        Icons.Default.CheckCircle,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                    Spacer(Modifier.width(4.dp))
+                                                }
+                                                Text(
+                                                    text = p.name,
+                                                    fontWeight = FontWeight.Bold,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                            val priceFmt = if (p.price > 0) "%,d Ks".format(p.price.toInt()) else "Free"
                                             Text(
-                                                text = "P: " + previewCode.reversed().take(previewCode.length.coerceAtMost(6)),
+                                                text = priceFmt,
                                                 style = MaterialTheme.typography.labelSmall,
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.primary
                                             )
                                         }
                                     }
+                                }
+                            }
 
-                                    // Vertical Box Divider
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .width(1.dp)
-                                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                            if (profileExpanded) {
+                                ExposedDropdownMenuBox(
+                                    expanded = profileExpanded,
+                                    onExpandedChange = { profileExpanded = !profileExpanded },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    OutlinedTextField(
+                                        value = selectedProfile?.name ?: "Select",
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("All Profiles") },
+                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = profileExpanded) },
+                                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                                        shape = RoundedCornerShape(10.dp)
                                     )
-
-                                    // Right Compartment: Profile & Limits
-                                    Column(
-                                        modifier = Modifier
-                                            .weight(0.95f)
-                                            .padding(8.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
+                                    ExposedDropdownMenu(
+                                        expanded = profileExpanded,
+                                        onDismissRequest = { profileExpanded = false }
                                     ) {
-                                        Text(
-                                            text = selectedProfile?.name ?: "Profile",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        val quotaStr = when {
-                                            (selectedProfile?.dataLimitMb ?: 0) <= 0 -> "Unlim"
-                                            (selectedProfile?.dataLimitMb ?: 0) >= 1024 && (selectedProfile?.dataLimitMb ?: 0) % 1024 == 0 -> "${(selectedProfile?.dataLimitMb ?: 0) / 1024}GB"
-                                            (selectedProfile?.dataLimitMb ?: 0) >= 1024 -> "${"%.1f".format((selectedProfile?.dataLimitMb ?: 0) / 1024.0)}GB"
-                                            else -> "${selectedProfile?.dataLimitMb}MB"
+                                        profiles.forEach { p ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Column {
+                                                        Text(p.name, fontWeight = FontWeight.Bold)
+                                                        Text("${p.rateLimit} • ${p.validityDays}D • %,d Ks".format(p.price.toInt()), style = MaterialTheme.typography.bodySmall)
+                                                    }
+                                                },
+                                                onClick = {
+                                                    selectedProfile = p
+                                                    profileExpanded = false
+                                                }
+                                            )
                                         }
-                                        val validityStr = when {
-                                            (selectedProfile?.durationMinutes ?: 0) in 1..59 -> "${selectedProfile?.durationMinutes}M"
-                                            (selectedProfile?.durationMinutes ?: 0) in 60..1439 && (selectedProfile?.durationMinutes ?: 0) % 60 == 0 -> "${(selectedProfile?.durationMinutes ?: 0) / 60}H"
-                                            (selectedProfile?.durationMinutes ?: 0) in 60..1439 -> "${selectedProfile?.durationMinutes}M"
-                                            (selectedProfile?.durationMinutes ?: 0) >= 1440 && (selectedProfile?.durationMinutes ?: 0) % 1440 == 0 -> "${(selectedProfile?.durationMinutes ?: 0) / 1440}D"
-                                            (selectedProfile?.durationMinutes ?: 0) >= 1440 -> "${selectedProfile?.durationMinutes}M"
-                                            (selectedProfile?.validityDays ?: 0) > 0 -> "${selectedProfile?.validityDays}D"
-                                            else -> "1D"
-                                        }
-                                        Text(
-                                            text = "$quotaStr • $validityStr",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        val price = selectedProfile?.price ?: 0.0
-                                        Text(
-                                            text = if (price > 0) "%,d Ks".format(price.toInt()) else "FREE",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Black,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
                                     }
                                 }
                             }
                         }
-                    }
 
-                    // 2. SEGMENTED MODE SELECTOR (Voucher vs Account)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                            .padding(4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Surface(
-                            onClick = { isAccountMode = false },
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (!isAccountMode) MaterialTheme.colorScheme.primary else Color.Transparent,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(vertical = 8.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Default.ConfirmationNumber,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = if (!isAccountMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = strings.userModeSame,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (!isAccountMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-
-                        Surface(
-                            onClick = { isAccountMode = true },
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (isAccountMode) MaterialTheme.colorScheme.primary else Color.Transparent,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(vertical = 8.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Default.Person,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = if (isAccountMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = strings.userModeSeparate,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isAccountMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-
-                    // 3. QUICK PROFILE CAROUSEL + DROPDOWN
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        // 4. THREE CHARACTER GENERATION OPTIONS (Numbers Only, Alphabet Only, Numbers + Alphabet)
+                        Column {
                             Text(
-                                "Profile (Package):",
+                                text = "Character Type (စာလုံး ပုံစံ - ၃ မျိုး):",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            if (profiles.size > 3) {
-                                TextButton(
-                                    onClick = { profileExpanded = true },
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Text("More...", style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
-                        }
-
-                        LazyRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(profiles) { p ->
-                                val isSelected = selectedProfile?.name == p.name
-                                Surface(
-                                    onClick = { selectedProfile = p },
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        1.dp,
-                                        if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-                                    ),
-                                    modifier = Modifier.width(IntrinsicSize.Min)
-                                ) {
-                                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (isSelected) {
-                                                Icon(
-                                                    Icons.Default.CheckCircle,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(14.dp)
-                                                )
-                                                Spacer(Modifier.width(4.dp))
-                                            }
+                            Spacer(Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                val options = listOf(
+                                    Triple("Numbers Only", "12345678", "0-9 ဂဏန်း"),
+                                    Triple("Alphabet Only", "ABCDEFGH", "A-Z အက္ခရာ"),
+                                    Triple("Numbers + Alphabet", "A3B8K9M2", "0-9 & A-Z ရောရာ")
+                                )
+                                options.forEach { (key, sample, desc) ->
+                                    val isSelected = selectedNumberStyle == key
+                                    Surface(
+                                        onClick = { selectedNumberStyle = key },
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            if (isSelected) 1.8.dp else 1.dp,
+                                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                        ),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
                                             Text(
-                                                text = p.name,
-                                                fontWeight = FontWeight.Bold,
-                                                style = MaterialTheme.typography.labelMedium,
+                                                text = when (key) {
+                                                    "Numbers Only" -> "Numbers Only"
+                                                    "Alphabet Only" -> "Alphabet Only"
+                                                    else -> "Num + Alpha"
+                                                },
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                                maxLines = 1
+                                            )
+                                            Spacer(Modifier.height(2.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface
+                                            ) {
+                                                Text(
+                                                    text = sample,
+                                                    fontFamily = FontFamily.Monospace,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    fontSize = 9.5.sp,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                )
+                                            }
+                                            Spacer(Modifier.height(2.dp))
+                                            Text(
+                                                text = desc,
+                                                fontSize = 8.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                                 maxLines = 1
                                             )
                                         }
-                                        val priceFmt = if (p.price > 0) "%,d Ks".format(p.price.toInt()) else "Free"
-                                        Text(
-                                            text = priceFmt,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
                                     }
                                 }
                             }
                         }
 
-                        if (profileExpanded) {
-                            ExposedDropdownMenuBox(
-                                expanded = profileExpanded,
-                                onExpandedChange = { profileExpanded = !profileExpanded },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                OutlinedTextField(
-                                    value = selectedProfile?.name ?: "Select",
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    label = { Text("All Profiles") },
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = profileExpanded) },
-                                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = profileExpanded,
-                                    onDismissRequest = { profileExpanded = false }
-                                ) {
-                                    profiles.forEach { p ->
-                                        DropdownMenuItem(
-                                            text = {
-                                                Column {
-                                                    Text(p.name, fontWeight = FontWeight.Bold)
-                                                    Text("${p.rateLimit} • ${p.validityDays}D • %,d Ks".format(p.price.toInt()), style = MaterialTheme.typography.bodySmall)
-                                                }
-                                            },
-                                            onClick = {
-                                                selectedProfile = p
-                                                profileExpanded = false
-                                            }
-                                        )
+                        // 5. PREFIX WITH QUICK PRESETS
+                        Column {
+                            OutlinedTextField(
+                                value = prefix,
+                                onValueChange = { prefix = it },
+                                label = { Text(strings.prefixOptional) },
+                                placeholder = { Text("e.g. HS-, VIP-, NET-") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true,
+                                trailingIcon = if (prefix.isNotEmpty()) {
+                                    {
+                                        IconButton(onClick = { prefix = "" }) {
+                                            Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
+                                        }
                                     }
-                                }
-                            }
-                        }
-                    }
-
-                    // 4. CODE STYLE / FORMAT CHIPS
-                    Column {
-                        Text(
-                            strings.characterType + ":",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 4.dp)
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            listOf(
-                                "Hyphenated Numbers" to "1234-5678",
-                                "Numbers Only" to "12345678",
-                                "Alphanumeric" to "AG3H-G6Q4"
-                            ).forEach { (styleKey, previewLabel) ->
-                                val isSelected = selectedNumberStyle.startsWith(styleKey)
-                                FilterChip(
-                                    selected = isSelected,
-                                    onClick = {
-                                        selectedNumberStyle = numberStyles.firstOrNull { it.startsWith(styleKey) } ?: numberStyles[0]
-                                    },
-                                    label = { Text(previewLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1) }
-                                )
-                            }
-                        }
-                    }
-
-                    // 5. PREFIX WITH QUICK PRESETS
-                    Column {
-                        OutlinedTextField(
-                            value = prefix,
-                            onValueChange = { prefix = it },
-                            label = { Text(strings.prefixOptional) },
-                            placeholder = { Text("e.g. HS-, VIP-, NET-") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            singleLine = true,
-                            trailingIcon = if (prefix.isNotEmpty()) {
-                                {
-                                    IconButton(onClick = { prefix = "" }) {
-                                        Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
-                                    }
-                                }
-                            } else null
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 4.dp)
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Prefix:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            listOf("None", "HS-", "VIP-", "NET-", "WF-").forEach { chipText ->
-                                val isSelected = (chipText == "None" && prefix.isEmpty()) || (chipText != "None" && prefix == chipText)
-                                SuggestionChip(
-                                    onClick = { prefix = if (chipText == "None") "" else chipText },
-                                    label = { Text(chipText, style = MaterialTheme.typography.labelSmall, maxLines = 1) },
-                                    colors = SuggestionChipDefaults.suggestionChipColors(
-                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                                    ),
-                                    modifier = Modifier.height(28.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // 6. QUANTITY & CODE LENGTH WITH INTERACTIVE STEPPERS
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-                            .padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Quantity Row with Minus / Plus Steppers
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(strings.quantity, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                                Text("Total vouchers to generate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(
-                                    onClick = {
-                                        val q = (quantity.toIntOrNull() ?: 10) - 5
-                                        quantity = q.coerceAtLeast(1).toString()
-                                    },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(Icons.Default.RemoveCircleOutline, contentDescription = "Decrease", tint = MaterialTheme.colorScheme.primary)
-                                }
-                                OutlinedTextField(
-                                    value = quantity,
-                                    onValueChange = { input -> if (input.all { it.isDigit() }) quantity = input },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
-                                    modifier = Modifier.width(68.dp),
-                                    shape = RoundedCornerShape(8.dp),
-                                    singleLine = true,
-                                    textStyle = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                    )
-                                )
-                                IconButton(
-                                    onClick = {
-                                        val q = (quantity.toIntOrNull() ?: 10) + 5
-                                        quantity = q.toString()
-                                    },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(Icons.Default.AddCircleOutline, contentDescription = "Increase", tint = MaterialTheme.colorScheme.primary)
-                                }
-                            }
-                        }
-
-                        // Quick Add Quantity Chips
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Quick:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            listOf(10, 25, 50, 100).forEach { qtyAdd ->
-                                SuggestionChip(
-                                    onClick = {
-                                        val current = quantity.toIntOrNull() ?: 0
-                                        quantity = (current + qtyAdd).toString()
-                                    },
-                                    label = { Text("+$qtyAdd", style = MaterialTheme.typography.labelSmall) },
-                                    modifier = Modifier.height(28.dp)
-                                )
-                            }
-                            SuggestionChip(
-                                onClick = { quantity = "10" },
-                                label = { Text("Reset", style = MaterialTheme.typography.labelSmall) },
-                                modifier = Modifier.height(28.dp)
+                                } else null
                             )
-                        }
-
-                        // Code Length Chips
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(strings.codeLength + ":", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            listOf(4, 6, 8, 10).forEach { lVal ->
-                                val isSelected = length == lVal.toString()
-                                val isPortalStandard = lVal == 8
-                                SuggestionChip(
-                                    onClick = { length = lVal.toString() },
-                                    label = {
-                                        Text(
-                                            text = if (isPortalStandard) "8 Digits (8-Box ⭐)" else "$lVal Digits",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    },
-                                    colors = SuggestionChipDefaults.suggestionChipColors(
-                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else if (isPortalStandard) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant
-                                    ),
-                                    modifier = Modifier.height(28.dp)
-                                )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp)
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Prefix:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                listOf("None", "HS-", "VIP-", "NET-", "WF-").forEach { chipText ->
+                                    val isSelected = (chipText == "None" && prefix.isEmpty()) || (chipText != "None" && prefix == chipText)
+                                    SuggestionChip(
+                                        onClick = { prefix = if (chipText == "None") "" else chipText },
+                                        label = { Text(chipText, style = MaterialTheme.typography.labelSmall, maxLines = 1) },
+                                        colors = SuggestionChipDefaults.suggestionChipColors(
+                                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                        ),
+                                        modifier = Modifier.height(28.dp)
+                                    )
+                                }
                             }
                         }
 
-                        // 8-Box Captive Portal Compatibility Indicator & One-Click Fix
-                        val rawCodeLen = previewCode.replace("-", "").length
-                        val hasPrefixOrHyphen = prefix.isNotBlank() || previewCode.contains("-")
-                        val isExact8Boxes = rawCodeLen == 8 && !hasPrefixOrHyphen
-
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (isExact8Boxes) Color(0xFF2E7D32).copy(alpha = 0.12f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isExact8Boxes) Color(0xFF2E7D32).copy(alpha = 0.4f) else MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
-                            ),
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                        // 6. QUANTITY & CODE LENGTH WITH INTERACTIVE STEPPERS
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                                .padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
+                            // Quantity Row with Minus / Plus Steppers
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(strings.quantity, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                    Text("Total vouchers to generate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = if (isExact8Boxes) Icons.Default.CheckCircle else Icons.Default.Warning,
-                                        contentDescription = null,
-                                        tint = if (isExact8Boxes) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(16.dp)
+                                    IconButton(
+                                        onClick = {
+                                            val q = (quantity.toIntOrNull() ?: 10) - 5
+                                            quantity = q.coerceAtLeast(1).toString()
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.RemoveCircleOutline, contentDescription = "Decrease", tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                    OutlinedTextField(
+                                        value = quantity,
+                                        onValueChange = { input -> if (input.all { it.isDigit() }) quantity = input },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
+                                        modifier = Modifier.width(68.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        singleLine = true,
+                                        textStyle = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        )
                                     )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(
-                                        text = if (isExact8Boxes) "8-Box Captive Portal Compatible ✓" else "Captive Portal 8-Box Warning (အကွက် ၈ ကွက် သတိပေးချက်)",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isExact8Boxes) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
+                                    IconButton(
+                                        onClick = {
+                                            val q = (quantity.toIntOrNull() ?: 10) + 5
+                                            quantity = q.toString()
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.AddCircleOutline, contentDescription = "Increase", tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                            }
+
+                            // Quick Add Quantity Chips
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Quick:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                listOf(10, 25, 50, 100).forEach { qtyAdd ->
+                                    SuggestionChip(
+                                        onClick = {
+                                            val current = quantity.toIntOrNull() ?: 0
+                                            quantity = (current + qtyAdd).toString()
+                                        },
+                                        label = { Text("+$qtyAdd", style = MaterialTheme.typography.labelSmall) },
+                                        modifier = Modifier.height(28.dp)
                                     )
                                 }
-                                Spacer(Modifier.height(4.dp))
-                                if (isExact8Boxes) {
-                                    Text(
-                                        text = "ကုတ်နံပါတ် ၈ လုံးသည် Captive Portal အကွက် ၈ ကွက်နှင့် အတိအကျ ကိုက်ညီသဖြင့် အသုံးပြုသူ အဆင်ပြေစွာ ရိုက်ထည့်နိုင်ပါသည်။ (Perfect 8-digit match for 8-box portal)",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontSize = 11.sp,
-                                        color = Color(0xFF1B5E20)
-                                    )
-                                } else {
-                                    Text(
-                                        text = if (rawCodeLen > 8) {
-                                            "အကွက် ၈ ကွက်သာရှိသော Portal တွင် ${rawCodeLen} လုံးပါကုတ်ကို ရိုက်ထည့်၍ မရနိုင်ပါ။ (Cannot type >8 digits into an 8-box portal!)"
-                                        } else if (hasPrefixOrHyphen) {
-                                            "Prefix သို့မဟုတ် Hyphen (-) ပါရှိပါက အကွက် ၈ ကွက်သာရှိသော Portal တွင် ရိုက်ထည့်ရန် မဆံ့နိုင်ပါ။ (Numbers Only 8-digits recommended)"
-                                        } else {
-                                            "ကုတ်အလျားသည် ${rawCodeLen} လုံး ဖြစ်နေပါသည်။ 8-Box Portal အတွက် ၈ လုံး အတိအကျ အကြံပြုပါသည်။"
+                                SuggestionChip(
+                                    onClick = { quantity = "10" },
+                                    label = { Text("Reset", style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.height(28.dp)
+                                )
+                            }
+
+                            // Code Length Chips
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(strings.codeLength + ":", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                listOf(4, 6, 8, 10).forEach { lVal ->
+                                    val isSelected = length == lVal.toString()
+                                    val isPortalStandard = lVal == 8
+                                    SuggestionChip(
+                                        onClick = { length = lVal.toString() },
+                                        label = {
+                                            Text(
+                                                text = if (isPortalStandard) "8 Digits (8-Box ⭐)" else "$lVal Digits",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
                                         },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onErrorContainer
-                                    )
-                                    Spacer(Modifier.height(6.dp))
-                                    FilledTonalButton(
-                                        onClick = {
-                                            length = "8"
-                                            prefix = ""
-                                            selectedNumberStyle = "Numbers Only (18199733)"
-                                        },
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        colors = SuggestionChipDefaults.suggestionChipColors(
+                                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else if (isPortalStandard) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant
+                                        ),
                                         modifier = Modifier.height(28.dp)
-                                    ) {
-                                        Text("⭐ 8-Box စံနှုန်း (8 Digits Only) သို့ ပြောင်းမည်", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                                    )
+                                }
+                            }
+
+                            // 8-Box Captive Portal Compatibility Indicator & One-Click Fix
+                            val rawCodeLen = previewCode.replace("-", "").length
+                            val hasPrefixOrHyphen = prefix.isNotBlank() || previewCode.contains("-")
+                            val isExact8Boxes = rawCodeLen == 8 && !hasPrefixOrHyphen
+
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isExact8Boxes) Color(0xFF2E7D32).copy(alpha = 0.12f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isExact8Boxes) Color(0xFF2E7D32).copy(alpha = 0.4f) else MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
+                                ),
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = if (isExact8Boxes) Icons.Default.CheckCircle else Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = if (isExact8Boxes) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isExact8Boxes) "8-Box Captive Portal Compatible ✓" else "Captive Portal 8-Box Warning (အကွက် ၈ ကွက် သတိပေးချက်)",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isExact8Boxes) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                    Spacer(Modifier.height(4.dp))
+                                    if (isExact8Boxes) {
+                                        Text(
+                                            text = "ကုတ်နံပါတ် ၈ လုံးသည် Captive Portal အကွက် ၈ ကွက်နှင့် အတိအကျ ကိုက်ညီသဖြင့် အသုံးပြုသူ အဆင်ပြေစွာ ရိုက်ထည့်နိုင်ပါသည်။ (Perfect 8-digit match for 8-box portal)",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF1B5E20)
+                                        )
+                                    } else {
+                                        Text(
+                                            text = if (rawCodeLen > 8) {
+                                                "အကွက် ၈ ကွက်သာရှိသော Portal တွင် ${rawCodeLen} လုံးပါကုတ်ကို ရိုက်ထည့်၍ မရနိုင်ပါ။ (Cannot type >8 digits into an 8-box portal!)"
+                                            } else if (hasPrefixOrHyphen) {
+                                                "Prefix သို့မဟုတ် Hyphen (-) ပါရှိပါက အကွက် ၈ ကွက်သာရှိသော Portal တွင် ရိုက်ထည့်ရန် မဆံ့နိုင်ပါ။ (Numbers Only 8-digits recommended)"
+                                            } else {
+                                                "ကုတ်အလျားသည် ${rawCodeLen} လုံး ဖြစ်နေပါသည်။ 8-Box Portal အတွက် ၈ လုံး အတိအကျ အကြံပြုပါသည်။"
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                        Spacer(Modifier.height(6.dp))
+                                        FilledTonalButton(
+                                            onClick = {
+                                                length = "8"
+                                                prefix = ""
+                                                selectedNumberStyle = "Numbers Only"
+                                            },
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            modifier = Modifier.height(28.dp)
+                                        ) {
+                                            Text("⭐ 8-Box စံနှုန်း (Numbers Only 8-Digits) သို့ ပြောင်းမည်", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
-        },
-        confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = {
-                        val q = quantity.toIntOrNull() ?: 0
-                        val l = (length.toIntOrNull() ?: 8).coerceAtLeast(4)
-                        if (selectedProfile != null && q > 0) {
-                            onGenerate(selectedProfile!!, q, l, selectedNumberStyle, isAccountMode, prefix, false)
-                        }
-                    },
-                    enabled = profiles.isNotEmpty() && (quantity.toIntOrNull() ?: 0) > 0,
-                    shape = RoundedCornerShape(10.dp)
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                // Action Buttons Bar (Pinned at bottom)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("${strings.generateVouchers} (${quantity})")
-                }
-                Button(
-                    onClick = {
-                        val q = quantity.toIntOrNull() ?: 0
-                        val l = (length.toIntOrNull() ?: 8).coerceAtLeast(4)
-                        if (selectedProfile != null && q > 0) {
-                            onGenerate(selectedProfile!!, q, l, selectedNumberStyle, isAccountMode, prefix, true)
-                        }
-                    },
-                    enabled = profiles.isNotEmpty() && (quantity.toIntOrNull() ?: 0) > 0,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(strings.printAction)
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(0.7f)
+                    ) {
+                        Text(strings.cancel, maxLines = 1)
+                    }
+
+                    Button(
+                        onClick = {
+                            val q = quantity.toIntOrNull() ?: 0
+                            val l = (length.toIntOrNull() ?: 8).coerceAtLeast(4)
+                            if (selectedProfile != null && q > 0) {
+                                onGenerate(selectedProfile!!, q, l, selectedNumberStyle, isAccountMode, prefix, true)
+                            }
+                        },
+                        enabled = profiles.isNotEmpty() && (quantity.toIntOrNull() ?: 0) > 0,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(0.9f)
+                    ) {
+                        Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(strings.printAction, maxLines = 1)
+                    }
+
+                    Button(
+                        onClick = {
+                            val q = quantity.toIntOrNull() ?: 0
+                            val l = (length.toIntOrNull() ?: 8).coerceAtLeast(4)
+                            if (selectedProfile != null && q > 0) {
+                                onGenerate(selectedProfile!!, q, l, selectedNumberStyle, isAccountMode, prefix, false)
+                            }
+                        },
+                        enabled = profiles.isNotEmpty() && (quantity.toIntOrNull() ?: 0) > 0,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1.4f)
+                    ) {
+                        Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "${strings.generateVouchers} ($quantity)",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(strings.cancel) }
         }
-    )
+    }
 }
 
 @Composable
@@ -1503,7 +1661,8 @@ fun PrintOptionsDialog(
     onDismiss: () -> Unit,
     onPrint: (Int, VoucherPrinter.PaperFormat, Boolean) -> Unit
 ) {
-    var selectedStyle by remember { mutableIntStateOf(1) } // 1: 2-Compartment Box, 2: Slim Row, 3: 3-Tier Full-Width
+    val context = LocalContext.current
+    var selectedStyle by remember { mutableIntStateOf(BluetoothThermalPrinter.getSavedDefaultStyle(context)) } // 1: 2-Compartment Box, 2: Ultra-Micro, 3: 3-Tier Full-Width
     var selectedFormat by remember { mutableStateOf(VoucherPrinter.PaperFormat.THERMAL_58MM) }
     var autoCutEachVoucher by remember { mutableStateOf(true) }
     var a4PreviewMode by remember { mutableIntStateOf(0) } // 0: Full A4 Sheet, 1: Single Ticket Zoom
@@ -1802,10 +1961,32 @@ fun PrinterSetupAndTestDialog(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var hasBtPerm by remember { mutableStateOf(BluetoothThermalPrinter.hasBluetoothPermission(context)) }
+    var isBtOn by remember { mutableStateOf(BluetoothThermalPrinter.isBluetoothEnabled(context)) }
     var pairedPrinters by remember { mutableStateOf(BluetoothThermalPrinter.getPairedPrinters(context)) }
     var savedPrinter by remember { mutableStateOf(BluetoothThermalPrinter.getSavedPrinter(context)) }
     var selectedWidth by remember { mutableStateOf(BluetoothThermalPrinter.getSavedPaperWidth(context)) }
     var isPrintingTest by remember { mutableStateOf(false) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        hasBtPerm = BluetoothThermalPrinter.hasBluetoothPermission(context)
+        isBtOn = BluetoothThermalPrinter.isBluetoothEnabled(context)
+        pairedPrinters = BluetoothThermalPrinter.getPairedPrinters(context)
+        savedPrinter = BluetoothThermalPrinter.getSavedPrinter(context)
+    }
+
+    LaunchedEffect(Unit) {
+        if (!hasBtPerm && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                    Manifest.permission.BLUETOOTH_SCAN
+                )
+            )
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1823,12 +2004,97 @@ fun PrinterSetupAndTestDialog(
                     .verticalScroll(rememberScrollState())
                     .padding(vertical = 4.dp)
             ) {
-                Text(
-                    text = "1. Select Paired Bluetooth Printer",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                if (!hasBtPerm) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Bluetooth Permission Required", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Android requires Bluetooth permission to discover your paired printer.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                        permissionLauncher.launch(
+                                            arrayOf(
+                                                Manifest.permission.BLUETOOTH_CONNECT,
+                                                Manifest.permission.BLUETOOTH_SCAN
+                                            )
+                                        )
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Grant Bluetooth Permission")
+                            }
+                        }
+                    }
+                } else if (!isBtOn) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Bluetooth is Turned Off", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                Text("Turn on Bluetooth to view and connect to printers", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    try {
+                                        context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Open phone Settings > Bluetooth", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Turn On")
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "1. Select Paired Bluetooth Printer",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Active Default: ${savedPrinter?.name ?: "Micro (Default)"}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Direct Bluetooth connection (SPP) with zero third-party print service dependencies.",
@@ -1839,21 +2105,28 @@ fun PrinterSetupAndTestDialog(
 
                 if (pairedPrinters.isEmpty()) {
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)),
-                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
+                        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 "No paired Bluetooth devices found.",
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onErrorContainer
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                "Please turn on Bluetooth and pair your thermal printer in Android settings.",
+                                "Default selected printer: ${savedPrinter?.name ?: "Micro (Default)"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Please pair your thermal printer in Android Bluetooth settings.",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -1866,9 +2139,14 @@ fun PrinterSetupAndTestDialog(
                     ) {
                         pairedPrinters.forEach { device ->
                             val isSelected = savedPrinter?.address == device.address
+                            val isMicro = device.name.contains("micro", ignoreCase = true)
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    if (isSelected) 1.5.dp else 1.dp,
+                                    if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                ),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
@@ -1893,7 +2171,24 @@ fun PrinterSetupAndTestDialog(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Column {
-                                        Text(device.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(device.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                            if (isMicro) {
+                                                Spacer(Modifier.width(6.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = MaterialTheme.colorScheme.tertiaryContainer
+                                                ) {
+                                                    Text(
+                                                        text = "⭐ Default (Micro)",
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
                                         Text(device.address, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }

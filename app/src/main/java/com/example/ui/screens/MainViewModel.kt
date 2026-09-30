@@ -500,12 +500,15 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
 
             val charPool = when {
                 charMode.contains("Numbers Only", ignoreCase = true) ||
-                charMode.contains("Hyphenated Numbers", ignoreCase = true) -> ('0'..'9').toList()
-                charMode.contains("Lowercase", ignoreCase = true) ||
-                charMode.contains("Letters Only (a-z)", ignoreCase = true) -> ('a'..'z').toList()
-                charMode.contains("Uppercase", ignoreCase = true) -> ('A'..'Z').toList()
-                charMode.contains("Alphanumeric", ignoreCase = true) -> ('A'..'Z') + ('0'..'9')
-                else -> ('a'..'z') + ('A'..'Z') + ('0'..'9')
+                charMode.contains("Hyphenated Numbers", ignoreCase = true) ||
+                charMode.equals("Numbers", ignoreCase = true) -> ('0'..'9').toList()
+                charMode.contains("Alphabet Only", ignoreCase = true) ||
+                charMode.contains("Uppercase", ignoreCase = true) ||
+                charMode.contains("Letters", ignoreCase = true) -> ('A'..'Z').toList()
+                charMode.contains("Lowercase", ignoreCase = true) -> ('a'..'z').toList()
+                charMode.contains("Numbers + Alphabet", ignoreCase = true) ||
+                charMode.contains("Alphanumeric", ignoreCase = true) -> ('0'..'9') + ('A'..'Z')
+                else -> ('0'..'9').toList()
             }
 
             // Initial comment on generation includes profile name and validity in days.

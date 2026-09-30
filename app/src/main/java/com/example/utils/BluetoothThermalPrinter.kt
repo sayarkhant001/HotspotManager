@@ -6,6 +6,10 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
+import android.content.pm.PackageManager
+import android.Manifest
+import android.os.Build
+import androidx.core.content.ContextCompat
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -44,18 +48,43 @@ object BluetoothThermalPrinter {
         WIDTH_80MM(48, 576)
     }
 
-    @SuppressLint("MissingPermission")
-    fun getPairedPrinters(context: Context): List<BluetoothPrinterDevice> {
+    fun hasBluetoothPermission(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    fun isBluetoothEnabled(context: Context): Boolean {
         return try {
             val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
             val adapter = bm?.adapter ?: BluetoothAdapter.getDefaultAdapter()
+            adapter != null && adapter.isEnabled
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun getPairedPrinters(context: Context): List<BluetoothPrinterDevice> {
+        return try {
+            if (!hasBluetoothPermission(context)) return emptyList()
+            val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+            val adapter = bm?.adapter ?: BluetoothAdapter.getDefaultAdapter()
             if (adapter == null || !adapter.isEnabled) return emptyList()
-            adapter.bondedDevices?.map { device ->
+            val bonded = adapter.bondedDevices ?: return emptyList()
+            val list = bonded.map { device ->
                 BluetoothPrinterDevice(
                     name = device.name ?: "Unknown Device",
                     address = device.address
                 )
-            }?.sortedBy { it.name } ?: emptyList()
+            }
+            // Prioritize printers with "micro" in the name to the top of the list!
+            list.sortedWith(
+                compareByDescending<BluetoothPrinterDevice> { it.name.contains("micro", ignoreCase = true) }
+                    .thenBy { it.name }
+            )
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
@@ -64,9 +93,33 @@ object BluetoothThermalPrinter {
 
     fun getSavedPrinter(context: Context): BluetoothPrinterDevice? {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val addr = prefs.getString(KEY_PRINTER_ADDR, null) ?: return null
-        val name = prefs.getString(KEY_PRINTER_NAME, "Thermal Printer") ?: "Thermal Printer"
-        return BluetoothPrinterDevice(name, addr)
+        val addr = prefs.getString(KEY_PRINTER_ADDR, null)
+        val name = prefs.getString(KEY_PRINTER_NAME, null)
+        val paired = getPairedPrinters(context)
+
+        // 1. If saved printer is valid and exists among paired devices, return it
+        if (addr != null && name != null) {
+            val matching = paired.firstOrNull { it.address.equals(addr, ignoreCase = true) }
+            if (matching != null) return matching
+
+            val microInPaired = paired.firstOrNull { it.name.contains("micro", ignoreCase = true) }
+            if (microInPaired != null && !name.contains("micro", ignoreCase = true)) {
+                savePrinter(context, microInPaired)
+                return microInPaired
+            }
+            return BluetoothPrinterDevice(name, addr)
+        }
+
+        // 2. If nothing saved yet, prioritize device with "micro" in its name as DEFAULT!
+        val microDevice = paired.firstOrNull { it.name.contains("micro", ignoreCase = true) }
+            ?: paired.firstOrNull()
+        if (microDevice != null) {
+            savePrinter(context, microDevice)
+            return microDevice
+        }
+
+        // 3. Fallback default entry so user always sees Micro as default even before Bluetooth is paired
+        return BluetoothPrinterDevice(name = "Micro (Default)", address = "")
     }
 
     fun savePrinter(context: Context, device: BluetoothPrinterDevice) {
@@ -99,7 +152,7 @@ object BluetoothThermalPrinter {
 
     fun getSavedDefaultStyle(context: Context): Int {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getInt("saved_default_style", 1)
+        return prefs.getInt("saved_default_style", 2) // Default to Style 2 (Ultra-Micro)
     }
 
     fun saveDefaultStyle(context: Context, style: Int) {

@@ -20,6 +20,20 @@ class MainActivity : ComponentActivity() {
     val repository = AppRepository(database.routerDao(), mikrotikClient)
     com.example.utils.LanguageManager.init(this)
 
+    // Ensure Bluetooth permissions are granted on Android 12+ so paired thermal printers are immediately visible
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        val permissions = arrayOf(
+            android.Manifest.permission.BLUETOOTH_CONNECT,
+            android.Manifest.permission.BLUETOOTH_SCAN
+        )
+        val needed = permissions.filter {
+            androidx.core.content.ContextCompat.checkSelfPermission(this, it) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+        if (needed.isNotEmpty()) {
+            androidx.core.app.ActivityCompat.requestPermissions(this, needed.toTypedArray(), 1001)
+        }
+    }
+
     setContent {
       MyApplicationTheme {
         com.example.ui.components.LiquidGlassBackground {

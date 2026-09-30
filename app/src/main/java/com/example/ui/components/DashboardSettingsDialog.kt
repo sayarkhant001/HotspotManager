@@ -1,5 +1,9 @@
 package com.example.ui.components
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -50,12 +54,34 @@ fun DashboardSettingsDialog(
     // -------------------------------------------------------------
     // PRINTER STATE
     // -------------------------------------------------------------
+    var hasBtPerm by remember { mutableStateOf(BluetoothThermalPrinter.hasBluetoothPermission(context)) }
+    var isBtOn by remember { mutableStateOf(BluetoothThermalPrinter.isBluetoothEnabled(context)) }
     var pairedPrinters by remember { mutableStateOf(BluetoothThermalPrinter.getPairedPrinters(context)) }
     var savedPrinter by remember { mutableStateOf(BluetoothThermalPrinter.getSavedPrinter(context)) }
     var selectedWidth by remember { mutableStateOf(BluetoothThermalPrinter.getSavedPaperWidth(context)) }
     var autoCutEnabled by remember { mutableStateOf(BluetoothThermalPrinter.getSavedAutoCut(context)) }
     var selectedStyle by remember { mutableIntStateOf(BluetoothThermalPrinter.getSavedDefaultStyle(context)) }
     var isPrintingTest by remember { mutableStateOf(false) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        hasBtPerm = BluetoothThermalPrinter.hasBluetoothPermission(context)
+        isBtOn = BluetoothThermalPrinter.isBluetoothEnabled(context)
+        pairedPrinters = BluetoothThermalPrinter.getPairedPrinters(context)
+        savedPrinter = BluetoothThermalPrinter.getSavedPrinter(context)
+    }
+
+    LaunchedEffect(Unit) {
+        if (!hasBtPerm && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                    Manifest.permission.BLUETOOTH_SCAN
+                )
+            )
+        }
+    }
 
     // -------------------------------------------------------------
     // PASSWORD STATE
@@ -270,18 +296,99 @@ fun DashboardSettingsDialog(
 
                         // Paired Printers List
                         Column {
+                            if (!hasBtPerm) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(6.dp))
+                                            Text("Bluetooth Permission Required", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            "Android requires Bluetooth permission to discover your paired printer.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                        Button(
+                                            onClick = {
+                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                                    permissionLauncher.launch(
+                                                        arrayOf(
+                                                            Manifest.permission.BLUETOOTH_CONNECT,
+                                                            Manifest.permission.BLUETOOTH_SCAN
+                                                        )
+                                                    )
+                                                }
+                                            },
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("Grant Bluetooth Permission")
+                                        }
+                                    }
+                                }
+                            } else if (!isBtOn) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f)),
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("Bluetooth is Turned Off", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                            Text("Turn on Bluetooth to view and connect to printers", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                        }
+                                        OutlinedButton(
+                                            onClick = {
+                                                try {
+                                                    context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                                                } catch (e: Exception) {
+                                                    Toast.makeText(context, "Open phone Settings > Bluetooth", Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text("Turn On")
+                                        }
+                                    }
+                                }
+                            }
+
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "Paired Bluetooth Printers",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Column {
+                                    Text(
+                                        text = "Paired Bluetooth Printers",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Active Default: ${savedPrinter?.name ?: "Micro (Default)"}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                                 TextButton(
                                     onClick = {
+                                        hasBtPerm = BluetoothThermalPrinter.hasBluetoothPermission(context)
+                                        isBtOn = BluetoothThermalPrinter.isBluetoothEnabled(context)
                                         pairedPrinters = BluetoothThermalPrinter.getPairedPrinters(context)
                                         savedPrinter = BluetoothThermalPrinter.getSavedPrinter(context)
                                         Toast.makeText(context, "Refreshed: ${pairedPrinters.size} devices", Toast.LENGTH_SHORT).show()
@@ -295,7 +402,7 @@ fun DashboardSettingsDialog(
 
                             if (pairedPrinters.isEmpty()) {
                                 Surface(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                                     shape = RoundedCornerShape(10.dp),
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
                                 ) {
@@ -306,34 +413,60 @@ fun DashboardSettingsDialog(
                                         Text(
                                             text = "No paired Bluetooth printers found.",
                                             style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                        Text(
+                                            text = "Default selected printer: ${savedPrinter?.name ?: "Micro (Default)"}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
                                         Spacer(Modifier.height(8.dp))
-                                        OutlinedButton(
-                                            onClick = {
-                                                try {
-                                                    val btIntent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
-                                                    context.startActivity(btIntent)
-                                                } catch (e: Exception) {
-                                                    Toast.makeText(context, "Open phone Settings > Bluetooth to pair", Toast.LENGTH_SHORT).show()
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    try {
+                                                        val btIntent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+                                                        context.startActivity(btIntent)
+                                                    } catch (e: Exception) {
+                                                        Toast.makeText(context, "Open phone Settings > Bluetooth to pair", Toast.LENGTH_SHORT).show()
+                                                    }
                                                 }
+                                            ) {
+                                                Icon(Icons.Default.Bluetooth, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("Pair in Bluetooth")
                                             }
-                                        ) {
-                                            Icon(Icons.Default.Bluetooth, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(Modifier.width(6.dp))
-                                            Text("Pair in Bluetooth Settings")
+                                            Button(
+                                                onClick = {
+                                                    hasBtPerm = BluetoothThermalPrinter.hasBluetoothPermission(context)
+                                                    isBtOn = BluetoothThermalPrinter.isBluetoothEnabled(context)
+                                                    pairedPrinters = BluetoothThermalPrinter.getPairedPrinters(context)
+                                                    savedPrinter = BluetoothThermalPrinter.getSavedPrinter(context)
+                                                    Toast.makeText(context, "Refreshed: ${pairedPrinters.size} devices", Toast.LENGTH_SHORT).show()
+                                                }
+                                            ) {
+                                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("Refresh")
+                                            }
                                         }
                                     }
                                 }
                             } else {
-                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Column(
+                                    modifier = Modifier.padding(top = 6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
                                     pairedPrinters.forEach { device ->
                                         val isSelected = savedPrinter?.address == device.address
+                                        val isMicro = device.name.contains("micro", ignoreCase = true)
                                         Surface(
                                             shape = RoundedCornerShape(10.dp),
                                             color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
                                             border = androidx.compose.foundation.BorderStroke(
-                                                1.dp,
+                                                if (isSelected) 1.5.dp else 1.dp,
                                                 if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
                                             ),
                                             modifier = Modifier
@@ -360,7 +493,24 @@ fun DashboardSettingsDialog(
                                                 )
                                                 Spacer(Modifier.width(8.dp))
                                                 Column(modifier = Modifier.weight(1f)) {
-                                                    Text(device.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Text(device.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                                        if (isMicro) {
+                                                            Spacer(Modifier.width(6.dp))
+                                                            Surface(
+                                                                shape = RoundedCornerShape(4.dp),
+                                                                color = MaterialTheme.colorScheme.tertiaryContainer
+                                                            ) {
+                                                                Text(
+                                                                    text = "⭐ Default (Micro)",
+                                                                    fontSize = 9.sp,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
                                                     Text(device.address, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                 }
                                                 if (isSelected) {
