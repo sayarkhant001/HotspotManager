@@ -142,7 +142,7 @@ object BluetoothThermalPrinter {
 
     fun getSavedAutoCut(context: Context): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getBoolean("saved_auto_cut", true)
+        return prefs.getBoolean("saved_auto_cut", false) // Default to false (Compact Continuous Strip / Saves Paper!)
     }
 
     fun saveAutoCut(context: Context, autoCut: Boolean) {
@@ -170,8 +170,8 @@ object BluetoothThermalPrinter {
         vouchers: List<Voucher>,
         deviceAddress: String? = null,
         paperWidth: PaperWidth = getSavedPaperWidth(context),
-        style: Int = 1,
-        autoCutEachVoucher: Boolean = true
+        style: Int = 2,
+        autoCutEachVoucher: Boolean = getSavedAutoCut(context)
     ): Result<Unit> = withContext(Dispatchers.IO) {
         if (vouchers.isEmpty()) return@withContext Result.failure(Exception("No vouchers to print"))
 
@@ -206,8 +206,10 @@ object BluetoothThermalPrinter {
             outputStream.write(escposData)
             outputStream.flush()
 
-            // Small delay to ensure printer buffer completes
-            Thread.sleep(300)
+            // Dynamic delay based on voucher count to ensure printer hardware buffer completely
+            // finishes burning dots on paper before closing socket (prevents cutting off the last ticket!)
+            val bufferDrainDelayMs = maxOf(2000L, vouchers.size * 650L)
+            Thread.sleep(bufferDrainDelayMs)
             Result.success(Unit)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -285,8 +287,8 @@ object BluetoothThermalPrinter {
     private fun buildVouchersEscPos(
         vouchers: List<Voucher>,
         paperWidth: PaperWidth,
-        style: Int = 1,
-        autoCutEachVoucher: Boolean = true
+        style: Int = 2,
+        autoCutEachVoucher: Boolean = false
     ): ByteArray {
         val stream = ByteArrayOutputStream()
 
@@ -299,29 +301,29 @@ object BluetoothThermalPrinter {
             val bmp = renderVoucherExcelBitmap(voucher, paperWidth, style)
             stream.write(bitmapToEscPosRaster(bmp))
 
-            if (autoCutEachVoucher) {
-                // Auto-cut on each voucher requested by user!
-                // 1. Advance paper past thermal cutter blade (typically 12-16mm = 4 text lines)
-                stream.write(byteArrayOf(0x1B, 0x64, 0x04)) // ESC d 4
-                // 2. Standard ESC/POS partial cut (Function A: GS V 1)
-                stream.write(byteArrayOf(0x1D, 0x56, 0x01))
-                // 3. Desktop POS-80 partial cut (Function B: GS V B 0)
-                stream.write(byteArrayOf(0x1D, 0x56, 0x42, 0x00))
-                // 4. Initial feed spacing for the next voucher
-                stream.write(byteArrayOf(0x1B, 0x4A, 0x10))
-            } else {
-                // Minimal paper spacing between vouchers (only 1 line)
-                if (index < vouchers.size - 1) {
-                    stream.write(byteArrayOf(0x1B, 0x64, 0x01)) // Feed 1 line
+            if (index < vouchers.size - 1) {
+                if (autoCutEachVoucher) {
+                    if (paperWidth == PaperWidth.WIDTH_80MM) {
+                        // Desktop POS-80 with hardware guillotine cutter: advance to blade & partial cut
+                        stream.write(byteArrayOf(0x1D, 0x56, 0x42, 0x00)) // GS V B 0
+                    } else {
+                        // 58mm portable printers: feed ~12mm (3 lines) to align with manual tear teeth
+                        stream.write(byteArrayOf(0x1B, 0x64, 0x03)) // ESC d 3
+                    }
+                } else {
+                    // COMPACT CONTINUOUS STRIP (Default / Maximum Paper Saving):
+                    // Only 20 dots (~2.5mm) between consecutive vouchers! Saves over 80% paper!
+                    stream.write(byteArrayOf(0x1B, 0x4A, 0x14)) // ESC J 20
                 }
             }
         }
 
-        // If not cutting each voucher, cut once at the very end
-        if (!autoCutEachVoucher) {
-            stream.write(byteArrayOf(0x1B, 0x64, 0x04)) // Feed 4 lines
-            stream.write(byteArrayOf(0x1D, 0x56, 0x01))
-            stream.write(byteArrayOf(0x1D, 0x56, 0x42, 0x00))
+        // Final feed at the end of the entire print batch:
+        // Advance paper ~16mm (4 lines) past the tear bar so the final voucher
+        // feeds completely out and can be torn off cleanly without getting stuck or cut in half!
+        stream.write(byteArrayOf(0x1B, 0x64, 0x04)) // ESC d 4
+        if (autoCutEachVoucher && paperWidth == PaperWidth.WIDTH_80MM) {
+            stream.write(byteArrayOf(0x1D, 0x56, 0x42, 0x00)) // GS V B 0 (Final cut)
         }
 
         return stream.toByteArray()
@@ -380,6 +382,7 @@ object BluetoothThermalPrinter {
         val textPaint = Paint().apply {
             color = Color.BLACK
             isAntiAlias = true
+            isFakeBoldText = true // Extra bold so thermal dots are thick & solid (prevents faint strokes on 4/7/A)
             textAlign = Paint.Align.CENTER
         }
 
@@ -565,10 +568,19 @@ object BluetoothThermalPrinter {
                 color = Color.WHITE
                 this.style = Paint.Style.FILL
             }
-            val label = "✂️ AUTO-CUT ON EACH VOUCHER ✂️"
+            val label = "✂️ TEAR / CUT SPACING ✂️"
             val textW = textPaint.measureText(label)
             canvas.drawRect(width / 2f - textW / 2f - 8f, cutY - 11f, width / 2f + textW / 2f + 8f, cutY + 11f, pillPaint)
             canvas.drawText(label, width / 2f, cutY + (if (is80) 6f else 4.5f), textPaint)
+        } else {
+            val cutY = currentY + cutSpacing / 2f
+            val cutPaint = Paint().apply {
+                color = Color.parseColor("#9E9E9E")
+                strokeWidth = 1.5f
+                this.style = Paint.Style.STROKE
+                pathEffect = DashPathEffect(floatArrayOf(4f, 4f), 0f)
+            }
+            canvas.drawLine(14f, cutY, width - 14f, cutY, cutPaint)
         }
 
         currentY += cutSpacing
@@ -613,8 +625,8 @@ object BluetoothThermalPrinter {
                         val g = (pixel shr 8) and 0xFF
                         val b = pixel and 0xFF
                         val luminance = (0.299 * r + 0.587 * g + 0.114 * b).toInt()
-                        // If dark (black dot), set bit to 1
-                        if (luminance < 128) {
+                        // If darker than threshold, print black dot (high contrast for thermal heads, prevents dropped crossbars)
+                        if (luminance < 195) {
                             currentByte = currentByte or (1 shl (7 - bitIdx))
                         }
                     }

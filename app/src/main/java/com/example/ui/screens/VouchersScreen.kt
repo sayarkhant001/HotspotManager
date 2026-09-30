@@ -1664,7 +1664,7 @@ fun PrintOptionsDialog(
     val context = LocalContext.current
     var selectedStyle by remember { mutableIntStateOf(BluetoothThermalPrinter.getSavedDefaultStyle(context)) } // 1: 2-Compartment Box, 2: Ultra-Micro, 3: 3-Tier Full-Width
     var selectedFormat by remember { mutableStateOf(VoucherPrinter.PaperFormat.THERMAL_58MM) }
-    var autoCutEachVoucher by remember { mutableStateOf(true) }
+    var autoCutEachVoucher by remember { mutableStateOf(BluetoothThermalPrinter.getSavedAutoCut(context)) }
     var a4PreviewMode by remember { mutableIntStateOf(0) } // 0: Full A4 Sheet, 1: Single Ticket Zoom
     val strings = LanguageManager.strings
 
@@ -1831,22 +1831,22 @@ fun PrintOptionsDialog(
                                     contentScale = ContentScale.FillWidth
                                 )
                             }
-                            if (isThermal && autoCutEachVoucher) {
+                            if (isThermal) {
                                 Text(
-                                    text = "✂️ Auto-cuts paper after each printed voucher",
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color(0xFFC62828)
+                                    text = if (autoCutEachVoucher) "✂️ Added spacing between tickets for manual tear or auto-cut" else "🌱 Compact continuous roll (Minimal spacing, saves 80% paper)",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (autoCutEachVoucher) Color(0xFFC62828) else Color(0xFF2E7D32)
                                 )
                             }
                         }
                     }
                 }
 
-                // AUTO-CUT TOGGLE CARD (shown for thermal printers / POS phones)
+                // SPACING & CUT TOGGLE CARD (shown for thermal printers / POS phones)
                 if (isThermal) {
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = if (autoCutEachVoucher) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                         border = androidx.compose.foundation.BorderStroke(1.dp, if (autoCutEachVoucher) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
                         modifier = Modifier.fillMaxWidth()
@@ -1854,14 +1854,22 @@ fun PrintOptionsDialog(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                                Text("Auto-Cut Each Voucher ✂️", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                 Text(
-                                    "Feed & cut paper between tickets on printers and phones with auto-cutter hardware",
+                                    text = if (autoCutEachVoucher) "✂️ Tear / Cut Spacing (Each Ticket)" else "🌱 Compact Strip (Saves 80% Paper)",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = if (!autoCutEachVoucher) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (autoCutEachVoucher)
+                                        "Feeds paper past printhead to manual tear teeth or triggers desktop POS cutter."
+                                    else
+                                        "Zero wasted blank space between vouchers. Highly recommended for 58mm portable printers!",
                                     style = MaterialTheme.typography.bodySmall,
                                     fontSize = 10.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1869,7 +1877,10 @@ fun PrintOptionsDialog(
                             }
                             Switch(
                                 checked = autoCutEachVoucher,
-                                onCheckedChange = { autoCutEachVoucher = it },
+                                onCheckedChange = {
+                                    autoCutEachVoucher = it
+                                    BluetoothThermalPrinter.saveAutoCut(context, it)
+                                },
                                 modifier = Modifier.scale(0.85f)
                             )
                         }

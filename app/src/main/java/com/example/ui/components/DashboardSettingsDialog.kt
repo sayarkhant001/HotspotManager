@@ -638,9 +638,9 @@ fun DashboardSettingsDialog(
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     Text(
-                                        text = "Advance paper past cutter & partial cut each ticket",
+                                        text = if (autoCutEnabled) "Adds extra spacing between tickets for manual tearing or cutter" else "Compact mode: Zero blank space between vouchers (Saves 80% Paper)",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (!autoCutEnabled) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                                 Switch(
