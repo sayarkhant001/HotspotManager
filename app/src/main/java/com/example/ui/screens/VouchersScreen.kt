@@ -1197,7 +1197,7 @@ fun MikhmonGenerateVouchersDialog(
                             }
                         }
 
-                        // 3. QUICK PROFILE CAROUSEL + DROPDOWN
+                        // 3. PROFILE / PACKAGE SELECTION (Clean Cards)
                         Column {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1205,7 +1205,7 @@ fun MikhmonGenerateVouchersDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    "Profile (Package):",
+                                    text = "Profile / Package (ပရိုဖိုင်):",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -1213,60 +1213,174 @@ fun MikhmonGenerateVouchersDialog(
                                 if (profiles.size > 3) {
                                     TextButton(
                                         onClick = { profileExpanded = true },
-                                        contentPadding = PaddingValues(0.dp)
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                                     ) {
-                                        Text("More...", style = MaterialTheme.typography.labelSmall)
+                                        Text(
+                                            text = if (profileExpanded) "Close" else "All (${profiles.size})...",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
                                     }
                                 }
                             }
+                            Spacer(Modifier.height(6.dp))
 
-                            LazyRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(profiles) { p ->
-                                    val isSelected = selectedProfile?.name == p.name
-                                    Surface(
-                                        onClick = { selectedProfile = p },
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                        border = androidx.compose.foundation.BorderStroke(
-                                            1.dp,
-                                            if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-                                        ),
-                                        modifier = Modifier.width(IntrinsicSize.Min)
-                                    ) {
-                                        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                if (isSelected) {
-                                                    Icon(
-                                                        Icons.Default.CheckCircle,
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.size(14.dp)
+                            if (profiles.size <= 3) {
+                                // Equal-width cards filling row evenly (Fixes unstyled look)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    profiles.forEach { p ->
+                                        val isSelected = selectedProfile?.name == p.name
+                                        val quotaStr = when {
+                                            p.dataLimitMb <= 0 -> ""
+                                            p.dataLimitMb >= 1024 && p.dataLimitMb % 1024 == 0 -> "${p.dataLimitMb / 1024}GB"
+                                            p.dataLimitMb >= 1024 -> "${"%.1f".format(p.dataLimitMb / 1024.0)}GB"
+                                            else -> "${p.dataLimitMb}MB"
+                                        }
+                                        val valStr = when {
+                                            p.durationMinutes in 1..59 -> "${p.durationMinutes}M"
+                                            p.durationMinutes in 60..1439 && p.durationMinutes % 60 == 0 -> "${p.durationMinutes / 60}H"
+                                            p.durationMinutes in 60..1439 -> "${p.durationMinutes}M"
+                                            p.durationMinutes >= 1440 && p.durationMinutes % 1440 == 0 -> "${p.durationMinutes / 1440}D"
+                                            p.validityDays > 0 -> "${p.validityDays}D"
+                                            else -> ""
+                                        }
+                                        val specSummary = listOf(quotaStr, valStr).filter { it.isNotEmpty() }.joinToString(" • ").ifEmpty { p.rateLimit.substringBefore("/") }
+
+                                        Surface(
+                                            onClick = { selectedProfile = p },
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                if (isSelected) 2.dp else 1.dp,
+                                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            ),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.Center
+                                                ) {
+                                                    Text(
+                                                        text = p.name,
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        style = MaterialTheme.typography.titleSmall,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
                                                     )
-                                                    Spacer(Modifier.width(4.dp))
+                                                    if (isSelected) {
+                                                        Spacer(Modifier.width(3.dp))
+                                                        Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                                                    }
                                                 }
+                                                Spacer(Modifier.height(2.dp))
                                                 Text(
-                                                    text = p.name,
+                                                    text = specSummary,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontSize = 9.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1
+                                                )
+                                                Spacer(Modifier.height(2.dp))
+                                                val priceFmt = if (p.price > 0) "%,d Ks".format(p.price.toInt()) else "Free"
+                                                Text(
+                                                    text = priceFmt,
+                                                    style = MaterialTheme.typography.labelSmall,
                                                     fontWeight = FontWeight.Bold,
-                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                                     maxLines = 1
                                                 )
                                             }
-                                            val priceFmt = if (p.price > 0) "%,d Ks".format(p.price.toInt()) else "Free"
-                                            Text(
-                                                text = priceFmt,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Scrollable Row with fixed-width cards for 4+ profiles
+                                LazyRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(profiles) { p ->
+                                        val isSelected = selectedProfile?.name == p.name
+                                        val quotaStr = when {
+                                            p.dataLimitMb <= 0 -> ""
+                                            p.dataLimitMb >= 1024 && p.dataLimitMb % 1024 == 0 -> "${p.dataLimitMb / 1024}GB"
+                                            p.dataLimitMb >= 1024 -> "${"%.1f".format(p.dataLimitMb / 1024.0)}GB"
+                                            else -> "${p.dataLimitMb}MB"
+                                        }
+                                        val valStr = when {
+                                            p.durationMinutes in 1..59 -> "${p.durationMinutes}M"
+                                            p.durationMinutes in 60..1439 && p.durationMinutes % 60 == 0 -> "${p.durationMinutes / 60}H"
+                                            p.durationMinutes in 60..1439 -> "${p.durationMinutes}M"
+                                            p.durationMinutes >= 1440 && p.durationMinutes % 1440 == 0 -> "${p.durationMinutes / 1440}D"
+                                            p.validityDays > 0 -> "${p.validityDays}D"
+                                            else -> ""
+                                        }
+                                        val specSummary = listOf(quotaStr, valStr).filter { it.isNotEmpty() }.joinToString(" • ").ifEmpty { p.rateLimit.substringBefore("/") }
+
+                                        Surface(
+                                            onClick = { selectedProfile = p },
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                if (isSelected) 2.dp else 1.dp,
+                                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            ),
+                                            modifier = Modifier.width(115.dp)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.Center
+                                                ) {
+                                                    Text(
+                                                        text = p.name,
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        style = MaterialTheme.typography.titleSmall,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    if (isSelected) {
+                                                        Spacer(Modifier.width(3.dp))
+                                                        Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                                                    }
+                                                }
+                                                Spacer(Modifier.height(2.dp))
+                                                Text(
+                                                    text = specSummary,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontSize = 9.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1
+                                                )
+                                                Spacer(Modifier.height(2.dp))
+                                                val priceFmt = if (p.price > 0) "%,d Ks".format(p.price.toInt()) else "Free"
+                                                Text(
+                                                    text = priceFmt,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
 
                             if (profileExpanded) {
+                                Spacer(Modifier.height(6.dp))
                                 ExposedDropdownMenuBox(
                                     expanded = profileExpanded,
                                     onExpandedChange = { profileExpanded = !profileExpanded },
@@ -1399,12 +1513,12 @@ fun MikhmonGenerateVouchersDialog(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 4.dp)
+                                    .padding(top = 4.dp, start = 2.dp)
                                     .horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Prefix:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Prefix:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 listOf("None", "HS-", "VIP-", "NET-", "WF-").forEach { chipText ->
                                     val isSelected = (chipText == "None" && prefix.isEmpty()) || (chipText != "None" && prefix == chipText)
                                     SuggestionChip(
@@ -1419,15 +1533,15 @@ fun MikhmonGenerateVouchersDialog(
                             }
                         }
 
-                        // 6. QUANTITY & CODE LENGTH WITH INTERACTIVE STEPPERS
+                        // 6. QUANTITY & CODE LENGTH (Clean Stepper & Full-Width Code Length Cards)
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-                                .padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // Quantity Row with Minus / Plus Steppers
+                            // Quantity Row with Minus / Plus Steppers (Quick row removed per user request)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1443,7 +1557,7 @@ fun MikhmonGenerateVouchersDialog(
                                             val q = (quantity.toIntOrNull() ?: 10) - 5
                                             quantity = q.coerceAtLeast(1).toString()
                                         },
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier.size(36.dp)
                                     ) {
                                         Icon(Icons.Default.RemoveCircleOutline, contentDescription = "Decrease", tint = MaterialTheme.colorScheme.primary)
                                     }
@@ -1451,7 +1565,7 @@ fun MikhmonGenerateVouchersDialog(
                                         value = quantity,
                                         onValueChange = { input -> if (input.all { it.isDigit() }) quantity = input },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
-                                        modifier = Modifier.width(68.dp),
+                                        modifier = Modifier.width(72.dp),
                                         shape = RoundedCornerShape(8.dp),
                                         singleLine = true,
                                         textStyle = MaterialTheme.typography.titleMedium.copy(
@@ -1464,61 +1578,90 @@ fun MikhmonGenerateVouchersDialog(
                                             val q = (quantity.toIntOrNull() ?: 10) + 5
                                             quantity = q.toString()
                                         },
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier.size(36.dp)
                                     ) {
                                         Icon(Icons.Default.AddCircleOutline, contentDescription = "Increase", tint = MaterialTheme.colorScheme.primary)
                                     }
                                 }
                             }
 
-                            // Quick Add Quantity Chips
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Quick:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                listOf(10, 25, 50, 100).forEach { qtyAdd ->
-                                    SuggestionChip(
-                                        onClick = {
-                                            val current = quantity.toIntOrNull() ?: 0
-                                            quantity = (current + qtyAdd).toString()
-                                        },
-                                        label = { Text("+$qtyAdd", style = MaterialTheme.typography.labelSmall) },
-                                        modifier = Modifier.height(28.dp)
-                                    )
-                                }
-                                SuggestionChip(
-                                    onClick = { quantity = "10" },
-                                    label = { Text("Reset", style = MaterialTheme.typography.labelSmall) },
-                                    modifier = Modifier.height(28.dp)
-                                )
-                            }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-                            // Code Length Chips
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(strings.codeLength + ":", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                listOf(4, 6, 8, 10).forEach { lVal ->
-                                    val isSelected = length == lVal.toString()
-                                    val isPortalStandard = lVal == 8
-                                    SuggestionChip(
-                                        onClick = { length = lVal.toString() },
-                                        label = {
-                                            Text(
-                                                text = if (isPortalStandard) "8 Digits (8-Box ⭐)" else "$lVal Digits",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                            )
-                                        },
-                                        colors = SuggestionChipDefaults.suggestionChipColors(
-                                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else if (isPortalStandard) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant
-                                        ),
-                                        modifier = Modifier.height(28.dp)
+                            // Code Length Section (Dedicated Header + Full-Width Balanced Selection Cards)
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${strings.codeLength} (ကုဒ် အလျား):",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
                                     )
+                                    if (length == "8") {
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = Color(0xFF2E7D32).copy(alpha = 0.15f)
+                                        ) {
+                                            Text(
+                                                text = "⭐ 8-Box Standard",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF1B5E20),
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    val lengthOptions = listOf(
+                                        Triple("4", "4 Digits", "Short"),
+                                        Triple("6", "6 Digits", "Medium"),
+                                        Triple("8", "8 Digits", "8-Box ⭐"),
+                                        Triple("9", "9 Digits", "Long")
+                                    )
+                                    lengthOptions.forEach { (lVal, label, badge) ->
+                                        val isSelected = length == lVal
+                                        val isPortalStandard = lVal == "8"
+                                        Surface(
+                                            onClick = { length = lVal },
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                if (isSelected) 1.8.dp else 1.dp,
+                                                if (isSelected) MaterialTheme.colorScheme.primary else if (isPortalStandard) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                            ),
+                                            modifier = Modifier.weight(if (isPortalStandard) 1.25f else 0.9f)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(vertical = 7.dp, horizontal = 2.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.Center
+                                            ) {
+                                                Text(
+                                                    text = label,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                                    maxLines = 1
+                                                )
+                                                Spacer(Modifier.height(1.dp))
+                                                Text(
+                                                    text = badge,
+                                                    fontSize = 8.5.sp,
+                                                    fontWeight = if (isPortalStandard) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (isPortalStandard) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
