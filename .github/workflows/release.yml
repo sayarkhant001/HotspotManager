@@ -1,0 +1,58 @@
+name: Build & Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare Release APK Artifact
+        run: |
+          mkdir -p release-output
+          TAG="${{ github.ref_name }}"
+          if [ -z "$TAG" ]; then TAG="latest"; fi
+          cp app/build/outputs/apk/debug/app-debug.apk release-output/HotspotManager-${TAG}.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: Hotspot Manager ${{ github.ref_name }}
+          body: |
+            ## 🚀 Hotspot Manager v${{ github.ref_name }} Update
+
+            ### What's New:
+            - 🛠️ **Settings & Tools Modal**: Directly accessible from the Dashboard top bar next to language toggle.
+            - 🖨️ **Thermal Printer Testing & Functions**: Instant test slip print, paper width toggle (58mm/80mm), auto-cut switch, and default voucher styles.
+            - 🔐 **Router Login Password Change**: Change password directly on MikroTik router via RouterOS API with automatic app credential sync.
+            - 📱 **User Profiles UI Fix**: Replaced colliding layout with modern 2x2 spec pills (Speed, Devices, Validity, Quota).
+            - 🎨 **Add Profile Studio Fix**: Responsive dialog layout with keyboard `imePadding`, scrollable quick presets, and pinned controls.
+            - 📄 **Voucher Ticket Paper-Saving**: Auto-scaled typography fitting maximum cell width with zero border collisions on A4 sheets and thermal rolls.
+            - 🇲🇲 **Full Localization**: Support for both Myanmar (🇲🇲) and English (🇬🇧).
+          draft: false
+          prerelease: false
+          files: release-output/*.apk

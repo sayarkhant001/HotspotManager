@@ -26,6 +26,10 @@ class AppRepository(
     fun getSessionsBetween(start: Long, end: Long): Flow<List<RouterSessionLog>> = dao.getSessionsBetween(start, end)
     fun getVouchersByProfile(profileName: String): Flow<List<Voucher>> = dao.getVouchersByProfile(profileName)
 
+    suspend fun changeRouterPassword(oldPass: String, newPass: String): Result<Unit> {
+        return mikrotikClient.changeUserPassword(oldPass, newPass)
+    }
+
     suspend fun addProfile(profile: UserProfile): Result<Unit> {
         if (!mikrotikClient.isConnected()) {
             mikrotikClient.ensureConnected()
@@ -358,22 +362,26 @@ class AppRepository(
     }
 
     suspend fun deleteUsedVouchers(): Result<Unit> = withContext(Dispatchers.IO) {
-        val used = dao.getAllUsedVouchersSync()
-        if (used.isEmpty()) return@withContext Result.success(Unit)
-        // 1. Optimistic Room DB deletion: instant UI update in < 5ms!
-        dao.deleteAllUsedVouchers()
+        try {
+            val used = dao.getAllUsedVouchersSync()
+            if (used.isEmpty()) return@withContext Result.success(Unit)
+            // 1. Optimistic Room DB deletion: instant UI update in < 5ms!
+            dao.deleteAllUsedVouchers()
 
-        // 2. Synchronize deletion with router
-        if (!mikrotikClient.isConnected()) {
-            mikrotikClient.ensureConnected()
-        }
-        if (mikrotikClient.isConnected()) {
-            val ok = mikrotikClient.deleteHotspotUsersBatch(used.map { it.code })
-            if (!ok) {
-                return@withContext Result.failure(Exception("Router rejected deleting used vouchers."))
+            // 2. Synchronize deletion with router
+            if (!mikrotikClient.isConnected()) {
+                mikrotikClient.ensureConnected()
             }
+            if (mikrotikClient.isConnected()) {
+                val ok = mikrotikClient.deleteHotspotUsersBatch(used.map { it.code })
+                if (!ok) {
+                    return@withContext Result.failure(Exception("Router rejected deleting used vouchers."))
+                }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        Result.success(Unit)
     }
 
     suspend fun clearCorruptSessions() {

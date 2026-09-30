@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -9,12 +10,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -48,6 +51,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
     val showUpdateDialog by viewModel.showUpdateDialog.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
+    var showSettingsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(userMsg) {
         userMsg?.let { msg ->
@@ -94,7 +98,15 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = { showSettingsDialog = true }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = strings.settings,
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     IconButton(
                         onClick = {
                             if (appUpdateInfo?.isNewer == true) {
@@ -335,14 +347,16 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 "All" to strings.dateAll
             )
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 filterOptions.forEach { (filterKey, filterLabel) ->
                     FilterChip(
                         selected = selectedFilter == filterKey,
                         onClick = { viewModel.setDateFilter(filterKey) },
-                        label = { Text(filterLabel, style = MaterialTheme.typography.labelSmall) },
+                        label = { Text(filterLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -370,17 +384,51 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column {
-                            Text(strings.activeSessionsStat, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("${activeUsers.size}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = strings.activeSessionsStat,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${activeUsers.size}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF4CAF50),
+                                maxLines = 1
+                            )
                         }
-                        Column {
-                            Text(strings.totalDataUsage, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(formattedDataUsage, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Column(modifier = Modifier.weight(1f).padding(horizontal = 4.dp)) {
+                            Text(
+                                text = strings.totalDataUsage,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = formattedDataUsage,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
                         }
-                        Column {
-                            Text(strings.trackedClients, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("${filteredSessions.size}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = strings.trackedClients,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${filteredSessions.size}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
@@ -389,10 +437,23 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                     val activeFilterLabel = filterOptions.firstOrNull { it.first == selectedFilter }?.second ?: selectedFilter
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("${strings.activatedVoucherSales} ($activeFilterLabel):", style = MaterialTheme.typography.bodySmall)
-                        Text("${"%,d".format(java.util.Locale.US, activatedSales.toLong())} Ks", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Text(
+                            text = "${strings.activatedVoucherSales} ($activeFilterLabel):",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f, fill = false),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "${"%,d".format(java.util.Locale.US, activatedSales.toLong())} Ks",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1
+                        )
                     }
 
                 }
@@ -471,7 +532,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                     style = MaterialTheme.typography.labelMedium
                                 )
                             }
-                            Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (update.isNewer) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
@@ -559,6 +620,21 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 }
             )
         }
+
+        if (showSettingsDialog) {
+            com.example.ui.components.DashboardSettingsDialog(
+                viewModel = viewModel,
+                strings = strings,
+                onDismiss = { showSettingsDialog = false },
+                onLogout = {
+                    viewModel.disconnectFromRouter()
+                    showSettingsDialog = false
+                    navController.navigate("login") {
+                        popUpTo("dashboard") { inclusive = true }
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -584,8 +660,8 @@ fun StatCard(
         Column(modifier = Modifier.padding(14.dp)) {
             Icon(imageVector = icon, contentDescription = title, tint = color, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.height(8.dp))
-            Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -614,8 +690,8 @@ fun CpuStatCard(
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))
-            Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
 
             Spacer(modifier = Modifier.height(8.dp))
 

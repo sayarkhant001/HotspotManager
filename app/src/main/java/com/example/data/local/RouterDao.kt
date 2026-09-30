@@ -52,7 +52,15 @@ interface RouterDao {
     suspend fun getVoucherByCode(code: String): Voucher?
 
     @Query("SELECT * FROM vouchers WHERE code IN (:codes)")
-    suspend fun getVouchersByCodes(codes: List<String>): List<Voucher>
+    suspend fun getVouchersByCodesChunk(codes: List<String>): List<Voucher>
+
+    @androidx.room.Transaction
+    suspend fun getVouchersByCodes(codes: List<String>): List<Voucher> {
+        if (codes.isEmpty()) return emptyList()
+        return codes.chunked(250).flatMap { chunk ->
+            getVouchersByCodesChunk(chunk)
+        }
+    }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertVouchers(vouchers: List<Voucher>)

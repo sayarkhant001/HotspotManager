@@ -189,6 +189,32 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         }
     }
 
+    fun getConnectedIp(): String = repository.mikrotikClient.getCurrentIp()
+    fun getConnectedUser(): String = repository.mikrotikClient.getCurrentUser()
+    fun getConnectedPass(): String = repository.mikrotikClient.getCurrentPass()
+
+    fun changeLoginPassword(oldPass: String, newPass: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val res = repository.changeRouterPassword(oldPass, newPass)
+            if (res.isSuccess) {
+                userMessage.value = "Password updated successfully!"
+                onResult(true, "Password updated successfully!")
+            } else {
+                val err = res.exceptionOrNull()?.message ?: "Failed to change password"
+                userMessage.value = err
+                onResult(false, err)
+            }
+        }
+    }
+
+    fun disconnectFromRouter() {
+        pollingJob?.cancel()
+        viewModelScope.launch {
+            repository.mikrotikClient.disconnect()
+            authState.value = AuthState.Idle
+        }
+    }
+
     private var isFetchingRouterData = false
 
     fun checkForAppUpdate(manual: Boolean = false) {

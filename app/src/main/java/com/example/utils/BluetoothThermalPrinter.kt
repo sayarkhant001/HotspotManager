@@ -87,6 +87,26 @@ object BluetoothThermalPrinter {
         prefs.edit().putString(KEY_PAPER_WIDTH, if (width == PaperWidth.WIDTH_80MM) "80" else "58").apply()
     }
 
+    fun getSavedAutoCut(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean("saved_auto_cut", true)
+    }
+
+    fun saveAutoCut(context: Context, autoCut: Boolean) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("saved_auto_cut", autoCut).apply()
+    }
+
+    fun getSavedDefaultStyle(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt("saved_default_style", 1)
+    }
+
+    fun saveDefaultStyle(context: Context, style: Int) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putInt("saved_default_style", style).apply()
+    }
+
     /**
      * Prints vouchers directly via Bluetooth RFCOMM socket.
      * ZERO external print services, ZERO Android PrintManager dialogs.

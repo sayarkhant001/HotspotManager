@@ -286,6 +286,41 @@ class MikrotikClient {
 
     fun isConnected(): Boolean = connection?.isConnected == true
 
+    fun getCurrentIp(): String = lastIp
+    fun getCurrentUser(): String = lastUser
+    fun getCurrentPass(): String = lastPass
+
+    suspend fun changeUserPassword(oldPass: String, newPass: String): Result<Unit> = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                if (lastPass.isNotBlank() && oldPass != lastPass) {
+                    return@withContext Result.failure(Exception("Current password is incorrect"))
+                }
+                if (newPass.isBlank()) {
+                    return@withContext Result.failure(Exception("New password cannot be empty"))
+                }
+                val conn = ensureConnectedInternal()
+                    ?: return@withContext Result.failure(Exception("Not connected to router"))
+
+                val userList = conn.execute("/user/print", "=.proplist=.id,name")
+                val targetUser = userList.firstOrNull { it["name"].equals(lastUser, ignoreCase = true) }
+                val userId = targetUser?.get(".id")
+
+                if (!userId.isNullOrBlank()) {
+                    conn.execute("/user/set", ".id=$userId", "password=$newPass")
+                } else {
+                    conn.execute("/user/set", "numbers=$lastUser", "password=$newPass")
+                }
+
+                lastPass = newPass
+                Result.success(Unit)
+            } catch (e: Exception) {
+                handleApiError(e)
+                Result.failure(Exception(e.localizedMessage ?: "Failed to update router password"))
+            }
+        }
+    }
+
     suspend fun ensureConnected(): Boolean = withContext(Dispatchers.IO) {
         apiMutex.withLock {
             ensureConnectedInternal() != null && connection?.isConnected == true
@@ -865,7 +900,15 @@ class MikrotikClient {
                 for (chunk in matchedIds.chunked(50)) {
                     try {
                         conn.execute("/ip/hotspot/user/remove", ".id=" + chunk.joinToString(","))
-                    } catch (_: Exception) {}
+                    } catch (_: Exception) {
+                        try {
+                            conn.execute("/ip/hotspot/user/remove", "numbers=" + chunk.joinToString(","))
+                        } catch (_: Exception) {
+                            for (id in chunk) {
+                                try { conn.execute("/ip/hotspot/user/remove", ".id=$id") } catch (_: Exception) {}
+                            }
+                        }
+                    }
                 }
 
                 // 3. Drop active sessions and collect client IPs/MACs
@@ -882,7 +925,11 @@ class MikrotikClient {
                     for (chunk in activeIds.chunked(50)) {
                         try {
                             conn.execute("/ip/hotspot/active/remove", ".id=" + chunk.joinToString(","))
-                        } catch (_: Exception) {}
+                        } catch (_: Exception) {
+                            for (id in chunk) {
+                                try { conn.execute("/ip/hotspot/active/remove", ".id=$id") } catch (_: Exception) {}
+                            }
+                        }
                     }
                 } catch (_: Exception) {}
 
@@ -893,7 +940,11 @@ class MikrotikClient {
                     for (chunk in cookieIds.chunked(50)) {
                         try {
                             conn.execute("/ip/hotspot/cookie/remove", ".id=" + chunk.joinToString(","))
-                        } catch (_: Exception) {}
+                        } catch (_: Exception) {
+                            for (id in chunk) {
+                                try { conn.execute("/ip/hotspot/cookie/remove", ".id=$id") } catch (_: Exception) {}
+                            }
+                        }
                     }
                 } catch (_: Exception) {}
 
@@ -904,7 +955,11 @@ class MikrotikClient {
                     for (chunk in hostIds.chunked(50)) {
                         try {
                             conn.execute("/ip/hotspot/host/remove", ".id=" + chunk.joinToString(","))
-                        } catch (_: Exception) {}
+                        } catch (_: Exception) {
+                            for (id in chunk) {
+                                try { conn.execute("/ip/hotspot/host/remove", ".id=$id") } catch (_: Exception) {}
+                            }
+                        }
                     }
                 } catch (_: Exception) {}
 

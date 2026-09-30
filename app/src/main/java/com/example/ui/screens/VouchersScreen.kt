@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
@@ -19,8 +20,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -294,26 +296,30 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         Text(
                             text = "${strings.usedVouchersBanner} ($usedCount)",
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f, fill = false),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        Spacer(modifier = Modifier.width(6.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Button(
                                 onClick = { showRenewAllUsedDialog = true },
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
                             ) {
                                 Icon(Icons.Default.Autorenew, contentDescription = null, modifier = Modifier.size(15.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text(strings.renewAll, style = MaterialTheme.typography.labelMedium)
+                                Text(strings.renewAll, style = MaterialTheme.typography.labelMedium, maxLines = 1)
                             }
                             Button(
                                 onClick = { showDeleteAllUsedDialog = true },
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                             ) {
                                 Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(15.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text(strings.deleteAll, style = MaterialTheme.typography.labelMedium)
+                                Text(strings.deleteAll, style = MaterialTheme.typography.labelMedium, maxLines = 1)
                             }
                         }
                     }
@@ -329,7 +335,10 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (selectedVoucherCodes.isNotEmpty()) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.weight(1f, fill = false),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Button(
                             onClick = {
                                 val selectedList = vouchers.filter { it.code in selectedVoucherCodes }
@@ -340,7 +349,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         ) {
                             Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("${strings.printAction} (${selectedVoucherCodes.size})")
+                            Text("${strings.printAction} (${selectedVoucherCodes.size})", maxLines = 1)
                         }
                         Button(
                             onClick = { showDeleteSelectedDialog = true },
@@ -349,11 +358,11 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         ) {
                             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("${strings.deleteAction} (${selectedVoucherCodes.size})")
+                            Text("${strings.deleteAction} (${selectedVoucherCodes.size})", maxLines = 1)
                         }
                     }
                     TextButton(onClick = { selectedVoucherCodes = emptySet() }) {
-                        Text(strings.deselectAll)
+                        Text(strings.deselectAll, maxLines = 1)
                     }
                 } else {
                     FilledTonalButton(
@@ -363,19 +372,25 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                             showPrintDialog = true
                         },
                         enabled = unprintedCount > 0,
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f, fill = false)
                     ) {
                         Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("${strings.printOnlyUnprinted} ($unprintedCount)")
+                        Text(
+                            text = "${strings.printOnlyUnprinted} ($unprintedCount)",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
                     TextButton(
                         onClick = {
                             selectedVoucherCodes = filteredVouchers.map { it.code }.toSet()
                         },
                         enabled = filteredVouchers.isNotEmpty()
                     ) {
-                        Text(strings.selectAll)
+                        Text(strings.selectAll, maxLines = 1)
                     }
                 }
             }
@@ -656,12 +671,18 @@ fun VoucherItemCard(
             }
             Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(
                         text = voucher.code,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
 
@@ -695,7 +716,9 @@ fun VoucherItemCard(
                             text = "(P: ${voucher.password})",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontFamily = FontFamily.Monospace
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -867,7 +890,7 @@ fun MikhmonGenerateVouchersDialog(
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        Icons.Default.ReceiptLong,
+                                        Icons.AutoMirrored.Filled.ReceiptLong,
                                         contentDescription = null,
                                         modifier = Modifier.size(15.dp),
                                         tint = MaterialTheme.colorScheme.primary
@@ -1014,7 +1037,9 @@ fun MikhmonGenerateVouchersDialog(
                                     text = strings.userModeSame,
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (!isAccountMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (!isAccountMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -1041,7 +1066,9 @@ fun MikhmonGenerateVouchersDialog(
                                     text = strings.userModeSeparate,
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isAccountMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (isAccountMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -1128,7 +1155,7 @@ fun MikhmonGenerateVouchersDialog(
                                     readOnly = true,
                                     label = { Text("All Profiles") },
                                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = profileExpanded) },
-                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                                     shape = RoundedCornerShape(10.dp)
                                 )
                                 ExposedDropdownMenu(
@@ -1162,7 +1189,10 @@ fun MikhmonGenerateVouchersDialog(
                             fontWeight = FontWeight.Bold
                         )
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp)
+                                .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             listOf(
@@ -1176,8 +1206,7 @@ fun MikhmonGenerateVouchersDialog(
                                     onClick = {
                                         selectedNumberStyle = numberStyles.firstOrNull { it.startsWith(styleKey) } ?: numberStyles[0]
                                     },
-                                    label = { Text(previewLabel, style = MaterialTheme.typography.labelSmall) },
-                                    modifier = Modifier.weight(1f)
+                                    label = { Text(previewLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1) }
                                 )
                             }
                         }
@@ -1202,7 +1231,10 @@ fun MikhmonGenerateVouchersDialog(
                             } else null
                         )
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp)
+                                .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -1211,7 +1243,7 @@ fun MikhmonGenerateVouchersDialog(
                                 val isSelected = (chipText == "None" && prefix.isEmpty()) || (chipText != "None" && prefix == chipText)
                                 SuggestionChip(
                                     onClick = { prefix = if (chipText == "None") "" else chipText },
-                                    label = { Text(chipText, style = MaterialTheme.typography.labelSmall) },
+                                    label = { Text(chipText, style = MaterialTheme.typography.labelSmall, maxLines = 1) },
                                     colors = SuggestionChipDefaults.suggestionChipColors(
                                         containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
                                     ),
@@ -1590,7 +1622,7 @@ fun PrintOptionsDialog(
                         selected = selectedFormat == VoucherPrinter.PaperFormat.THERMAL_58MM,
                         onClick = { selectedFormat = VoucherPrinter.PaperFormat.THERMAL_58MM }
                     )
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text("58 mm Thermal (Default / Saves 75% Paper)", fontWeight = FontWeight.SemiBold)
                         Text("Direct Bluetooth print. Compact ticket height, minimal line feeds.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -1601,7 +1633,7 @@ fun PrintOptionsDialog(
                         selected = selectedFormat == VoucherPrinter.PaperFormat.THERMAL_80MM,
                         onClick = { selectedFormat = VoucherPrinter.PaperFormat.THERMAL_80MM }
                     )
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text("80 mm POS Thermal (Desktop POS / Extra-Large Fonts)", fontWeight = FontWeight.SemiBold)
                         Text("Wide 80mm roll with giant 50sp+ bold typography. Easy to read.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -1612,7 +1644,7 @@ fun PrintOptionsDialog(
                         selected = selectedFormat == VoucherPrinter.PaperFormat.A4_PAGE,
                         onClick = { selectedFormat = VoucherPrinter.PaperFormat.A4_PAGE }
                     )
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text("A4 Sheet Grid (Paper-Saving 68-115 per sheet)", fontWeight = FontWeight.SemiBold)
                         Text("High-density cut grid with scissor guides. Massive paper savings.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -1624,21 +1656,21 @@ fun PrintOptionsDialog(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = selectedStyle == 1, onClick = { selectedStyle = 1 })
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text("Style 1: 2-Compartment Box [ Code | Profile ] (Default)", fontWeight = FontWeight.SemiBold)
                         Text("Excel solid black border. Huge code on left, plan details on right.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = selectedStyle == 2, onClick = { selectedStyle = 2 })
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text("Style 2: Slim Compact Excel Row (Maximum Paper Saving)", fontWeight = FontWeight.SemiBold)
                         Text("Single line code & plan. Absolute minimum paper consumption.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = selectedStyle == 3, onClick = { selectedStyle = 3 })
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text("Style 3: 3-Tier Full-Width Stacked Excel Box (Giant Code)", fontWeight = FontWeight.SemiBold)
                         Text("Full-width massive code centered, 3 plan columns at bottom.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

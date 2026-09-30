@@ -421,18 +421,30 @@ object VoucherPrinter {
                 // Row 3: 3 Sub-cells for Quota, Validity, Price
                 val col1W = width / 3f
                 val col2W = col1W * 2f
+                val subCellMaxW = col1W - 4f
+                val row3H = y + height - row2H
                 canvas.drawLine(x + col1W, row2H, x + col1W, y + height, linePaint)
                 canvas.drawLine(x + col2W, row2H, x + col2W, y + height, linePaint)
 
-                textPaint.textSize = if (is80) 12f else 9.5f
+                var subSize = (row3H * 0.55f).coerceIn(8.5f, if (is80) 13f else 10f)
+                textPaint.textSize = subSize
                 val quota = if (voucher.dataLimitMb > 0) "${voucher.dataLimitMb}MB" else "Unlim"
-                val botMidY = row2H + (y + height - row2H) / 2f + 3f
+                while (textPaint.measureText(quota) > subCellMaxW && subSize > 7f) {
+                    subSize -= 0.5f
+                    textPaint.textSize = subSize
+                }
+                val botMidY = row2H + (row3H / 2f) + (subSize * 0.35f)
                 canvas.drawText(quota, x + col1W / 2f, botMidY, textPaint)
-                canvas.drawText("${voucher.validityDays}D", x + col1W * 1.5f, botMidY, textPaint)
 
-                pricePaint.textSize = if (is80) 14f else 11f
+                val valStr = "${voucher.validityDays}D"
+                canvas.drawText(valStr, x + col1W * 1.5f, botMidY, textPaint)
+
+                pricePaint.textSize = subSize + 0.5f
                 val prText = if (voucher.price > 0) "${"%,d".format(java.util.Locale.US, voucher.price.toLong())} Ks" else "Free"
-                canvas.drawText(prText, x + col1W * 2.5f, botMidY, pricePaint)
+                while (pricePaint.measureText(prText) > subCellMaxW && pricePaint.textSize > 7f) {
+                    pricePaint.textSize -= 0.5f
+                }
+                canvas.drawText(prText, x + col1W * 2.5f, row2H + (row3H / 2f) + (pricePaint.textSize * 0.35f), pricePaint)
             }
             else -> {
                 // Style 1 (DEFAULT): COMPACT 2-COMPARTMENT PAPER-SAVING BOX (Code | Profile & Limits)
@@ -441,68 +453,118 @@ object VoucherPrinter {
                 // Strong vertical divider line between the two compartments
                 canvas.drawLine(splitX, y, splitX, y + height, linePaint)
 
-                // Left compartment: BIGGEST POSSIBLE VOUCHER CODE
-                val leftMaxW = (splitX - x) - 4f
+                // Left compartment: Header banner + BIGGEST POSSIBLE VOUCHER CODE
+                val leftMaxW = (splitX - x) - 6f
                 val leftCenterX = x + (splitX - x) / 2f
 
-                titlePaint.textSize = if (is80) 11f else 8.5f
-                canvas.drawText(if (voucher.isAccount) "ACCOUNT" else "CODE", leftCenterX, y + (if (is80) 14f else 11f), titlePaint)
+                val headerH = (height * 0.28f).coerceIn(9f, 16f)
+                canvas.drawLine(x, y + headerH, splitX, y + headerH, linePaint)
 
-                // DYNAMIC AUTO-FIT CODE: Maximize font size up to 28f on 80mm and 21f on 58mm!
-                var codeSize = if (is80) (if (voucher.isAccount) 20f else 28f) else (if (voucher.isAccount) 15f else 21f)
-                codePaint.textSize = codeSize
-                while (codePaint.measureText(voucher.code) > leftMaxW && codeSize > 9.5f) {
-                    codeSize -= 0.5f
-                    codePaint.textSize = codeSize
-                }
+                titlePaint.textSize = (headerH * 0.65f).coerceIn(7f, 12f)
+                canvas.drawText(
+                    if (voucher.isAccount) "ACCOUNT LOGIN" else "VOUCHER CODE",
+                    leftCenterX,
+                    y + (headerH * 0.5f) + (titlePaint.textSize * 0.35f),
+                    titlePaint
+                )
 
+                val codeAreaH = height - headerH
                 if (voucher.isAccount) {
-                    canvas.drawText(voucher.code, leftCenterX, y + (if (is80) 34f else 26f), codePaint)
-                    var passSize = if (is80) 15f else 11.5f
+                    var codeSize = (codeAreaH * 0.36f).coerceIn(9f, if (is80) 22f else 16f)
+                    codePaint.textSize = codeSize
+                    while (codePaint.measureText(voucher.code) > leftMaxW && codeSize > 8f) {
+                        codeSize -= 0.5f
+                        codePaint.textSize = codeSize
+                    }
+                    canvas.drawText(
+                        voucher.code,
+                        leftCenterX,
+                        y + headerH + (codeAreaH * 0.36f) + (codeSize * 0.32f),
+                        codePaint
+                    )
+
+                    var passSize = (codeAreaH * 0.28f).coerceIn(8f, if (is80) 16f else 12f)
                     textPaint.textSize = passSize
                     val passText = "P: ${voucher.password}"
-                    while (textPaint.measureText(passText) > leftMaxW && passSize > 7.5f) {
+                    while (textPaint.measureText(passText) > leftMaxW && passSize > 7f) {
                         passSize -= 0.5f
                         textPaint.textSize = passSize
                     }
-                    canvas.drawText(passText, leftCenterX, y + (if (is80) 52f else 40f), textPaint)
+                    canvas.drawText(
+                        passText,
+                        leftCenterX,
+                        y + headerH + (codeAreaH * 0.78f) + (passSize * 0.32f),
+                        textPaint
+                    )
                 } else {
-                    canvas.drawText(voucher.code, leftCenterX, y + (if (is80) 41f else 32f), codePaint)
+                    // Massive centered voucher code
+                    var codeSize = (codeAreaH * 0.56f).coerceIn(11f, if (is80) 28f else 22f)
+                    codePaint.textSize = codeSize
+                    while (codePaint.measureText(voucher.code) > leftMaxW && codeSize > 9f) {
+                        codeSize -= 0.5f
+                        codePaint.textSize = codeSize
+                    }
+                    canvas.drawText(
+                        voucher.code,
+                        leftCenterX,
+                        y + headerH + (codeAreaH / 2f) + (codeSize * 0.35f),
+                        codePaint
+                    )
                 }
 
-                // Right compartment: BIG BOLD PROFILE, LIMITS & PRICE
-                val rightMaxW = (x + width - splitX) - 4f
+                // Right compartment: 3 neat Excel rows (Profile, Limits, Price)
+                val rightMaxW = (x + width - splitX) - 6f
                 val rightCenterX = splitX + (x + width - splitX) / 2f
+                val rowH = height / 3f
 
-                // Profile Name
-                var profSize = if (is80) 16f else 13f
+                // Row dividers
+                canvas.drawLine(splitX, y + rowH, x + width, y + rowH, linePaint)
+                canvas.drawLine(splitX, y + rowH * 2f, x + width, y + rowH * 2f, linePaint)
+
+                // Row 1: Profile Name
+                var profSize = (rowH * 0.55f).coerceIn(8.5f, if (is80) 16f else 13f)
                 titlePaint.textSize = profSize
-                while (titlePaint.measureText(voucher.profileName) > rightMaxW && profSize > 8.5f) {
+                while (titlePaint.measureText(voucher.profileName) > rightMaxW && profSize > 7.5f) {
                     profSize -= 0.5f
                     titlePaint.textSize = profSize
                 }
-                canvas.drawText(voucher.profileName, rightCenterX, y + (if (is80) 18f else 13.5f), titlePaint)
+                canvas.drawText(
+                    voucher.profileName,
+                    rightCenterX,
+                    y + (rowH * 0.5f) + (profSize * 0.35f),
+                    titlePaint
+                )
 
-                // Data Quota & Validity
+                // Row 2: Data Quota & Validity
                 val quotaStr = if (voucher.dataLimitMb > 0) "${voucher.dataLimitMb}MB" else "Unlim"
                 val limitStr = "$quotaStr • ${voucher.validityDays}D"
-                var limitSize = if (is80) 14f else 11.5f
+                var limitSize = (rowH * 0.50f).coerceIn(8f, if (is80) 14f else 11.5f)
                 textPaint.textSize = limitSize
-                while (textPaint.measureText(limitStr) > rightMaxW && limitSize > 7.5f) {
+                while (textPaint.measureText(limitStr) > rightMaxW && limitSize > 7f) {
                     limitSize -= 0.5f
                     textPaint.textSize = limitSize
                 }
-                canvas.drawText(limitStr, rightCenterX, y + (if (is80) 36f else 27f), textPaint)
+                canvas.drawText(
+                    limitStr,
+                    rightCenterX,
+                    y + (rowH * 1.5f) + (limitSize * 0.35f),
+                    textPaint
+                )
 
-                // Price
+                // Row 3: Price
                 val priceStr = if (voucher.price > 0) "${"%,d".format(java.util.Locale.US, voucher.price.toLong())} Ks" else "Free"
-                var prSize = if (is80) 17f else 13.5f
+                var prSize = (rowH * 0.60f).coerceIn(9f, if (is80) 18f else 14f)
                 pricePaint.textSize = prSize
-                while (pricePaint.measureText(priceStr) > rightMaxW && prSize > 8.5f) {
+                while (pricePaint.measureText(priceStr) > rightMaxW && prSize > 8f) {
                     prSize -= 0.5f
                     pricePaint.textSize = prSize
                 }
-                canvas.drawText(priceStr, rightCenterX, y + (if (is80) 54f else 41f), pricePaint)
+                canvas.drawText(
+                    priceStr,
+                    rightCenterX,
+                    y + (rowH * 2.5f) + (prSize * 0.35f),
+                    pricePaint
+                )
             }
         }
     }

@@ -27,10 +27,10 @@ data class AppReleaseInfo(
 
 object GitHubUpdateManager {
 
-    // Repositories to check: primary requested by user, with fallback
+    // Repositories to check: primary HotspotManager, with fallback
     private val REPO_URLS = listOf(
-        "https://api.github.com/repos/sayarkhant001/mikrotik-Manager/releases/latest",
-        "https://api.github.com/repos/sayarkhant001/HotspotManager/releases/latest"
+        "https://api.github.com/repos/sayarkhant001/HotspotManager/releases/latest",
+        "https://api.github.com/repos/sayarkhant001/mikrotik-Manager/releases/latest"
     )
 
     suspend fun checkForUpdate(): AppReleaseInfo? = withContext(Dispatchers.IO) {
