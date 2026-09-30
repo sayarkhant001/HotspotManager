@@ -20,19 +20,39 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     viewModel: MainViewModel,
     onLoginSuccess: () -> Unit
 ) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("hotspot_login_prefs", Context.MODE_PRIVATE) }
+
     val authState by viewModel.authState.collectAsStateWithLifecycle()
-    var ip by remember { mutableStateOf("10.10.10.1") }
-    var user by remember { mutableStateOf("admin") }
-    var pass by remember { mutableStateOf("") }
+    var ip by remember { mutableStateOf(prefs.getString("router_ip", "10.10.10.1") ?: "10.10.10.1") }
+    var user by remember { mutableStateOf(prefs.getString("router_user", "admin") ?: "admin") }
+    var pass by remember { mutableStateOf(prefs.getString("router_pass", "Khant1234@") ?: "Khant1234@") }
+    var rememberPassword by remember { mutableStateOf(prefs.getBoolean("remember_password", true)) }
 
     LaunchedEffect(authState) {
         if (authState is AuthState.Success) {
+            if (rememberPassword) {
+                prefs.edit()
+                    .putString("router_ip", ip)
+                    .putString("router_user", user)
+                    .putString("router_pass", pass)
+                    .putBoolean("remember_password", true)
+                    .apply()
+            } else {
+                prefs.edit()
+                    .remove("router_pass")
+                    .putBoolean("remember_password", false)
+                    .apply()
+            }
             onLoginSuccess()
         }
     }
@@ -79,7 +99,7 @@ fun LoginScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 24.dp)
+                        modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
                     )
 
                     OutlinedTextField(
@@ -113,7 +133,25 @@ fun LoginScreen(
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true
                     )
-                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = rememberPassword,
+                            onCheckedChange = { rememberPassword = it }
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Remember Password for Easy Login",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
                     
                     if (authState is AuthState.Error) {
                         Surface(

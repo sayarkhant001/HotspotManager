@@ -8,7 +8,7 @@ import com.example.domain.models.RouterSessionLog
 import com.example.domain.models.UserProfile
 import com.example.domain.models.Voucher
 
-@Database(entities = [UserProfile::class, Voucher::class, RouterSessionLog::class], version = 2, exportSchema = false)
+@Database(entities = [UserProfile::class, Voucher::class, RouterSessionLog::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun routerDao(): RouterDao
 

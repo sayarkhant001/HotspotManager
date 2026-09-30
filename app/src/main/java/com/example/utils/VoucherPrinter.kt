@@ -16,6 +16,7 @@ import android.print.PrintAttributes
 import android.print.PrintDocumentAdapter
 import android.print.PrintDocumentInfo
 import android.print.PrintManager
+import com.example.domain.models.UserProfile
 import com.example.domain.models.Voucher
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
@@ -84,6 +85,36 @@ object VoucherPrinter {
         printManager.print(jobName, VoucherPrintAdapter(context, pdfFile), null)
     }
 
+    fun printTestReceipt(
+        context: Context,
+        format: PaperFormat = PaperFormat.THERMAL_58MM,
+        profiles: List<UserProfile> = emptyList()
+    ) {
+        val testVouchers = if (profiles.isNotEmpty()) {
+            profiles.take(5).mapIndexed { idx, p ->
+                Voucher(
+                    id = idx,
+                    code = "TEST-${p.name.take(4).uppercase()}-${100 + idx}",
+                    profileName = p.name,
+                    price = p.price,
+                    dataLimitMb = p.dataLimitMb,
+                    validityDays = p.validityDays,
+                    isUsed = false,
+                    isPrinted = false
+                )
+            }
+        } else {
+            listOf(
+                Voucher(id = 1, code = "TEST-1GB-01", profileName = "1GB_1H", price = 500.0, dataLimitMb = 1024, validityDays = 1),
+                Voucher(id = 2, code = "TEST-3GB-02", profileName = "3GB_6H", price = 1000.0, dataLimitMb = 3072, validityDays = 3),
+                Voucher(id = 3, code = "TEST-7GB-03", profileName = "7GB_7D", price = 3000.0, dataLimitMb = 7168, validityDays = 7)
+            )
+        }
+        val pdfFile = generatePdf(context, testVouchers, style = 2, format = format)
+        val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+        printManager.print("Hotspot Printer Test Slip", VoucherPrintAdapter(context, pdfFile), null)
+    }
+
     private fun generatePdf(
         context: Context,
         vouchers: List<Voucher>,
@@ -107,13 +138,13 @@ object VoucherPrinter {
     private fun renderA4Sheet(pdfDocument: PdfDocument, vouchers: List<Voucher>, style: Int) {
         val pageWidth = 595 // A4 width in points
         val pageHeight = 842 // A4 height in points
-        val cols = if (style == 2) 3 else 3
-        val cardWidth = 175f
-        val cardHeight = if (style == 2) 50f else 115f
-        val gapX = 10f
-        val gapY = 10f
+        val cols = if (style == 2) 5 else 3
+        val cardWidth = if (style == 2) 111f else 175f
+        val cardHeight = if (style == 2) 34f else 115f // 34 pt = 12mm
+        val gapX = if (style == 2) 5f else 10f
+        val gapY = if (style == 2) 4f else 10f
         val marginX = (pageWidth - (cols * cardWidth + (cols - 1) * gapX)) / 2f
-        val marginY = 25f
+        val marginY = 20f
 
         val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
         var page = pdfDocument.startPage(pageInfo)
@@ -134,7 +165,7 @@ object VoucherPrinter {
             drawVoucherCard(canvas, voucher, curX, curY, cardWidth, cardHeight, style)
 
             curX += cardWidth + gapX
-            if (curX + cardWidth > pageWidth - marginX + 5f) {
+            if (curX + cardWidth > pageWidth - marginX + 3f) {
                 curX = marginX
                 curY += cardHeight + gapY
             }
@@ -148,17 +179,18 @@ object VoucherPrinter {
         style: Int,
         rollWidth: Int
     ) {
-        val cardHeight = if (style == 2) 65 else 135
-        val totalHeight = (cardHeight + 10) * vouchers.size + 20
+        val cardHeight = if (style == 2) 34 else 125 // 34 pt = 12mm
+        val gapY = if (style == 2) 2 else 8
+        val totalHeight = (cardHeight + gapY) * vouchers.size + 16
 
-        val pageInfo = PdfDocument.PageInfo.Builder(rollWidth, Math.max(totalHeight, 200), 1).create()
+        val pageInfo = PdfDocument.PageInfo.Builder(rollWidth, Math.max(totalHeight, 100), 1).create()
         val page = pdfDocument.startPage(pageInfo)
         val canvas = page.canvas
 
-        var curY = 10f
+        var curY = 8f
         vouchers.forEach { voucher ->
-            drawVoucherCard(canvas, voucher, 5f, curY, (rollWidth - 10).toFloat(), cardHeight.toFloat(), style)
-            curY += cardHeight + 10f
+            drawVoucherCard(canvas, voucher, 4f, curY, (rollWidth - 8).toFloat(), cardHeight.toFloat(), style)
+            curY += cardHeight + gapY.toFloat()
         }
         pdfDocument.finishPage(page)
     }
@@ -175,13 +207,13 @@ object VoucherPrinter {
         val borderPaint = Paint().apply {
             color = Color.DKGRAY
             this.style = Paint.Style.STROKE
-            strokeWidth = 1f
+            strokeWidth = 0.8f
         }
         val linePaint = Paint().apply {
             color = Color.LTGRAY
             this.style = Paint.Style.STROKE
             strokeWidth = 0.8f
-            pathEffect = android.graphics.DashPathEffect(floatArrayOf(4f, 4f), 0f)
+            pathEffect = android.graphics.DashPathEffect(floatArrayOf(3f, 3f), 0f)
         }
         val titlePaint = Paint().apply {
             color = Color.BLACK
@@ -210,19 +242,22 @@ object VoucherPrinter {
 
         // Draw Card border
         val rect = RectF(x, y, x + width, y + height)
-        canvas.drawRoundRect(rect, 6f, 6f, borderPaint)
+        canvas.drawRoundRect(rect, if (style == 2) 2f else 5f, if (style == 2) 2f else 5f, borderPaint)
 
         val centerX = x + (width / 2f)
 
         when (style) {
             2 -> {
-                // Style 2: One-Line Compact
-                codePaint.textSize = 12f
-                canvas.drawText(voucher.code, centerX, y + 18f, codePaint)
-                textPaint.textSize = 7.5f
-                val info = "${voucher.profileName} • ${if (voucher.dataLimitMb > 0) "${voucher.dataLimitMb}MB" else "Unlim"} • \$${voucher.price}"
-                canvas.drawText(info, centerX, y + 32f, textPaint)
-                canvas.drawText("http://10.10.10.1", centerX, y + 44f, textPaint)
+                // Style 2: Ultra-Compact (58mm x 12mm thermal / 5-col A4 grid)
+                // Specification: Only voucher code and profile name
+                codePaint.textSize = if (width < 120f) 10.5f else 12f
+                codePaint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+                canvas.drawText(voucher.code, centerX, y + 14f, codePaint)
+
+                textPaint.textSize = if (width < 120f) 7f else 8f
+                textPaint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                val profileText = if (voucher.price > 0) "${voucher.profileName} • ${"%,d".format(java.util.Locale.US, voucher.price.toLong())} Ks" else voucher.profileName
+                canvas.drawText(profileText, centerX, y + 27f, textPaint)
             }
             3 -> {
                 // Style 3: QR Scannable Voucher
@@ -254,7 +289,7 @@ object VoucherPrinter {
                 textPaint.textSize = 7f
                 canvas.drawText("Profile: ${voucher.profileName}", rightCenterX, y + 74f, textPaint)
                 pricePaint.textSize = 8.5f
-                canvas.drawText(if (voucher.price > 0) "\$${voucher.price}" else "FREE", rightCenterX, y + 88f, pricePaint)
+                canvas.drawText(if (voucher.price > 0) "${"%,d".format(java.util.Locale.US, voucher.price.toLong())} Ks" else "FREE", rightCenterX, y + 88f, pricePaint)
                 textPaint.textSize = 6.5f
                 canvas.drawText("Scan QR to Connect", rightCenterX, y + 100f, textPaint)
             }
@@ -284,7 +319,7 @@ object VoucherPrinter {
                 canvas.drawText("$limitText • ${voucher.validityDays} Day(s)", centerX, y + 93f, textPaint)
 
                 pricePaint.textSize = 9f
-                canvas.drawText(if (voucher.price > 0) "Price: \$${voucher.price}" else "Free Access", centerX, y + 106f, pricePaint)
+                canvas.drawText(if (voucher.price > 0) "Price: ${"%,d".format(java.util.Locale.US, voucher.price.toLong())} Ks" else "Free Access", centerX, y + 106f, pricePaint)
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.example.domain.models
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import kotlinx.serialization.Serializable
 
@@ -39,11 +40,15 @@ data class Voucher(
     val price: Double = 0.0,
     val generatedAt: Long = System.currentTimeMillis(),
     val isUsed: Boolean = false,
+    val isPrinted: Boolean = false,
     val styleType: Int = 1,
     val comment: String = ""
 )
 
-@Entity(tableName = "sessions")
+@Entity(
+    tableName = "sessions",
+    indices = [Index(value = ["macAddress", "dateKey"], unique = true)]
+)
 @Serializable
 data class RouterSessionLog(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
@@ -59,4 +64,22 @@ data class RouterSessionLog(
     val isBanned: Boolean = false,
     val dateKey: String = "" // format: YYYY-MM-DD
 )
+
+data class ActiveUser(
+    val id: String,
+    val server: String,
+    val user: String,
+    val address: String,
+    val macAddress: String,
+    val uptime: String,
+    val bytesIn: String,
+    val bytesOut: String,
+    val hostName: String = "",
+    val quotaUsedMb: Double = 0.0,
+    val quotaTotalMb: Int = 0,
+    val quotaRemainingMb: Double = 0.0,
+    val profileName: String = "",
+    val comment: String = ""
+)
+
 

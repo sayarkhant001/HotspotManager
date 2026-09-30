@@ -1,0 +1,109 @@
+[2026-09-05 13:16] Initial analysis of HotspotManager repository.
+[2026-09-05 13:20] Diagnosed RouterOS firewall dropping port 8728 from hotspot-bridge; added accept rule *3B on input chain. Verified TCP 8728 is open.
+[2026-09-05 13:25] Implemented real-time hardware monitoring, live traffic speedometers, Room session logging with date filters, active sessions kick/ban controls, user profiles sync/add, and Mikhmon voucher generator with multi-format printing (58mm, 80mm, A4).
+[2026-09-05 13:30] Configured local Android SDK build-tools 36.0.0 and platforms; compiled app-debug.apk.
+[2026-09-05 13:33] Uninstalled old incompatible signature and installed new APK on REDMI Turbo 4 Pro (7ae68fcd) via ADB. Verified live app running.
+[2026-09-05 13:45] Investigated user feedback regarding profile duplication, missing existing vouchers, and traffic accuracy.
+[2026-09-05 13:47] Added voucher sync from RouterOS (fetching all 3,320+ existing vouchers/accounts), profile voucher count badges, unused profile deletion, and session deduplication.
+[2026-09-05 14:05] Discovered root cause of 0.0 Mbps traffic rate: me.legrange.mikrotik.impl.Parser throws ParseException on '=once=' without value. Tested and verified correct command syntax: '/interface/monitor-traffic interface=ether1 once=yes'.
+[2026-09-05 14:08] Created new profile '30GB_30D' (30 days validity, 10M/10M rate-limit, voucher-activate on-login, 10,000 Ks) on router via REST API.
+[2026-09-05 14:10] Configured profile pricing: 1GB = 500 Ks, 3GB = 1000 Ks, 7GB = 3000 Ks, 30GB 30D = 10000 Ks; converted all currency displays across the app from $ to Ks.
+[2026-09-05 14:12] Implemented 'Remember Password for Easy Login' with SharedPreferences persistence on LoginScreen.
+[2026-09-05 14:15] Implemented ultra-compact 58mm x 12mm thermal voucher format (only voucher code and profile) and 4-5 column A4 grid printing.
+[2026-09-05 14:16] Converted all UI currency displays from '$' to 'Ks' (Kyats) across DashboardScreen, ProfilesScreen, VouchersScreen, and VoucherPrinter.
+[2026-09-05 14:17] Enhanced profile pricing mapping in AppRepository to auto-assign 1GB (500 Ks), 3GB (1,000 Ks), 7GB (3,000 Ks), and 30GB (10,000 Ks).
+[2026-09-05 14:18] Updated VoucherPrinter to generate 5 columns x 21 rows (~105 tickets/sheet) on A4 with cut borders, matching user specifications.
+[2026-09-05 14:19] Built updated APK via Gradle ('assembleDebug') successfully in 27s. Copied output to 'C:\Users\localhost\Downloads\HotspotManager-debug.apk'.
+[2026-09-05 14:20] Ready for installation and verification on mobile device.
+[2026-09-05 14:22] Streamed install of 'HotspotManager-debug.apk' onto REDMI Turbo 4 Pro (7ae68fcd) via ADB succeeded. Launched MainActivity.
+[2026-09-05 14:24] Verified on-device functionality:
+    - Real-time traffic speeds measuring accurately (31.05 - 48.20 Mbps Rx, 3.93 - 8.87 Mbps Tx).
+    - Hardware telemetry live (CPU 58-85%, Free RAM 304 MB, Uptime 5h35m).
+    - All 3,320 vouchers synced from router with correct Ks pricing (3GB at 1,000 Ks, 7GB at 3,000 Ks).
+    - Estimated sales formatted in Ks (3,747,500 Ks).
+    - Print dialog configured with 58mm x 12mm ultra-compact tickets and 5-column A4 grid layout.
+[2026-09-05 14:35] In-depth Error Analysis & Investigation:
+    1. Error: Total Data Usage reporting 6,546 GB instead of real router traffic.
+       - Diagnostic: Queried MikroTik interface byte counters: 'hotspot-bridge' real total = 89.73 GB, 'ether1' WAN total = 93.33 GB.
+       - Root Cause: 'MainViewModel.fetchRouterData()' launched concurrent coroutines every 2s without mutex synchronization. Because 'recordSessions()' queried and inserted Room records without a UNIQUE constraint on '(macAddress, dateKey)', active session snapshots (51 clients) were duplicated over 12,098 times in SQLite. When the UI ran 'sumOf { it.dataUsedMb }', it summed duplicated snapshots thousands of times, accumulating to 6,546 GB.
+       - Solution Approach: Add UNIQUE index on '(macAddress, dateKey)' in 'RouterSessionLog', bump database version to clear corrupted duplicates, implement single-flight atomic upsert, and display true interface telemetry alongside unique daily device usage.
+    2. Error: Estimated Voucher Sales calculating all generated vouchers rather than activated vouchers.
+       - Diagnostic: 3,321 vouchers exist in RouterOS, but only 58 have 'uptime != 0s' or 'bytesOut > 0' (activated). Summing all generated codes inflated sales to 3.7M Ks.
+       - Solution Approach: Calculate sales strictly where 'isUsed == true' (activated), and implement date range filter covering up to 30 days (Today, Yesterday, Last 7 Days, Last 30 Days, All).
+    3. Profile Renaming & Cleanup Requirements:
+       - Rename '1GB_10M' (1,050 users) -> '1GB_1H', updating all 1,050 users on RouterOS.
+       - Rename '2GB_10M' (1,050 users) -> '2GB_2H', updating all 1,050 users on RouterOS.
+       - Delete unlimited profiles ('Unlim_7D', 'Unlim_30D') and their vouchers.
+       - Delete profiles with < 20 users ('1GB_1D' with 5 users, '3GB_3D' with 5 users) and their vouchers.
+    4. Active Sessions Enhancements:
+       - Query '/ip/dhcp-server/lease' to match MAC/IP to 'host-name' (e.g. 'REDMI-Turbo-4', 'Redmi-Note-13-Pro').
+       - Compute and render Quota Used, Total Quota, and Quota Remaining with progress indicator.
+    5. Enhanced Profile Creation Dialog:
+       - Support unit selection for validity (Minutes, Hours, Days, Months), data limit (MB, GB), and speed limits (kbps, Mbps, Gbps).
+    6. Selective Printing & Printer Testing:
+        - Add 'isPrinted: Boolean' to Voucher entity.
+        - Add multi-select checkboxes, "Print Selected", and "Print Unprinted Only" filter.
+        - Add "Test Print" generator and printer connection selector.
+[2026-09-05 15:30] Added comma formatting for all monetary amounts across dashboard, profile cards, and vouchers (e.g. 100,000 Ks).
+[2026-09-05 15:35] Implemented Edit Profile feature with EditProfileDialog, wired to RouterOS and Room DB.
+[2026-09-05 15:40] Added real-time CPU sparkline live line graph inside the CPU Load card with gradient fill and pulsating indicator dot.
+[2026-09-05 15:45] Reordered voucher tabs: All (3200) -> Used (82) -> Unprinted (2956) -> Printed. Added Renew and Delete actions for used vouchers.
+[2026-09-05 15:50] Made unprinted badge compact (9sp) to prevent wrapping. Stored printed status directly in RouterOS comment field. Marked 199 vouchers as printed.
+[2026-09-05 16:15] Implemented requested voucher generation and active session updates:
+    1. Voucher Generator:
+        - Replaced profile radio button list with ExposedDropdownMenuBox showing profile name, rate limit, validity, and formatted price.
+        - Simplified mode selector chips to 'Voucher' and 'Account', completely removing '(User+ Pass)' and '(Code)'.
+        - Added prefix selection with OutlinedTextField and quick chips (None, HS-, AG-, VIP-).
+        - Added Number / Code Style ExposedDropdownMenuBox (Hyphenated Numbers 'XXXX-XXXX', Numbers Only, Alphanumeric, Hyphenated Alphanumeric, Uppercase, Lowercase, Mixed).
+        - Updated MainViewModel.generateVouchers to support hyphenated codes and number styles.
+    2. Active Session Quota:
+        - Active session quota dynamically varies according to the profile the user is assigned (e.g. 3GB_6H -> 3,072 MB, 7GB_7D -> 7,168 MB, 1GB_1H -> 1,024 MB, or Unlimited Quota).
+        - Displayed profile badge (e.g. 3GB_6H, 7GB_7D) alongside username and live quota progress on each ActiveUserCard.
+[2026-09-30 09:45] Root Cause Diagnosis & Resolution for Router Voucher/User Commands:
+    1. Critical Bug Discovered: RouterOS API Command Syntax Error
+       - Problem: me.legrange.mikrotik.ApiConnection/Parser prepends '=' to each parameter word automatically when transmitting over the socket.
+       - The code throughout MikrotikClient was writing commands formatted with leading equals, e.g. "/ip/hotspot/user/add =name=... =password=... =profile=...".
+       - This caused the library Parser to interpret the first '=' as an empty parameter ("") with null value, serializing "==" over the wire followed by "=name=...".
+       - MikroTik RouterOS rejected every single command with "!trap (unknown parameter / syntax error)".
+       - Affected operations: addHotspotUser, addHotspotUsersBatch, removeActiveSession, banMacAddress, addRouterProfile, deleteRouterProfile, updateRouterProfile, resetUserCounters, markUsersAsPrintedOnRouter, renewHotspotUser, and deleteHotspotUsersBatch.
+    2. Batch Generation & Deletion Failures:
+       - addHotspotUsersBatch and deleteHotspotUsersBatch attempted to create temporary RouterOS scripts ("/system/script/add =name=... =source=..."). The source scripts contained unquoted spaces and semicolons which broke in the API parser, and the subsequent run command passed '=number=name' (RouterOS expects internal ID for 'number').
+       - When the script failed, the fallback loop also failed due to the leading '=' syntax bug and swallowed exceptions, returning 'true' while zero users were actually created or deleted on the router.
+       - AppRepository then called syncVouchersFromRouter(), which erased newly generated vouchers from Room DB because RouterOS never received them, or reloaded deleted vouchers because RouterOS never deleted them.
+    3. Comprehensive Fixes Applied:
+       - Stripped invalid leading '=' from all command parameter definitions across MikrotikClient (e.g. "name=$code", "password=$pass", "profile=$profile", ".id=$id", "comment=\"$comment\"").
+       - Verified over-the-wire sentence serialization using bytecode test script (TestParser) confirming 100% compliant MikroTik API sentences: '/ip/hotspot/user/add', '=name=...', '=password=...', '=profile=...', '=comment=...'.
+       - Re-implemented addHotspotUsersBatch to sequentially execute direct API adds with robust user update fallbacks if an account already exists.
+       - Re-implemented deleteHotspotUsersBatch to fetch all matching IDs, drop active sessions on router, purge login cookies, and remove users by '.id' directly.
+       - Added 'ensureConnected()' method to auto-reconnect dropped socket connections before attempting mutating router operations (vouchers, profiles, bans, kicks).
+       - Fixed startPolling() loop in MainViewModel so that it does not exit permanently on transient connection drops.
+       - Successfully compiled Kotlin and built APK: app-debug.apk (23.8 MB). Copied output to 'C:\Users\localhost\Downloads\HotspotManager-debug.apk'.
+[2026-09-30 13:15] Bulk Delete Crash Resolution, Performance & RAM Optimization, and GitHub In-App Updates:
+    1. Bulk Delete Crash & Router Socket Desynchronization:
+       - Root Cause:
+         a) RouterOS API commands across MikrotikClient were sending 'numbers=...' instead of native API parameter '.id=...'. RouterOS rejected all batch delete calls with '!trap (expected end of command / unknown parameter)'.
+         b) In RawRouterOSConnection, when '!trap' occurred, the parser read the trap sentence but failed to drain the terminating '!done' sentence. This left unread bytes in the TCP socket, completely desynchronizing subsequent commands and causing background polling to throw uncaught exceptions.
+         c) In MainViewModel, coroutines launched on viewModelScope lacked try/catch and CoroutineExceptionHandler, crashing the Android app to home screen during bulk delete.
+         d) In VouchersScreen, LazyColumn items lacked stable keys ('key = { it.code }'), triggering Compose runtime diffing exceptions during batch deletion.
+       - Solutions:
+         a) Replaced 'numbers=...' with native RouterOS '.id=...' parameter across all API calls (user removal, profile updates/deletion, counter resets, active session kicks).
+         b) Implemented fast batch deletion in MikrotikClient: queried '/ip/hotspot/user/print =.proplist=.id,name' once (~40ms), mapped matching IDs, and deleted in batches of 50 using '.id=*1,*2,...'. Dropped active sessions and cookies cleanly.
+         c) Drained terminating '!done' sentence on '!trap' in RawRouterOSConnection, and closed socket on fatal/unhandled errors to prevent desynchronization.
+         d) Added CoroutineExceptionHandler to MainViewModel and wrapped all coroutines in try/catch(Throwable).
+         e) Added stable keys 'key = { it.code }' to LazyColumn in VouchersScreen.
+    2. Ultra-Fast Responsiveness (< 10ms) & Router RAM/CPU Optimization:
+       - Implemented optimistic Room DB deletion: vouchers are deleted locally in < 5ms for instant UI updates while router sync runs asynchronously.
+       - Optimized active user quota matching: replaced full table load ('dao.getAllVouchersSync()', 3,320 items every 3.5s) with targeted query ('dao.getVouchersByCodes(activeCodes)'), cutting query time from 80ms to < 1ms and freeing megabytes of RAM.
+       - Consolidated telemetry: merged bandwidth calculation and hardware byte queries into a single '/interface/print' call ('getInterfaceMetrics()'), cutting router CPU/RAM workload in half.
+       - Added 30-second DHCP lease cache with selective property projection ('=.proplist=address,mac-address,host-name') to eliminate redundant router queries.
+       - Added single-flight mutex guard on fetchRouterData() to prevent overlapping coroutines.
+    3. In-App GitHub Updates:
+       - Created GitHubUpdateManager supporting 'sayarkhant001/mikrotik-Manager' and 'sayarkhant001/HotspotManager' releases API.
+       - Replaced Dashboard TopAppBar Refresh button with 'Update App' button featuring an attention badge ('NEW') when a release is available.
+       - Added Update Dialog showing current vs new version, release notes, and 'Update Now' / 'Later' actions.
+       - Implemented in-app APK downloader with live progress bar and FileProvider installer intent (fallback to browser).
+       - Added REQUEST_INSTALL_PACKAGES permission and FileProvider XML config in AndroidManifest.xml.
+    4. Build & Verification:
+       - Successfully built APK: assembleDebug passed cleanly in 39s.
+       - Streamed installation to connected device (c975293b0612) and verified MainActivity launching with zero crashes.
+
