@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>အရိပ်စစ် Wifi – လမ်းကြောင်းလွှဲနေပါသည်...</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="refresh" content="0; url=$(link-redirect)" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#090D1A;color:#fff;
+              display:flex;align-items:center;justify-content:center;}
+    .wrap{text-align:center;padding:20px;}
+    .ring{width:40px;height:40px;border-radius:50%;border:3px solid rgba(6,182,212,.2);
+          border-top-color:#06B6D4;animation:spin .8s linear infinite;margin:0 auto 14px;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    p{font-size:13px;color:rgba(255,255,255,.6);}
+    a{color:#06B6D4;text-decoration:none;font-size:12px;display:block;margin-top:12px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="ring"></div>
+    <p>အင်တာနက် ချိတ်ဆက်နေပါသည်...</p>
+    <a href="$(link-redirect)">မရောက်ရှိပါက ဤနေရာကို နှိပ်ပါ</a>
+  </div>
+  <script>
+    (function () {
+      var dest = '$(link-redirect)';
+      if (!dest || dest.indexOf('$(') !== -1 || dest.trim() === '') {
+        var origin = (window.location.origin && window.location.origin.startsWith('http'))
+          ? window.location.origin
+          : 'http://10.10.10.1';
+        dest = origin + '/login';
+      }
+      try {
+        window.location.replace(dest);
+      } catch (e) {
+        window.location.href = dest;
+      }
+    })();
+  </script>
+</body>
+</html>

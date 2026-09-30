@@ -13,6 +13,7 @@ import com.example.domain.models.Voucher
 import com.example.utils.AppReleaseInfo
 import com.example.utils.GitHubUpdateManager
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -79,6 +80,10 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     // Real-time Bandwidth (in Mbps)
     val rxSpeedMbps = MutableStateFlow(0.0)
     val txSpeedMbps = MutableStateFlow(0.0)
+
+    // Detected Hotspot Portal Login URL and Wi-Fi SSID
+    val hotspotLoginUrl = MutableStateFlow("http://10.10.10.1")
+    val hotspotSsid = MutableStateFlow("")
 
     // Router hardware total data bytes (rx, tx)
     val routerHardwareTotalBytes = MutableStateFlow(Pair(0L, 0L))
@@ -170,10 +175,24 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 startPolling()
                 syncProfiles()
                 syncVouchers()
+                fetchHotspotNetworkInfo()
             } else {
                 val errorMsg = result.exceptionOrNull()?.message ?: "Failed to connect. Check IP, user, password or network."
                 authState.value = AuthState.Error(errorMsg)
             }
+        }
+    }
+
+    fun fetchHotspotNetworkInfo() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val url = repository.getHotspotLoginUrl()
+                hotspotLoginUrl.value = url
+                val ssid = repository.getHotspotSsid()
+                if (!ssid.isNullOrBlank()) {
+                    hotspotSsid.value = ssid
+                }
+            } catch (_: Exception) {}
         }
     }
 

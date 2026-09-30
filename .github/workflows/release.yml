@@ -46,13 +46,21 @@ jobs:
             ## 🚀 Hotspot Manager v${{ github.ref_name }} Update
 
             ### What's New:
-            - 🛠️ **Settings & Tools Modal**: Directly accessible from the Dashboard top bar next to language toggle.
-            - 🖨️ **Thermal Printer Testing & Functions**: Instant test slip print, paper width toggle (58mm/80mm), auto-cut switch, and default voucher styles.
-            - 🔐 **Router Login Password Change**: Change password directly on MikroTik router via RouterOS API with automatic app credential sync.
-            - 📱 **User Profiles UI Fix**: Replaced colliding layout with modern 2x2 spec pills (Speed, Devices, Validity, Quota).
-            - 🎨 **Add Profile Studio Fix**: Responsive dialog layout with keyboard `imePadding`, scrollable quick presets, and pinned controls.
-            - 📄 **Voucher Ticket Paper-Saving**: Auto-scaled typography fitting maximum cell width with zero border collisions on A4 sheets and thermal rolls.
-            - 🇲🇲 **Full Localization**: Support for both Myanmar (🇲🇲) and English (🇬🇧).
+            - 🎫 **Voucher Ticket In-Box URL & Dynamic SSID**:
+              - Hotspot login URL positioned strictly **inside the box right beneath the code** (never clipped by thermal tear teeth or A4 scissors).
+              - Dynamic router SSID header (`AyeikSIt_WiFi`) printed on vouchers.
+              - 4-to-12 digit code auto-scaling typography with solid Excel borders.
+            - 🌐 **Dual Captive Portals (`A Yeik Sitt 1` & `A Yeik Sitt 2`)**:
+              - Pure Myanmar language interface.
+              - Style 1 (Compact Minimalist) & Style 2 (Glassmorphism Modern).
+              - Real-time traffic, remaining quota, and user notice cards (**သတင်းနှင့် အသိပေးချက်များ**).
+            - 🛠️ **Dashboard Settings & In-App Updates**:
+              - Direct GitHub OTA update checker and installer (Tab 2: App Updates).
+              - Instant thermal printer testing, paper width toggle (58mm/80mm), and auto-cut.
+              - Live Router login password changer with automatic app credential sync.
+            - 🎨 **Simplified Modern App Icon**:
+              - Clean, refined Wi-Fi ticket glyph with high contrast.
+            - 🇲🇲 **Full Myanmar & English Dual Localization**.
           draft: false
           prerelease: false
           files: release-output/*.apk

@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.Manifest
+import android.content.Context
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -460,10 +461,14 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
         // Print Format and Style Dialog
         if (showPrintDialog) {
             val targetList = if (vouchersToPrint.isNotEmpty()) vouchersToPrint else filteredVouchers
+            val detectedLoginUrl by viewModel.hotspotLoginUrl.collectAsStateWithLifecycle()
+            val detectedSsid by viewModel.hotspotSsid.collectAsStateWithLifecycle()
             PrintOptionsDialog(
                 sampleVoucher = targetList.firstOrNull(),
+                defaultSsid = detectedSsid,
+                defaultLoginUrl = detectedLoginUrl,
                 onDismiss = { showPrintDialog = false },
-                onPrint = { style, format, autoCut ->
+                onPrint = { style, format, autoCut, ssid, url ->
                     if (format == VoucherPrinter.PaperFormat.THERMAL_58MM || format == VoucherPrinter.PaperFormat.THERMAL_80MM) {
                         val savedPrinter = BluetoothThermalPrinter.getSavedPrinter(context)
                         val paperWidth = if (format == VoucherPrinter.PaperFormat.THERMAL_80MM)
@@ -480,7 +485,9 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                                     deviceAddress = savedPrinter.address,
                                     paperWidth = paperWidth,
                                     style = style,
-                                    autoCutEachVoucher = autoCut
+                                    autoCutEachVoucher = autoCut,
+                                    routerSsid = ssid,
+                                    loginUrl = url
                                 )
                                 if (res.isSuccess) {
                                     viewModel.markVouchersAsPrinted(targetList.map { it.code })
@@ -495,7 +502,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                             showPrinterSetupDialog = true
                         }
                     } else {
-                        VoucherPrinter.printVouchers(navController.context, targetList, style, format)
+                        VoucherPrinter.printVouchers(navController.context, targetList, style, format, routerSsid = ssid, loginUrl = url)
                         viewModel.markVouchersAsPrinted(targetList.map { it.code })
                     }
                     selectedVoucherCodes = emptySet()
@@ -1621,10 +1628,11 @@ fun MikhmonGenerateVouchersDialog(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     val lengthOptions = listOf(
-                                        Triple("4", "4 Digits", "Short"),
-                                        Triple("6", "6 Digits", "Medium"),
-                                        Triple("8", "8 Digits", "8-Box ⭐"),
-                                        Triple("9", "9 Digits", "Long")
+                                        Triple("4", "4 Digits", "အလွယ် (4)"),
+                                        Triple("6", "6 Digits", "အလတ် (6)"),
+                                        Triple("8", "8 Digits", "စံနှုန်း (8) ⭐"),
+                                        Triple("10", "10 Digits", "အရှည် (10)"),
+                                        Triple("12", "12 Digits", "အရှည်ဆုံး (12)")
                                     )
                                     lengthOptions.forEach { (lVal, label, badge) ->
                                         val isSelected = length == lVal
@@ -1637,7 +1645,7 @@ fun MikhmonGenerateVouchersDialog(
                                                 if (isSelected) 1.8.dp else 1.dp,
                                                 if (isSelected) MaterialTheme.colorScheme.primary else if (isPortalStandard) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                                             ),
-                                            modifier = Modifier.weight(if (isPortalStandard) 1.25f else 0.9f)
+                                            modifier = Modifier.weight(if (isPortalStandard) 1.15f else 0.95f)
                                         ) {
                                             Column(
                                                 modifier = Modifier.padding(vertical = 7.dp, horizontal = 2.dp),
@@ -1665,53 +1673,46 @@ fun MikhmonGenerateVouchersDialog(
                                 }
                             }
 
-                            // 8-Box Captive Portal Compatibility Indicator & One-Click Fix
+                            // 4-12 Digits Universal Compatibility Indicator
                             val rawCodeLen = previewCode.replace("-", "").length
-                            val hasPrefixOrHyphen = prefix.isNotBlank() || previewCode.contains("-")
-                            val isExact8Boxes = rawCodeLen == 8 && !hasPrefixOrHyphen
+                            val isSupportedRange = rawCodeLen in 4..12
 
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = if (isExact8Boxes) Color(0xFF2E7D32).copy(alpha = 0.12f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
+                                color = if (isSupportedRange) Color(0xFF2E7D32).copy(alpha = 0.12f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
                                 border = androidx.compose.foundation.BorderStroke(
                                     1.dp,
-                                    if (isExact8Boxes) Color(0xFF2E7D32).copy(alpha = 0.4f) else MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
+                                    if (isSupportedRange) Color(0xFF2E7D32).copy(alpha = 0.4f) else MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
                                 ),
                                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                             ) {
                                 Column(modifier = Modifier.padding(10.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
-                                            imageVector = if (isExact8Boxes) Icons.Default.CheckCircle else Icons.Default.Warning,
+                                            imageVector = if (isSupportedRange) Icons.Default.CheckCircle else Icons.Default.Warning,
                                             contentDescription = null,
-                                            tint = if (isExact8Boxes) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+                                            tint = if (isSupportedRange) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Spacer(Modifier.width(6.dp))
                                         Text(
-                                            text = if (isExact8Boxes) "8-Box Captive Portal Compatible ✓" else "Captive Portal 8-Box Warning (အကွက် ၈ ကွက် သတိပေးချက်)",
+                                            text = if (isSupportedRange) "4 - 12 Digits Fully Compatible ✓ (၄ မှ ၁၂ လုံး ကိုက်ညီမှုရှိ)" else "Code Length Warning (ကုဒ်အလျား သတိပေးချက်)",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (isExact8Boxes) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
+                                            color = if (isSupportedRange) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
                                         )
                                     }
                                     Spacer(Modifier.height(4.dp))
-                                    if (isExact8Boxes) {
+                                    if (isSupportedRange) {
                                         Text(
-                                            text = "ကုတ်နံပါတ် ၈ လုံးသည် Captive Portal အကွက် ၈ ကွက်နှင့် အတိအကျ ကိုက်ညီသဖြင့် အသုံးပြုသူ အဆင်ပြေစွာ ရိုက်ထည့်နိုင်ပါသည်။ (Perfect 8-digit match for 8-box portal)",
+                                            text = "ကုဒ်နံပါတ် ${rawCodeLen} လုံးသည် ပရင်တာ စက္ကူလိပ်နှင့် Captive Portal တွင် အလိုအလျောက် အံဝင်ခွင်ကျဖြစ်ပြီး အဆင်ပြေစွာ ရိုက်ထည့်အသုံးပြုနိုင်ပါသည်။ (4 to 12 digits auto-fit on printer & captive portal)",
                                             style = MaterialTheme.typography.bodySmall,
                                             fontSize = 11.sp,
                                             color = Color(0xFF1B5E20)
                                         )
                                     } else {
                                         Text(
-                                            text = if (rawCodeLen > 8) {
-                                                "အကွက် ၈ ကွက်သာရှိသော Portal တွင် ${rawCodeLen} လုံးပါကုတ်ကို ရိုက်ထည့်၍ မရနိုင်ပါ။ (Cannot type >8 digits into an 8-box portal!)"
-                                            } else if (hasPrefixOrHyphen) {
-                                                "Prefix သို့မဟုတ် Hyphen (-) ပါရှိပါက အကွက် ၈ ကွက်သာရှိသော Portal တွင် ရိုက်ထည့်ရန် မဆံ့နိုင်ပါ။ (Numbers Only 8-digits recommended)"
-                                            } else {
-                                                "ကုတ်အလျားသည် ${rawCodeLen} လုံး ဖြစ်နေပါသည်။ 8-Box Portal အတွက် ၈ လုံး အတိအကျ အကြံပြုပါသည်။"
-                                            },
+                                            text = "အဆင်ပြေစွာ အသုံးပြုနိုင်ရန် ကုဒ်အလျားကို ၄ လုံးမှ ၁၂ လုံးအတွင်း ရွေးချယ်ပေးပါရန်။ (Please choose 4 to 12 digits)",
                                             style = MaterialTheme.typography.bodySmall,
                                             fontSize = 11.sp,
                                             color = MaterialTheme.colorScheme.onErrorContainer
@@ -1727,7 +1728,7 @@ fun MikhmonGenerateVouchersDialog(
                                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                             modifier = Modifier.height(28.dp)
                                         ) {
-                                            Text("⭐ 8-Box စံနှုန်း (Numbers Only 8-Digits) သို့ ပြောင်းမည်", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                                            Text("⭐ 8-Digits စံနှုန်းသို့ ပြောင်းမည်", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }
@@ -1801,12 +1802,29 @@ fun MikhmonGenerateVouchersDialog(
 @Composable
 fun PrintOptionsDialog(
     sampleVoucher: Voucher? = null,
+    defaultSsid: String = "",
+    defaultLoginUrl: String = "",
     onDismiss: () -> Unit,
-    onPrint: (Int, VoucherPrinter.PaperFormat, Boolean) -> Unit
+    onPrint: (Int, VoucherPrinter.PaperFormat, Boolean, String, String) -> Unit
 ) {
     val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("hotspot_login_prefs", Context.MODE_PRIVATE) }
+    var routerSsid by remember(defaultSsid) {
+        mutableStateOf(if (defaultSsid.isNotBlank()) defaultSsid else (prefs.getString("router_ssid", "AllGood_Wifi") ?: "AllGood_Wifi"))
+    }
+    var hotspotLoginUrl by remember(defaultLoginUrl) {
+        mutableStateOf(if (defaultLoginUrl.isNotBlank()) defaultLoginUrl else (prefs.getString("hotspot_login_url", "http://allgood.lan") ?: "http://allgood.lan"))
+    }
+    val savedWidth = remember { BluetoothThermalPrinter.getSavedPaperWidth(context) }
     var selectedStyle by remember { mutableIntStateOf(BluetoothThermalPrinter.getSavedDefaultStyle(context)) } // 1: 2-Compartment Box, 2: Ultra-Micro, 3: 3-Tier Full-Width
-    var selectedFormat by remember { mutableStateOf(VoucherPrinter.PaperFormat.THERMAL_58MM) }
+    var selectedFormat by remember {
+        mutableStateOf(
+            if (savedWidth == BluetoothThermalPrinter.PaperWidth.WIDTH_80MM)
+                VoucherPrinter.PaperFormat.THERMAL_80MM
+            else
+                VoucherPrinter.PaperFormat.THERMAL_58MM
+        )
+    }
     var autoCutEachVoucher by remember { mutableStateOf(BluetoothThermalPrinter.getSavedAutoCut(context)) }
     var a4PreviewMode by remember { mutableIntStateOf(0) } // 0: Full A4 Sheet, 1: Single Ticket Zoom
     val strings = LanguageManager.strings
@@ -1827,15 +1845,15 @@ fun PrintOptionsDialog(
         BluetoothThermalPrinter.PaperWidth.WIDTH_58MM
 
     // Generate real preview bitmaps matching exact printer/PDF output
-    val previewBitmap = remember(v, selectedFormat, selectedStyle, autoCutEachVoucher, a4PreviewMode) {
+    val previewBitmap = remember(v, selectedFormat, selectedStyle, autoCutEachVoucher, a4PreviewMode, routerSsid, hotspotLoginUrl) {
         if (selectedFormat == VoucherPrinter.PaperFormat.A4_PAGE) {
             if (a4PreviewMode == 0) {
-                VoucherPrinter.renderA4PreviewBitmap(v, selectedStyle)
+                VoucherPrinter.renderA4PreviewBitmap(v, selectedStyle, routerSsid = routerSsid, loginUrl = hotspotLoginUrl)
             } else {
-                BluetoothThermalPrinter.renderVoucherExcelBitmap(v, BluetoothThermalPrinter.PaperWidth.WIDTH_80MM, selectedStyle)
+                BluetoothThermalPrinter.renderVoucherExcelBitmap(v, BluetoothThermalPrinter.PaperWidth.WIDTH_80MM, selectedStyle, routerSsid = routerSsid, loginUrl = hotspotLoginUrl)
             }
         } else {
-            BluetoothThermalPrinter.renderThermalPreviewBitmap(v, paperWidth, selectedStyle, showAutoCut = autoCutEachVoucher)
+            BluetoothThermalPrinter.renderThermalPreviewBitmap(v, paperWidth, selectedStyle, showAutoCut = autoCutEachVoucher, routerSsid = routerSsid, loginUrl = hotspotLoginUrl)
         }
     }
 
@@ -2030,6 +2048,36 @@ fun PrintOptionsDialog(
                     }
                 }
 
+                // Wi-Fi SSID Field (Printed directly on tickets)
+                OutlinedTextField(
+                    value = routerSsid,
+                    onValueChange = {
+                        routerSsid = it
+                        prefs.edit().putString("router_ssid", it).apply()
+                    },
+                    label = { Text("Wi-Fi SSID (Ticket Header)") },
+                    placeholder = { Text("e.g. AllGood_Wifi, A Yeik Sitt Wifi") },
+                    leadingIcon = { Icon(Icons.Default.Wifi, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(6.dp))
+
+                // Hotspot Login URL Field (Printed under voucher card with small text)
+                OutlinedTextField(
+                    value = hotspotLoginUrl,
+                    onValueChange = {
+                        hotspotLoginUrl = it
+                        prefs.edit().putString("hotspot_login_url", it).apply()
+                    },
+                    label = { Text("Hotspot Login URL (Printed Under Card)") },
+                    placeholder = { Text("e.g. http://allgood.lan, http://ayeiksitt.lan") },
+                    leadingIcon = { Icon(Icons.Default.Language, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 HorizontalDivider()
 
                 Text("Paper Format (Paper-Saver):", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
@@ -2037,22 +2085,28 @@ fun PrintOptionsDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(
                         selected = selectedFormat == VoucherPrinter.PaperFormat.THERMAL_58MM,
-                        onClick = { selectedFormat = VoucherPrinter.PaperFormat.THERMAL_58MM }
+                        onClick = {
+                            selectedFormat = VoucherPrinter.PaperFormat.THERMAL_58MM
+                            BluetoothThermalPrinter.savePaperWidth(context, BluetoothThermalPrinter.PaperWidth.WIDTH_58MM)
+                        }
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text("58 mm Thermal (Default / Saves 75% Paper)", fontWeight = FontWeight.SemiBold)
-                        Text("Direct Bluetooth print. Compact ticket height, minimal line feeds.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Direct Bluetooth print. Fits 58mm mobile thermal printers perfectly without cut-offs.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(
                         selected = selectedFormat == VoucherPrinter.PaperFormat.THERMAL_80MM,
-                        onClick = { selectedFormat = VoucherPrinter.PaperFormat.THERMAL_80MM }
+                        onClick = {
+                            selectedFormat = VoucherPrinter.PaperFormat.THERMAL_80MM
+                            BluetoothThermalPrinter.savePaperWidth(context, BluetoothThermalPrinter.PaperWidth.WIDTH_80MM)
+                        }
                     )
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("80 mm POS Thermal (Desktop POS / Extra-Large Fonts)", fontWeight = FontWeight.SemiBold)
-                        Text("Wide 80mm roll with giant 50sp+ bold typography. Easy to read.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("80 mm POS Thermal (Desktop POS Printers Only)", fontWeight = FontWeight.SemiBold)
+                        Text("⚠️ သတိပြုရန် - 80mm စက္ကူအကျယ်သုံး ပရင်တာများအတွက်သာ ဖြစ်ပါသည်။ (58mm ပရင်တာသုံးပါက 58mm ကိုသာ ရွေးပါ)", style = MaterialTheme.typography.bodySmall, color = if (selectedFormat == VoucherPrinter.PaperFormat.THERMAL_80MM) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
 
@@ -2095,7 +2149,7 @@ fun PrintOptionsDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { onPrint(selectedStyle, selectedFormat, autoCutEachVoucher) }) {
+            Button(onClick = { onPrint(selectedStyle, selectedFormat, autoCutEachVoucher, routerSsid, hotspotLoginUrl) }) {
                 Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(strings.printAction)

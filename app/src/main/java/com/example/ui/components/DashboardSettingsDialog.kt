@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.BuildConfig
 import com.example.ui.screens.MainViewModel
 import com.example.utils.AppStrings
 import com.example.utils.BluetoothPrinterDevice
@@ -50,6 +52,14 @@ fun DashboardSettingsDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    // -------------------------------------------------------------
+    // APP UPDATE STATE
+    // -------------------------------------------------------------
+    val appUpdateInfo by viewModel.appUpdateInfo.collectAsState()
+    val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsState()
+    val isDownloadingUpdate by viewModel.isDownloadingUpdate.collectAsState()
+    val downloadProgress by viewModel.downloadProgress.collectAsState()
 
     // -------------------------------------------------------------
     // PRINTER STATE
@@ -193,6 +203,17 @@ fun DashboardSettingsDialog(
                                 Icon(Icons.Default.LockReset, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text("Login Password", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    )
+                    Tab(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("App Updates", fontWeight = FontWeight.Bold)
                             }
                         }
                     )
@@ -699,7 +720,7 @@ fun DashboardSettingsDialog(
                             }
                         }
 
-                    } else {
+                    } else if (selectedTab == 1) {
                         // ============================================================
                         // TAB 1: ROUTER LOGIN PASSWORD CHANGING
                         // ============================================================
@@ -899,6 +920,238 @@ fun DashboardSettingsDialog(
                             Icon(Icons.Default.ExitToApp, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(strings.logoutRouter, fontWeight = FontWeight.Bold)
+                        }
+                    } else if (selectedTab == 2) {
+                        // ============================================================
+                        // TAB 2: APP UPDATES & GITHUB RELEASES
+                        // ============================================================
+
+                        // App Version Card
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                Icons.Default.SystemUpdate,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            "Hotspot Manager",
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                        Text(
+                                            "Installed: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Checking State
+                        if (isCheckingUpdate) {
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                    Spacer(Modifier.width(12.dp))
+                                    Text("Checking GitHub for newer releases...", style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
+
+                        // Release Info Card
+                        val info = appUpdateInfo
+                        if (info != null) {
+                            if (info.isNewer) {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = Color(0xFFE8F5E9),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF4CAF50)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    Icons.Default.Celebration,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFF2E7D32),
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(
+                                                    "New Update: v${info.versionName}",
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFF1B5E20),
+                                                    style = MaterialTheme.typography.titleMedium
+                                                )
+                                            }
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color(0xFF4CAF50)
+                                            ) {
+                                                Text(
+                                                    "NEW",
+                                                    color = Color.White,
+                                                    fontWeight = FontWeight.Black,
+                                                    fontSize = 10.sp,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+
+                                        if (info.releaseTitle.isNotBlank()) {
+                                            Text(
+                                                info.releaseTitle,
+                                                fontWeight = FontWeight.SemiBold,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = Color(0xFF2E7D32)
+                                            )
+                                        }
+
+                                        if (info.releaseNotes.isNotBlank()) {
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = Color.White.copy(alpha = 0.8f),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text(
+                                                    info.releaseNotes,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = Color.Black,
+                                                    modifier = Modifier.padding(10.dp)
+                                                )
+                                            }
+                                        }
+
+                                        if (isDownloadingUpdate) {
+                                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Text(
+                                                        "Downloading update APK...",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = Color(0xFF1B5E20)
+                                                    )
+                                                    Text(
+                                                        "${(downloadProgress * 100).toInt()}%",
+                                                        fontWeight = FontWeight.Bold,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = Color(0xFF1B5E20)
+                                                    )
+                                                }
+                                                LinearProgressIndicator(
+                                                    progress = { downloadProgress },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(8.dp),
+                                                    color = Color(0xFF4CAF50),
+                                                    trackColor = Color(0xFFC8E6C9)
+                                                )
+                                            }
+                                        } else {
+                                            Button(
+                                                onClick = { viewModel.downloadAndInstallUpdate(context) },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                                shape = RoundedCornerShape(10.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                Spacer(Modifier.width(8.dp))
+                                                Text("Download & Install Update", fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = Color(0xFF4CAF50),
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                        Spacer(Modifier.width(12.dp))
+                                        Column {
+                                            Text("Up to Date", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                                            Text(
+                                                "You are currently running the latest released version.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Check For Updates Button
+                        Button(
+                            onClick = { viewModel.checkForAppUpdate(manual = true) },
+                            enabled = !isCheckingUpdate && !isDownloadingUpdate,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Check for Updates Now", fontWeight = FontWeight.Bold)
                         }
                     }
                 }

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>အရိပ်စစ် Wifi – လော့ဂ်အောက် ထွက်ပြီးပါပြီ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <div class="compact-wrapper">
+    <div class="compact-card" style="text-align: center;">
+
+      <div style="width: 54px; height: 54px; border-radius: 50%; background: rgba(6, 182, 212, 0.12); border: 1.5px solid rgba(6, 182, 212, 0.35); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; color: #06B6D4;">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </div>
+
+      <h1 class="compact-title" style="font-size: 18px; margin-bottom: 4px;">လော့ဂ်အောက် ထွက်ပြီးပါပြီ</h1>
+      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">အင်တာနက် အသုံးပြုမှု ပြီးဆုံးပါသည်</p>
+
+      <div class="status-stats-list">
+        <div class="status-row-item">
+          <span class="status-row-label">အသုံးပြုသူအမည်:</span>
+          <span class="status-row-value">$(username)</span>
+        </div>
+        <div class="status-row-item">
+          <span class="status-row-label">အသုံးပြုချိန်:</span>
+          <span class="status-row-value" style="color:#34D399;">$(uptime)</span>
+        </div>
+        <div class="status-row-item">
+          <span class="status-row-label">ဒေတာ ပမာဏ:</span>
+          <span class="status-row-value" style="color:#38BDF8;">$(bytes-in-nice) / $(bytes-out-nice)</span>
+        </div>
+      </div>
+
+      <form action="$(link-login)" method="get">
+        <button class="btn-submit-compact" type="submit">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+          </svg>
+          ပြန်လည် အသုံးပြုမည် (Login Again)
+        </button>
+      </form>
+
+      <p class="copy-compact">
+        အရိပ်စစ် Wifi &bull; ကျေးဇူးတင်ပါသည်
+      </p>
+
+    </div>
+  </div>
+
+</body>
+</html>

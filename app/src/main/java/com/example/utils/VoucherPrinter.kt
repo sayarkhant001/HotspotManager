@@ -77,10 +77,12 @@ object VoucherPrinter {
         context: Context,
         vouchers: List<Voucher>,
         style: Int = 1,
-        format: PaperFormat = PaperFormat.THERMAL_58MM
+        format: PaperFormat = PaperFormat.THERMAL_58MM,
+        routerSsid: String? = null,
+        loginUrl: String? = null
     ) {
         if (vouchers.isEmpty()) return
-        val pdfFile = generatePdf(context, vouchers, style, format)
+        val pdfFile = generatePdf(context, vouchers, style, format, routerSsid, loginUrl)
         val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
         val jobName = "MikroTik Hotspot Vouchers"
         printManager.print(jobName, VoucherPrintAdapter(context, pdfFile), null)
@@ -134,14 +136,16 @@ object VoucherPrinter {
         context: Context,
         vouchers: List<Voucher>,
         style: Int,
-        format: PaperFormat
+        format: PaperFormat,
+        routerSsid: String? = null,
+        loginUrl: String? = null
     ): File {
         val pdfDocument = PdfDocument()
 
         when (format) {
-            PaperFormat.THERMAL_58MM -> renderThermalRoll(pdfDocument, vouchers, style, 164) // 58mm width
-            PaperFormat.THERMAL_80MM -> renderThermalRoll(pdfDocument, vouchers, style, 226) // 80mm width
-            PaperFormat.A4_PAGE -> renderA4Sheet(pdfDocument, vouchers, style)
+            PaperFormat.THERMAL_58MM -> renderThermalRoll(pdfDocument, vouchers, style, 164, routerSsid, loginUrl) // 58mm width
+            PaperFormat.THERMAL_80MM -> renderThermalRoll(pdfDocument, vouchers, style, 226, routerSsid, loginUrl) // 80mm width
+            PaperFormat.A4_PAGE -> renderA4Sheet(pdfDocument, vouchers, style, routerSsid, loginUrl)
         }
 
         val file = File(context.cacheDir, "hotspot_vouchers.pdf")
@@ -158,7 +162,9 @@ object VoucherPrinter {
         sampleVoucher: Voucher,
         style: Int,
         previewWidth: Int = 595,
-        previewHeight: Int = 842
+        previewHeight: Int = 842,
+        routerSsid: String? = null,
+        loginUrl: String? = null
     ): Bitmap {
         val bitmap = Bitmap.createBitmap(previewWidth, previewHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -227,7 +233,7 @@ object VoucherPrinter {
                 val cellX = marginX + col * (cardWidth + gapX)
                 val codePrefix = sampleVoucher.code.take(4).ifEmpty { "1819" }
                 val v = sampleVoucher.copy(code = "$codePrefix-${seq++}")
-                drawVoucherCard(canvas, v, cellX, curY, cardWidth, cardHeight, style)
+                drawVoucherCard(canvas, v, cellX, curY, cardWidth, cardHeight, style, routerSsid, loginUrl)
 
                 if (col < cols - 1) {
                     val cutX = cellX + cardWidth + (gapX / 2f)
@@ -242,7 +248,13 @@ object VoucherPrinter {
         return bitmap
     }
 
-    private fun renderA4Sheet(pdfDocument: PdfDocument, vouchers: List<Voucher>, style: Int) {
+    private fun renderA4Sheet(
+        pdfDocument: PdfDocument,
+        vouchers: List<Voucher>,
+        style: Int,
+        routerSsid: String? = null,
+        loginUrl: String? = null
+    ) {
         val pageWidth = 595 // A4 width in points
         val pageHeight = 842 // A4 height in points
 
@@ -286,7 +298,7 @@ object VoucherPrinter {
                 curY = marginY
             }
 
-            drawVoucherCard(canvas, voucher, curX, curY, cardWidth, cardHeight, style)
+            drawVoucherCard(canvas, voucher, curX, curY, cardWidth, cardHeight, style, routerSsid, loginUrl)
 
             curX += cardWidth + gapX
             if (curX + cardWidth > pageWidth - marginX + 3f) {
@@ -301,7 +313,9 @@ object VoucherPrinter {
         pdfDocument: PdfDocument,
         vouchers: List<Voucher>,
         style: Int,
-        rollWidth: Int
+        rollWidth: Int,
+        routerSsid: String? = null,
+        loginUrl: String? = null
     ) {
         val is80 = rollWidth >= 200
         val cardHeight = when (style) {
@@ -318,7 +332,7 @@ object VoucherPrinter {
 
         var curY = 6f
         vouchers.forEach { voucher ->
-            drawVoucherCard(canvas, voucher, 4f, curY, (rollWidth - 8).toFloat(), cardHeight.toFloat(), style)
+            drawVoucherCard(canvas, voucher, 4f, curY, (rollWidth - 8).toFloat(), cardHeight.toFloat(), style, routerSsid, loginUrl)
             curY += cardHeight + gapY.toFloat()
         }
         pdfDocument.finishPage(page)
@@ -331,9 +345,13 @@ object VoucherPrinter {
         y: Float,
         width: Float,
         height: Float,
-        style: Int
+        style: Int,
+        routerSsid: String? = null,
+        loginUrl: String? = null
     ) {
         val is80 = width >= 180f
+        val hasUrl = !loginUrl.isNullOrBlank()
+
         val borderPaint = Paint().apply {
             color = Color.BLACK
             this.style = Paint.Style.STROKE
@@ -373,45 +391,106 @@ object VoucherPrinter {
 
         when (style) {
             2 -> {
-                // Style 2: Ultra-Compact Micro (Auto-fit to largest readable size)
-                val splitX = x + (width * 0.58f)
+                // Style 2: Ultra-Compact Micro (Auto-fit to largest readable size, 4-12 digits resilient)
+                val splitX = x + (width * 0.55f)
                 val maxW = (splitX - x) - 4f
                 val leftCenter = x + (splitX - x) / 2f
                 val isAcc = voucher.isAccount || (voucher.password.isNotBlank() && voucher.password != voucher.username)
-                if (isAcc) {
-                    val uText = "U: ${voucher.username}"
-                    val pText = "P: ${voucher.password}"
-                    var uSize = if (is80) 15f else 11f
-                    codePaint.textSize = uSize
-                    while (codePaint.measureText(uText) > maxW && uSize > 7.5f) {
-                        uSize -= 0.5f
-                        codePaint.textSize = uSize
-                    }
-                    canvas.drawText(uText, leftCenter, y + (height * 0.36f) + (uSize * 0.32f), codePaint)
+                val urlH = if (hasUrl) (if (is80) 8.5f else 6f) else 0f
 
-                    var pSize = if (is80) 15f else 11f
-                    codePaint.textSize = pSize
-                    while (codePaint.measureText(pText) > maxW && pSize > 7.5f) {
-                        pSize -= 0.5f
+                if (hasUrl) {
+                    val cleanUrl = if (loginUrl!!.startsWith("http://") || loginUrl.startsWith("https://")) loginUrl else "http://$loginUrl"
+                    val urlPaint = Paint().apply {
+                        color = Color.BLACK
+                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                        textAlign = Paint.Align.CENTER
+                        textSize = (urlH * 0.70f).coerceIn(4.5f, if (is80) 8f else 6f)
+                    }
+                    while (urlPaint.measureText(cleanUrl) > maxW && urlPaint.textSize > 3.8f) {
+                        urlPaint.textSize -= 0.3f
+                    }
+
+                    if (isAcc) {
+                        val uText = "U: ${voucher.username}"
+                        val pText = "P: ${voucher.password}"
+                        var uSize = if (is80) 12f else 9f
+                        codePaint.textSize = uSize
+                        while (codePaint.measureText(uText) > maxW && uSize > 6f) {
+                            uSize -= 0.5f
+                            codePaint.textSize = uSize
+                        }
+                        canvas.drawText(uText, leftCenter, y + (height * 0.30f) + (uSize * 0.32f), codePaint)
+
+                        var pSize = if (is80) 12f else 9f
                         codePaint.textSize = pSize
-                    }
-                    canvas.drawText(pText, leftCenter, y + (height * 0.78f) + (pSize * 0.32f), codePaint)
-                } else {
-                    var cSize = if (is80) 22f else 17f
-                    codePaint.textSize = cSize
-                    while (codePaint.measureText(voucher.code) > maxW && cSize > 9.5f) {
-                        cSize -= 0.5f
+                        while (codePaint.measureText(pText) > maxW && pSize > 6f) {
+                            pSize -= 0.5f
+                            codePaint.textSize = pSize
+                        }
+                        canvas.drawText(pText, leftCenter, y + (height * 0.60f) + (pSize * 0.32f), codePaint)
+                    } else {
+                        val preferredCodeSize = when {
+                            voucher.code.length <= 4 -> if (is80) 18f else 13.5f
+                            voucher.code.length <= 6 -> if (is80) 16f else 12f
+                            voucher.code.length <= 8 -> if (is80) 14.5f else 11f
+                            voucher.code.length <= 10 -> if (is80) 13f else 9.5f
+                            else -> if (is80) 11.5f else 8.5f
+                        }
+                        var cSize = preferredCodeSize
                         codePaint.textSize = cSize
+                        while (codePaint.measureText(voucher.code) > maxW && cSize > 7.5f) {
+                            cSize -= 0.5f
+                            codePaint.textSize = cSize
+                        }
+                        canvas.drawText(voucher.code, leftCenter, y + ((height - urlH) / 2f) + (cSize * 0.35f), codePaint)
                     }
-                    canvas.drawText(voucher.code, leftCenter, y + (height / 2f) + (cSize * 0.35f), codePaint)
+
+                    // Login URL right beneath code in the box
+                    canvas.drawText(cleanUrl, leftCenter, y + height - (if (is80) 2.5f else 1.8f), urlPaint)
+                } else {
+                    if (isAcc) {
+                        val uText = "U: ${voucher.username}"
+                        val pText = "P: ${voucher.password}"
+                        var uSize = if (is80) 14f else 10.5f
+                        codePaint.textSize = uSize
+                        while (codePaint.measureText(uText) > maxW && uSize > 7f) {
+                            uSize -= 0.5f
+                            codePaint.textSize = uSize
+                        }
+                        canvas.drawText(uText, leftCenter, y + (height * 0.36f) + (uSize * 0.32f), codePaint)
+
+                        var pSize = if (is80) 14f else 10.5f
+                        codePaint.textSize = pSize
+                        while (codePaint.measureText(pText) > maxW && pSize > 7f) {
+                            pSize -= 0.5f
+                            codePaint.textSize = pSize
+                        }
+                        canvas.drawText(pText, leftCenter, y + (height * 0.78f) + (pSize * 0.32f), codePaint)
+                    } else {
+                        val preferredCodeSize = when {
+                            voucher.code.length <= 4 -> if (is80) 20f else 15f
+                            voucher.code.length <= 6 -> if (is80) 18f else 13.5f
+                            voucher.code.length <= 8 -> if (is80) 16f else 12f
+                            voucher.code.length <= 10 -> if (is80) 14.5f else 11f
+                            else -> if (is80) 13f else 9.5f
+                        }
+                        var cSize = preferredCodeSize
+                        codePaint.textSize = cSize
+                        while (codePaint.measureText(voucher.code) > maxW && cSize > 8.5f) {
+                            cSize -= 0.5f
+                            codePaint.textSize = cSize
+                        }
+                        canvas.drawText(voucher.code, leftCenter, y + (height / 2f) + (cSize * 0.35f), codePaint)
+                    }
                 }
 
                 val rightCenter = splitX + (x + width - splitX) / 2f
                 val rightMaxW = (x + width - splitX) - 4f
-                val profileText = if (voucher.price > 0) "${voucher.profileName} • ${"%,d".format(java.util.Locale.US, voucher.price.toLong())} Ks" else voucher.profileName
-                var pSize = if (is80) 15f else 12f
+                val profLabel = if (!routerSsid.isNullOrBlank()) "${routerSsid} • ${voucher.profileName}" else voucher.profileName
+                val profileText = if (voucher.price > 0) "$profLabel • ${"%,d".format(java.util.Locale.US, voucher.price.toLong())} Ks" else profLabel
+                var pSize = if (is80) 14f else 11f
                 textPaint.textSize = pSize
-                while (textPaint.measureText(profileText) > rightMaxW && pSize > 7.5f) {
+                while (textPaint.measureText(profileText) > rightMaxW && pSize > 7f) {
                     pSize -= 0.5f
                     textPaint.textSize = pSize
                 }
@@ -426,40 +505,66 @@ object VoucherPrinter {
 
                 val isAcc = voucher.isAccount || (voucher.password.isNotBlank() && voucher.password != voucher.username)
 
-                // Row 1: Header (HOTSPOT ACCOUNT or HOTSPOT VOUCHER • Profile)
+                // Row 1: Header (Router SSID or HOTSPOT VOUCHER • Profile)
                 titlePaint.textSize = if (is80) 12f else 9.5f
-                val hText = if (isAcc) "HOTSPOT ACCOUNT • ${voucher.profileName}" else "HOTSPOT VOUCHER • ${voucher.profileName}"
+                val titleHeader = if (isAcc) "HOTSPOT ACCOUNT" else (routerSsid?.takeIf { it.isNotBlank() } ?: "HOTSPOT VOUCHER")
+                val hText = "$titleHeader • ${voucher.profileName}"
                 canvas.drawText(hText, centerX, y + (height * 0.17f), titlePaint)
 
-                // Row 2: MASSIVE VOUCHER CODE or USER + PASS
+                // Row 2: MASSIVE VOUCHER CODE or USER + PASS + Login URL right beneath
+                val urlH = if (hasUrl) (if (is80) 10f else 7.5f) else 0f
                 val codeMaxW = width - 8f
+                val codeAreaH = (row2H - row1H) - urlH
+                val midY = row1H + (codeAreaH / 2f)
+
                 if (isAcc) {
                     val uText = "U: ${voucher.username}"
                     val pText = "P: ${voucher.password}"
-                    var uSize = if (is80) 22f else 16f
+                    var uSize = if (is80) 18f else 13.5f
                     codePaint.textSize = uSize
-                    while (codePaint.measureText(uText) > codeMaxW && uSize > 10f) {
+                    while (codePaint.measureText(uText) > codeMaxW && uSize > 8f) {
                         uSize -= 0.5f
                         codePaint.textSize = uSize
                     }
-                    canvas.drawText(uText, centerX, row1H + (row2H - row1H) * 0.38f + (uSize * 0.32f), codePaint)
+                    canvas.drawText(uText, centerX, row1H + codeAreaH * 0.36f + (uSize * 0.32f), codePaint)
 
-                    var pSize = if (is80) 22f else 16f
+                    var pSize = if (is80) 18f else 13.5f
                     codePaint.textSize = pSize
-                    while (codePaint.measureText(pText) > codeMaxW && pSize > 10f) {
+                    while (codePaint.measureText(pText) > codeMaxW && pSize > 8f) {
                         pSize -= 0.5f
                         codePaint.textSize = pSize
                     }
-                    canvas.drawText(pText, centerX, row1H + (row2H - row1H) * 0.78f + (pSize * 0.32f), codePaint)
+                    canvas.drawText(pText, centerX, row1H + codeAreaH * 0.78f + (pSize * 0.32f), codePaint)
                 } else {
-                    var cSize = if (is80) 32f else 24f
+                    val preferredCodeSize = when {
+                        voucher.code.length <= 4 -> if (is80) 28f else 20f
+                        voucher.code.length <= 6 -> if (is80) 24f else 17.5f
+                        voucher.code.length <= 8 -> if (is80) 21f else 15.5f
+                        voucher.code.length <= 10 -> if (is80) 18.5f else 13.5f
+                        else -> if (is80) 16f else 12f
+                    }
+                    var cSize = preferredCodeSize
                     codePaint.textSize = cSize
-                    while (codePaint.measureText(voucher.code) > codeMaxW && cSize > 12f) {
+                    while (codePaint.measureText(voucher.code) > codeMaxW && cSize > 9f) {
                         cSize -= 0.5f
                         codePaint.textSize = cSize
                     }
-                    val midY = row1H + (row2H - row1H) / 2f
                     canvas.drawText(voucher.code, centerX, midY + (cSize * 0.35f), codePaint)
+                }
+
+                // Login URL right beneath the code in Row 2, inside the box
+                if (hasUrl) {
+                    val cleanUrl = if (loginUrl!!.startsWith("http://") || loginUrl.startsWith("https://")) loginUrl else "http://$loginUrl"
+                    val urlPaint = Paint().apply {
+                        color = Color.BLACK
+                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                        textAlign = Paint.Align.CENTER
+                        textSize = (urlH * 0.70f).coerceIn(5f, if (is80) 9f else 6.5f)
+                    }
+                    while (urlPaint.measureText(cleanUrl) > codeMaxW && urlPaint.textSize > 4f) {
+                        urlPaint.textSize -= 0.3f
+                    }
+                    canvas.drawText(cleanUrl, centerX, row2H - (if (is80) 3f else 2f), urlPaint)
                 }
 
                 // Row 3: 3 Sub-cells for Quota, Validity, Price
@@ -492,12 +597,12 @@ object VoucherPrinter {
             }
             else -> {
                 // Style 1 (DEFAULT): COMPACT 2-COMPARTMENT PAPER-SAVING BOX (Code | Profile & Limits)
-                val splitX = x + (width * 0.58f)
+                val splitX = x + (width * 0.55f)
 
                 // Strong vertical divider line between the two compartments
                 canvas.drawLine(splitX, y, splitX, y + height, linePaint)
 
-                // Left compartment: Header banner + BIGGEST POSSIBLE VOUCHER CODE
+                // Left compartment: Header banner + BIGGEST POSSIBLE VOUCHER CODE + Login URL right beneath code
                 val leftMaxW = (splitX - x) - 6f
                 val leftCenterX = x + (splitX - x) / 2f
 
@@ -505,20 +610,26 @@ object VoucherPrinter {
                 canvas.drawLine(x, y + headerH, splitX, y + headerH, linePaint)
 
                 val isAcc = voucher.isAccount || (voucher.password.isNotBlank() && voucher.password != voucher.username)
+                val headerText = if (isAcc) "ACCOUNT LOGIN" else (routerSsid?.takeIf { it.isNotBlank() } ?: "VOUCHER CODE")
                 titlePaint.textSize = (headerH * 0.65f).coerceIn(7f, 12f)
+                while (titlePaint.measureText(headerText) > leftMaxW && titlePaint.textSize > 6.5f) {
+                    titlePaint.textSize -= 0.5f
+                }
                 canvas.drawText(
-                    if (isAcc) "ACCOUNT LOGIN" else "VOUCHER CODE",
+                    headerText,
                     leftCenterX,
                     y + (headerH * 0.5f) + (titlePaint.textSize * 0.35f),
                     titlePaint
                 )
 
-                val codeAreaH = height - headerH
+                val urlH = if (hasUrl) (if (is80) 10f else 7f) else 0f
+                val codeAreaH = height - headerH - urlH
+
                 if (isAcc) {
                     val uText = "U: ${voucher.username}"
-                    var codeSize = (codeAreaH * 0.36f).coerceIn(9f, if (is80) 22f else 16f)
+                    var codeSize = (codeAreaH * 0.36f).coerceIn(8.5f, if (is80) 18f else 13.5f)
                     codePaint.textSize = codeSize
-                    while (codePaint.measureText(uText) > leftMaxW && codeSize > 8f) {
+                    while (codePaint.measureText(uText) > leftMaxW && codeSize > 7.5f) {
                         codeSize -= 0.5f
                         codePaint.textSize = codeSize
                     }
@@ -529,10 +640,10 @@ object VoucherPrinter {
                         codePaint
                     )
 
-                    var passSize = (codeAreaH * 0.28f).coerceIn(8f, if (is80) 16f else 12f)
+                    var passSize = (codeAreaH * 0.28f).coerceIn(7.5f, if (is80) 14f else 10f)
                     textPaint.textSize = passSize
                     val passText = "P: ${voucher.password}"
-                    while (textPaint.measureText(passText) > leftMaxW && passSize > 7f) {
+                    while (textPaint.measureText(passText) > leftMaxW && passSize > 6.5f) {
                         passSize -= 0.5f
                         textPaint.textSize = passSize
                     }
@@ -543,10 +654,16 @@ object VoucherPrinter {
                         textPaint
                     )
                 } else {
-                    // Massive centered voucher code
-                    var codeSize = (codeAreaH * 0.56f).coerceIn(11f, if (is80) 28f else 22f)
+                    val preferredCodeSize = when {
+                        voucher.code.length <= 4 -> if (is80) 22f else 16.5f
+                        voucher.code.length <= 6 -> if (is80) 19.5f else 15f
+                        voucher.code.length <= 8 -> if (is80) 17.5f else 13.5f
+                        voucher.code.length <= 10 -> if (is80) 15.5f else 12f
+                        else -> if (is80) 14f else 10.5f
+                    }
+                    var codeSize = preferredCodeSize.coerceIn(8.5f, if (is80) 22f else 16.5f)
                     codePaint.textSize = codeSize
-                    while (codePaint.measureText(voucher.code) > leftMaxW && codeSize > 9f) {
+                    while (codePaint.measureText(voucher.code) > leftMaxW && codeSize > 7.5f) {
                         codeSize -= 0.5f
                         codePaint.textSize = codeSize
                     }
@@ -556,6 +673,21 @@ object VoucherPrinter {
                         y + headerH + (codeAreaH / 2f) + (codeSize * 0.35f),
                         codePaint
                     )
+                }
+
+                // Login URL right beneath code, inside the box
+                if (hasUrl) {
+                    val cleanUrl = if (loginUrl!!.startsWith("http://") || loginUrl.startsWith("https://")) loginUrl else "http://$loginUrl"
+                    val urlPaint = Paint().apply {
+                        color = Color.BLACK
+                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                        textAlign = Paint.Align.CENTER
+                        textSize = (urlH * 0.70f).coerceIn(5f, if (is80) 8.5f else 6.5f)
+                    }
+                    while (urlPaint.measureText(cleanUrl) > leftMaxW && urlPaint.textSize > 4f) {
+                        urlPaint.textSize -= 0.3f
+                    }
+                    canvas.drawText(cleanUrl, leftCenterX, y + height - (if (is80) 3.5f else 2.5f), urlPaint)
                 }
 
                 // Right compartment: 3 neat Excel rows (Profile, Limits, Price)

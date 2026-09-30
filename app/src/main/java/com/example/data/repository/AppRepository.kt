@@ -30,6 +30,24 @@ class AppRepository(
         return mikrotikClient.changeUserPassword(oldPass, newPass)
     }
 
+    suspend fun getHotspotLoginUrl(): String {
+        val detected = try {
+            mikrotikClient.getHotspotServerDnsName()
+        } catch (_: Exception) {
+            null
+        }
+        val target = if (!detected.isNullOrBlank()) detected else "10.10.10.1"
+        return if (target.startsWith("http://") || target.startsWith("https://")) target else "http://$target"
+    }
+
+    suspend fun getHotspotSsid(): String? {
+        return try {
+            mikrotikClient.getRouterSsid()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     suspend fun addProfile(profile: UserProfile): Result<Unit> {
         if (!mikrotikClient.isConnected()) {
             mikrotikClient.ensureConnected()

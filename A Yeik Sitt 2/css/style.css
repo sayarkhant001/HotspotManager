@@ -1,0 +1,375 @@
+/* ─────────────────────────────────────────────────────────────
+   အရိပ်စစ် WIFI (A YEIK SITT 2) – Compact Captive Portal Stylesheet
+   မိုဘိုင်းဖုန်းများတွင် စကရင်မလျှံဘဲ အလွယ်တကူ အသုံးပြုနိုင်သော Compact ဒီဇိုင်း
+   ─────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap');
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-dark: #090D1A;
+  --card-bg: #121829;
+  --card-border: #1E293B;
+  --card-inner: #0F172A;
+
+  --accent-cyan: #06B6D4;
+  --accent-blue: #3B82F6;
+  --accent-emerald: #10B981;
+  --accent-rose: #F43F5E;
+
+  --input-bg: #090D1A;
+  --input-border: #334155;
+  --input-focus: #06B6D4;
+
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+
+  --font-burmese: 'Noto Sans Myanmar', 'Padauk', 'Pyidaungsu', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-code: 'Outfit', 'Noto Sans Myanmar', monospace;
+}
+
+html, body {
+  min-height: 100%;
+  font-family: var(--font-burmese);
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+.hide { display: none !important; }
+
+/* ─── Compact Centered Container ───────────────────────────── */
+.compact-wrapper {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 12px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(6, 182, 212, 0.12) 0%, transparent 60%),
+    radial-gradient(circle at 50% 100%, rgba(59, 130, 246, 0.08) 0%, transparent 60%),
+    var(--bg-dark);
+}
+
+.compact-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  padding: 24px 20px 20px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.50), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+/* ─── Compact Header ───────────────────────────────────────── */
+.header-compact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.compact-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #06B6D4, #3B82F6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.35);
+}
+
+.header-text {
+  flex: 1;
+}
+
+.compact-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #FFFFFF;
+  line-height: 1.2;
+}
+
+.compact-sub {
+  font-size: 12px;
+  color: var(--accent-cyan);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* ─── Compact Tab Switcher ─────────────────────────────────── */
+.tabs-compact {
+  display: flex;
+  background: var(--card-inner);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 3px;
+  margin-bottom: 18px;
+}
+
+.tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-burmese);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 6px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.tab-btn.active {
+  background: #1E293B;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ─── Compact Code Input ───────────────────────────────────── */
+.input-label-compact {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.code-field-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.code-input {
+  width: 100%;
+  height: 50px;
+  background: var(--input-bg);
+  border: 1.6px solid var(--input-border);
+  border-radius: 12px;
+  font-family: var(--font-code);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  color: #FFFFFF;
+  text-align: center;
+  padding: 0 46px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.code-input:focus {
+  border-color: var(--input-focus);
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.20);
+}
+
+.code-input::placeholder {
+  font-size: 12.5px;
+  letter-spacing: normal;
+  color: rgba(255, 255, 255, 0.30);
+  font-weight: 500;
+  font-family: var(--font-burmese);
+}
+
+/* Quick Action Buttons */
+.action-btn-compact {
+  position: absolute;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.action-btn-compact:hover {
+  background: rgba(6, 182, 212, 0.25);
+  color: #FFFFFF;
+}
+
+.subtext-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+/* ─── Account Fields ───────────────────────────────────────── */
+.compact-group {
+  margin-bottom: 12px;
+}
+
+.compact-input {
+  width: 100%;
+  height: 46px;
+  background: var(--input-bg);
+  border: 1.4px solid var(--input-border);
+  border-radius: 12px;
+  font-family: var(--font-burmese);
+  font-size: 13.5px;
+  color: #FFFFFF;
+  padding: 0 40px 0 14px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.compact-input:focus {
+  border-color: var(--input-focus);
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.20);
+}
+
+/* ─── Action Button ────────────────────────────────────────── */
+.btn-submit-compact {
+  width: 100%;
+  height: 48px;
+  background: linear-gradient(135deg, #06B6D4 0%, #2563EB 100%);
+  border: none;
+  border-radius: 12px;
+  color: #FFFFFF;
+  font-family: var(--font-burmese);
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 16px rgba(6, 182, 212, 0.35);
+  transition: all 0.2s ease;
+}
+
+.btn-submit-compact:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.btn-submit-compact:active {
+  transform: translateY(0);
+}
+
+/* ─── Alerts & Badges ──────────────────────────────────────── */
+.alert-compact {
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.30);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #FDA4AF;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.badge-row-compact {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.badge-item {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-emerald);
+}
+
+.copy-compact {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 12px;
+}
+
+/* ─── Compact Status Specifics ─────────────────────────────── */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.30);
+  border-radius: 16px;
+  padding: 4px 12px;
+  color: #34D399;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+.status-stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.status-row-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--card-inner);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+
+.status-row-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.status-row-value {
+  font-family: var(--font-code);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.btn-logout-compact {
+  width: 100%;
+  height: 42px;
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.30);
+  color: #FB7185;
+  font-family: var(--font-burmese);
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}

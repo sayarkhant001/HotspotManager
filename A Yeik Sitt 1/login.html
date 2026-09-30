@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>အရိပ်စစ် Wifi – အင်တာနက် အသုံးပြုရန်</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta name="description" content="အရိပ်စစ် Wifi – မြန်နှုန်းမြင့်မားပြီး လိုင်းဆွဲအားအထူးကောင်းမွန်သော အင်တာနက် ဝန်ဆောင်မှု" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23060913'/%3E%3Cpath d='M16 26 Q32 10 48 26' stroke='%2300F2FE' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M22 34 Q32 22 42 34' stroke='%2338BDF8' stroke-width='3.6' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='44' r='4' fill='%2310B981'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- Ambient Light Orbs -->
+  <div class="bg-ambient">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <div class="portal-container">
+    <div class="glass-card">
+
+      <!-- Brand Logo & Title -->
+      <div class="brand-header">
+        <div class="brand-logo-wrap">
+          <!-- Protective Shelter (အရိပ်) + Radiant Wi-Fi Arcs Logo -->
+          <svg width="48" height="48" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="အရိပ်စစ် Wifi">
+            <defs>
+              <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#00F2FE"/>
+                <stop offset="100%" stop-color="#4FACFE"/>
+              </linearGradient>
+              <linearGradient id="greenGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#34D399"/>
+                <stop offset="100%" stop-color="#10B981"/>
+              </linearGradient>
+            </defs>
+            <!-- Protective Shelter Canopy (အရိပ်) -->
+            <path d="M12 28 C12 16, 52 16, 52 28 C52 38, 32 54, 32 54 C32 54, 12 38, 12 28 Z" stroke="url(#shieldGrad)" stroke-width="2.5" fill="rgba(56, 189, 248, 0.08)"/>
+            <!-- WiFi Signal Rays Inside Shelter -->
+            <path d="M20 25 Q32 15 44 25" stroke="url(#shieldGrad)" stroke-width="3" stroke-linecap="round"/>
+            <path d="M25 32 Q32 25 39 32" stroke="url(#shieldGrad)" stroke-width="2.8" stroke-linecap="round"/>
+            <!-- Center Core Pulse -->
+            <circle cx="32" cy="40" r="3.5" fill="url(#greenGlow)"/>
+          </svg>
+        </div>
+        <h1 class="brand-title">အရိပ်စစ် Wifi</h1>
+        <p class="brand-subtitle">
+          <span class="brand-subtitle-dot"></span>
+          မြန်နှုန်းမြင့် အင်တာနက် ဝန်ဆောင်မှု
+        </p>
+      </div>
+
+      <!--
+        MikroTik Hotspot Login Form
+        action = $(link-login-only)
+        dst    = $(link-status)
+      -->
+      <form id="login_form" name="sendin" method="post" action="$(link-login-only)">
+        <input type="hidden" name="dst" value="$(link-status)" />
+        <input type="hidden" name="popup" value="false" />
+
+        <!-- RouterOS Credentials -->
+        <input type="hidden" name="username" id="username_field" />
+        <input type="hidden" name="password" id="password_field" value="" />
+
+        <!-- Tab Switcher (Myanmar Only) -->
+        <div class="tab-switcher" id="login_tabs">
+          <button type="button" class="tab-btn active" id="tab_voucher">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <rect x="2" y="6" width="20" height="12" rx="3"/>
+              <path d="M12 6v12M2 12h2M20 12h2"/>
+            </svg>
+            ဘောင်ချာကုဒ်
+          </button>
+          <button type="button" class="tab-btn" id="tab_account">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            အကောင့်
+          </button>
+        </div>
+
+        <!-- ── Voucher Panel (4 to 12 Digits Resilient) ── -->
+        <div class="tab-panel" id="panel_voucher">
+          <label class="input-label" for="voucher_input">ဘောင်ချာကုဒ် ရိုက်ထည့်ပါ (၄ မှ ၁၂ လုံး)</label>
+          <div class="input-box-wrapper">
+            <input
+              class="code-input-main"
+              id="voucher_input"
+              type="text"
+              maxlength="16"
+              placeholder="ကုဒ်နံပါတ် (ဥပမာ 3799, 49304727)"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="characters"
+              spellcheck="false"
+            />
+
+            <!-- Clear Button -->
+            <button type="button" class="btn-icon-action" id="clear_voucher_btn" title="ဖျက်မည်" style="display:none;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+
+            <!-- Paste Button -->
+            <button type="button" class="btn-icon-action" id="paste_voucher_btn" title="ကူးယူထည့်မည်">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+              </svg>
+            </button>
+          </div>
+          <p class="field-hint">လက်မှတ်ပါ ကုဒ်နံပါတ် ၄ လုံးမှ ၁၂ လုံးကို ရိုက်ထည့်ပါ</p>
+        </div>
+
+        <!-- ── Account Panel ──────────────────────────── -->
+        <div class="tab-panel hide" id="panel_account">
+          <div class="account-group">
+            <label class="input-label" for="account_input">အသုံးပြုသူအမည် (Username)</label>
+            <input
+              class="account-input"
+              type="text"
+              id="account_input"
+              autocomplete="username"
+              placeholder="အသုံးပြုသူအမည် ထည့်ပါ"
+              spellcheck="false"
+            />
+          </div>
+
+          <div class="account-group">
+            <label class="input-label" for="account_password">လျှို့ဝှက်နံပါတ် (Password)</label>
+            <div style="position:relative;">
+              <input
+                class="account-input"
+                type="password"
+                id="account_password"
+                autocomplete="current-password"
+                placeholder="လျှို့ဝှက်နံပါတ် ထည့်ပါ"
+              />
+              <button type="button" class="btn-icon-action" id="toggle_password_btn" title="လျှို့ဝှက်နံပါတ် ကြည့်မည်">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error Alert (from RouterOS) -->
+        <div class="msg-alert hide" id="login_msg">$(if error)<span>&#9888;</span> <span>$(error)</span>$(endif)</div>
+
+        <!-- Connect Action Button -->
+        <button class="btn-connect" type="submit" id="login_btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+            <circle cx="12" cy="20" r="1"/>
+          </svg>
+          အင်တာနက် စတင်ချိတ်ဆက်မည်
+        </button>
+      </form>
+
+      <!-- Feature Highlights (Myanmar) -->
+      <div class="badges-row">
+        <span class="badge-chip">&#10003; မြန်နှုန်းမြင့်မားခြင်း</span>
+        <span class="badge-chip">&#10003; လိုင်းဆွဲအားကောင်း</span>
+        <span class="badge-chip">&#10003; ၂၄ နာရီလိုင်းရ</span>
+      </div>
+
+      <!-- User Notice / Updates Card -->
+      <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 14px; padding: 12px 14px; margin-top: 16px; text-align: left; font-size: 11.5px; color: #CBD5E1; line-height: 1.5;">
+        <span style="color: #38BDF8; font-weight: 700;">📢 အသိပေးချက် (Notice):</span> ဘောင်ချာကုဒ် ၄ လုံးမှ ၁၂ လုံးအထိ လွတ်လပ်စွာ ရိုက်ထည့်နိုင်ပါပြီ။ အင်တာနက်ပြတ်တောက်ပါက လော့ဂ်အင်လိပ်စာ <strong style="color: #38BDF8;">http://$(hostname)</strong> သို့ ပြန်လည်ဝင်ရောက်နိုင်ပါသည်။
+      </div>
+
+      <p class="footer-copy">
+        အရိပ်စစ် Wifi &bull; စိတ်ချယုံကြည်ရသော ဝန်ဆောင်မှု
+      </p>
+
+    </div>
+  </div>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

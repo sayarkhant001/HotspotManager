@@ -32,7 +32,7 @@
 :put ("Detected RouterOS : " . $rosVer)
 
 # ── GLOBAL VARIABLES ──────────────────────────────────────────
-:global wifiSsid   "AllGood_Wifi"
+:global wifiSsid   "AyeikSIt_WiFi"
 :global dnsName    ""
 :global apiPass    "Khant1234@"
 :global adminMacs  {"A0:29:19:39:34:61";"CC:15:31:83:26:BF"}
@@ -132,13 +132,15 @@
   /ip dns set allow-remote-requests=yes servers="8.8.8.8,1.1.1.1"
 } on-error={}
 
-# Static DNS mapping: allgood.lan -> 10.10.10.1
-:do {
-  /ip dns static add name=$dnsName address=$gwIp comment="Hotspot Portal DNS"
-} on-error={
-  :do { /ip dns static set [find name=$dnsName] address=$gwIp } on-error={}
+# Static DNS mapping (only if dnsName is provided)
+:if ([:len $dnsName] > 0) do={
+  :do {
+    /ip dns static add name=$dnsName address=$gwIp comment="Hotspot Portal DNS"
+  } on-error={
+    :do { /ip dns static set [find name=$dnsName] address=$gwIp } on-error={}
+  }
+  :put ("  Static DNS Configured: " . $dnsName . " -> " . $gwIp)
 }
-:put ("  Static DNS Configured: " . $dnsName . " -> " . $gwIp)
 :put "  IP & DHCP Configured."
 
 # ── STEP 5: Hotspot Server & Directory Detection ───────────────
@@ -518,9 +520,11 @@
 :do {
   /ip hotspot walled-garden ip add dst-address=$gwIp dst-port=8729 action=accept comment="HotspotManager API-SSL"
 } on-error={}
-:do {
-  /ip hotspot walled-garden add dst-host=$dnsName action=allow comment="Hotspot Portal DNS"
-} on-error={}
+:if ([:len $dnsName] > 0) do={
+  :do {
+    /ip hotspot walled-garden add dst-host=$dnsName action=allow comment="Hotspot Portal DNS"
+  } on-error={}
+}
 :put "  Walled Garden API & DNS access configured."
 
 # ── STEP 10: MAC Bypass for Admin Devices ─────────────────────
@@ -644,9 +648,9 @@
 :put ("Router Model    : " . $boardName)
 :put ("RouterOS Version: " . $rosVer)
 :put "Gateway IP      : 10.10.10.1"
-:put "Hotspot DNS     : allgood.lan (Points to 10.10.10.1)"
+:put "Hotspot DNS     : (Blank - Gateway IP 10.10.10.1)"
 :put "Network Range   : 10.10.10.0/23"
-:put "SSID            : AllGoodWifi"
+:put "SSID            : AyeikSIt_WiFi"
 :put "Portal Directory: flash/hotspot (or hotspot)"
 :put "API Port        : 8728 (ENABLED & ALLOWED)"
 :put "Admin User      : admin / Khant1234@"

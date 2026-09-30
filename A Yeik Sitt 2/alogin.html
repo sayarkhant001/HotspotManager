@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>အရိပ်စစ် Wifi – အင်တာနက် ချိတ်ဆက်နေပါသည်...</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta http-equiv="refresh" content="2; url=$(link-status)" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script>
+    function startRedirect() {
+      window.location.href = "$(link-status)";
+    }
+  </script>
+</head>
+<body onload="startRedirect()">
+
+  <div class="compact-wrapper">
+    <div class="compact-card" style="text-align: center;">
+
+      <div style="width: 54px; height: 54px; border-radius: 50%; background: rgba(16, 185, 129, 0.15); border: 1.5px solid rgba(16, 185, 129, 0.40); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; color: #34D399;">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+
+      <h1 class="compact-title" style="font-size: 18px; margin-bottom: 4px;">ချိတ်ဆက်မှု အောင်မြင်ပါသည်</h1>
+      <p style="font-size: 12px; color: #A7F3D0; margin-bottom: 16px;">အင်တာနက် အသုံးပြုနိုင်ပါပြီ...</p>
+
+      <div style="background: rgba(255,255,255,0.06); border-radius: 100px; height: 5px; overflow: hidden; margin: 16px 0;">
+        <div style="height: 100%; width: 100%; background: linear-gradient(90deg, #06B6D4, #2563EB); border-radius: 100px;"></div>
+      </div>
+
+      <a href="$(link-status)" class="btn-submit-compact" style="text-decoration:none;">
+        ဆက်လက် အသုံးပြုမည်
+      </a>
+
+      <p class="copy-compact">
+        အရိပ်စစ် Wifi
+      </p>
+
+    </div>
+  </div>
+
+</body>
+</html>

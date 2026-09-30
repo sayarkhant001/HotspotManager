@@ -321,6 +321,53 @@ class MikrotikClient {
         }
     }
 
+    suspend fun getHotspotServerDnsName(): String? = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withContext null
+                val res = conn.execute("/ip/hotspot/profile/print")
+                for (row in res) {
+                    val dns = row["dns-name"]?.trim() ?: ""
+                    if (dns.isNotBlank()) return@withContext dns
+                }
+                for (row in res) {
+                    val addr = row["hotspot-address"]?.trim() ?: ""
+                    if (addr.isNotBlank()) return@withContext addr
+                }
+                null
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    suspend fun getRouterSsid(): String? = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withContext null
+                // Try v7 wifiwave2 / wifi interface first
+                try {
+                    val wList = conn.execute("/interface/wifi/print")
+                    for (row in wList) {
+                        val ssid = row["configuration.ssid"] ?: row["ssid"] ?: ""
+                        if (ssid.isNotBlank()) return@withContext ssid
+                    }
+                } catch (_: Exception) {}
+                // Fallback to legacy wireless interface
+                try {
+                    val wList = conn.execute("/interface/wireless/print")
+                    for (row in wList) {
+                        val ssid = row["ssid"] ?: ""
+                        if (ssid.isNotBlank()) return@withContext ssid
+                    }
+                } catch (_: Exception) {}
+                null
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
     suspend fun ensureConnected(): Boolean = withContext(Dispatchers.IO) {
         apiMutex.withLock {
             ensureConnectedInternal() != null && connection?.isConnected == true
