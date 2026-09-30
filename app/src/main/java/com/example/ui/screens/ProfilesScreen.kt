@@ -398,8 +398,17 @@ fun ProfileItemCard(
                         Spacer(Modifier.width(6.dp))
                         Column {
                             Text(strings.validity, style = MaterialTheme.typography.labelSmall, fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            val validityDisplay = when {
+                                profile.durationMinutes in 1..59 -> "${profile.durationMinutes} Mins"
+                                profile.durationMinutes in 60..1439 && profile.durationMinutes % 60 == 0 -> "${profile.durationMinutes / 60} Hour(s)"
+                                profile.durationMinutes in 60..1439 -> "${profile.durationMinutes} Mins"
+                                profile.durationMinutes >= 1440 && profile.durationMinutes % 1440 == 0 -> "${profile.durationMinutes / 1440} Day(s)"
+                                profile.durationMinutes >= 1440 -> "${profile.durationMinutes} Mins"
+                                profile.validityDays > 0 -> "${profile.validityDays} Day(s)"
+                                else -> "Unlimited"
+                            }
                             Text(
-                                text = "${profile.validityDays} Day(s)",
+                                text = validityDisplay,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
@@ -423,9 +432,12 @@ fun ProfileItemCard(
                         Spacer(Modifier.width(6.dp))
                         Column {
                             Text(strings.dataLimitMb, style = MaterialTheme.typography.labelSmall, fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            val quotaText = if (profile.dataLimitMb > 0) {
-                                if (profile.dataLimitMb >= 1024) "${profile.dataLimitMb / 1024} GB" else "${profile.dataLimitMb} MB"
-                            } else "Unlimited"
+                            val quotaText = when {
+                                profile.dataLimitMb <= 0 -> "Unlimited"
+                                profile.dataLimitMb >= 1024 && profile.dataLimitMb % 1024 == 0 -> "${profile.dataLimitMb / 1024} GB"
+                                profile.dataLimitMb >= 1024 -> "${"%.1f".format(profile.dataLimitMb / 1024.0)} GB"
+                                else -> "${profile.dataLimitMb} MB"
+                            }
                             Text(
                                 text = quotaText,
                                 style = MaterialTheme.typography.labelMedium,
@@ -451,6 +463,7 @@ fun AddProfileDialog(
     var speedVal by remember { mutableStateOf("10") }
     var validityVal by remember { mutableStateOf("1") }
     var validityUnit by remember { mutableStateOf("Days") }
+    var quotaUnit by remember { mutableStateOf("GB") }
     var dataVal by remember { mutableStateOf("0") }
     var isUnlimitedData by remember { mutableStateOf(true) }
     var sharedUsers by remember { mutableStateOf("1") }
@@ -458,7 +471,8 @@ fun AddProfileDialog(
 
     // Quick Presets matching Myanmar ISP Hotspot standards
     val presets = listOf(
-        PresetItem("1H_Trial", "3", "Mbps", "1", "Hours", 0, 200, "1H Trial • 200K"),
+        PresetItem("30M_Trial", "5", "Mbps", "30", "Minutes", 300, 200, "30M Trial • 200K"),
+        PresetItem("1H_Trial", "5", "Mbps", "1", "Hours", 500, 300, "1H / 500MB • 300K"),
         PresetItem("1D_1GB", "5", "Mbps", "1", "Days", 1024, 500, "1D / 1GB • 500K"),
         PresetItem("3D_3GB", "5", "Mbps", "3", "Days", 3072, 1000, "3D / 3GB • 1,000K"),
         PresetItem("7D_7GB", "10", "Mbps", "7", "Days", 7168, 3000, "7D / 7GB • 3,000K"),
@@ -603,8 +617,9 @@ fun AddProfileDialog(
                                     shape = RoundedCornerShape(6.dp),
                                     color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
                                 ) {
+                                    val displayData = if (isUnlimitedData) "📦 Unlimited" else "📦 $dataVal $quotaUnit"
                                     Text(
-                                        text = if (isUnlimitedData) "📦 Unlimited" else "📦 ${dataVal} GB",
+                                        text = displayData,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -649,7 +664,16 @@ fun AddProfileDialog(
                                         validityVal = p.valVal
                                         validityUnit = p.valUnit
                                         isUnlimitedData = p.dataMb == 0
-                                        dataVal = if (p.dataMb == 0) "0" else (p.dataMb / 1024).toString()
+                                        if (p.dataMb == 0) {
+                                            quotaUnit = "GB"
+                                            dataVal = "0"
+                                        } else if (p.dataMb < 1024) {
+                                            quotaUnit = "MB"
+                                            dataVal = p.dataMb.toString()
+                                        } else {
+                                            quotaUnit = "GB"
+                                            dataVal = (p.dataMb / 1024).toString()
+                                        }
                                         price = p.price.toString()
                                     },
                                     shape = RoundedCornerShape(8.dp),
@@ -752,66 +776,128 @@ fun AddProfileDialog(
                         }
                     }
 
-                    // 5. VALIDITY DURATION (Hours vs Days)
+                    // 5. PROMINENT VALIDITY DURATION (Minutes / Hours / Days)
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
                             .padding(12.dp)
                     ) {
-                        Text(strings.validity, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-
-                        Spacer(Modifier.height(6.dp))
-
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            OutlinedTextField(
-                                value = validityVal,
-                                onValueChange = { input -> if (input.all { it.isDigit() }) validityVal = input },
-                                label = { Text("Duration") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
-                                modifier = Modifier.weight(1.1f),
-                                shape = RoundedCornerShape(10.dp),
-                                singleLine = true
-                            )
-                            Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                FilterChip(
-                                    selected = validityUnit == "Hours",
-                                    onClick = { validityUnit = "Hours" },
-                                    label = { Text("Hours", fontSize = 11.sp, fontWeight = if (validityUnit == "Hours") FontWeight.Bold else FontWeight.Normal) },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                FilterChip(
-                                    selected = validityUnit == "Days",
-                                    onClick = { validityUnit = "Days" },
-                                    label = { Text("Days", fontSize = 11.sp, fontWeight = if (validityUnit == "Days") FontWeight.Bold else FontWeight.Normal) },
-                                    modifier = Modifier.weight(1f)
+                            Text(strings.validity, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    text = "⏳ $validityVal $validityUnit",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
                         }
 
                         Spacer(Modifier.height(8.dp))
 
-                        val durationPresets = if (validityUnit == "Hours") listOf("1", "2", "6", "12", "24") else listOf("1", "3", "7", "14", "30")
+                        // PROMINENT 3-Segment Unit Selector Bar
+                        Text(
+                            text = "သက်တမ်း ယူနစ် (Validity Unit):",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                                .padding(3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            listOf(
+                                Pair("Minutes", "⏱️ မိနစ် (Mins)"),
+                                Pair("Hours", "🕒 နာရီ (Hours)"),
+                                Pair("Days", "📅 ရက် (Days)")
+                            ).forEach { (unitKey, unitLabel) ->
+                                val isSelected = validityUnit == unitKey
+                                Surface(
+                                    onClick = {
+                                        validityUnit = unitKey
+                                        if (unitKey == "Minutes" && validityVal !in listOf("15", "30", "45", "60", "120")) {
+                                            validityVal = "30"
+                                        } else if (unitKey == "Hours" && validityVal !in listOf("1", "2", "6", "12", "24")) {
+                                            validityVal = "2"
+                                        } else if (unitKey == "Days" && validityVal !in listOf("1", "3", "7", "14", "30")) {
+                                            validityVal = "1"
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 2.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = unitLabel,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = validityVal,
+                            onValueChange = { input -> if (input.all { it.isDigit() }) validityVal = input },
+                            label = { Text("Duration ($validityUnit)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true
+                        )
+
+                        Spacer(Modifier.height(8.dp))
+
+                        val durationPresets = when (validityUnit) {
+                            "Minutes" -> listOf("15", "30", "45", "60", "120")
+                            "Hours" -> listOf("1", "2", "6", "12", "24")
+                            else -> listOf("1", "3", "7", "14", "30")
+                        }
                         LazyRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             items(durationPresets) { dur ->
+                                val unitSuffix = when (validityUnit) {
+                                    "Minutes" -> "m"
+                                    "Hours" -> "h"
+                                    else -> "d"
+                                }
                                 FilterChip(
                                     selected = validityVal == dur,
                                     onClick = { validityVal = dur },
-                                    label = { Text(dur, fontSize = 11.sp) },
+                                    label = { Text("$dur$unitSuffix", fontSize = 11.sp, fontWeight = if (validityVal == dur) FontWeight.Bold else FontWeight.Normal) },
                                     modifier = Modifier.height(28.dp)
                                 )
                             }
                         }
                     }
 
-                    // 6. DATA QUOTA LIMIT
+                    // 6. PROMINENT DATA QUOTA LIMIT (MB vs GB)
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -826,7 +912,7 @@ fun AddProfileDialog(
                             Column {
                                 Text(strings.dataLimitMb, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                                 Text(
-                                    text = if (isUnlimitedData) "Unlimited Data ♾️" else "Capped Quota in GB 📦",
+                                    text = if (isUnlimitedData) "Unlimited Data ♾️ (အကန့်အသတ်မဲ့)" else "Capped Quota in $quotaUnit 📦",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -839,26 +925,82 @@ fun AddProfileDialog(
                         }
 
                         if (!isUnlimitedData) {
-                            Spacer(Modifier.height(6.dp))
+                            Spacer(Modifier.height(8.dp))
+
+                            // PROMINENT 2-Segment Unit Selector Bar for Quota
+                            Text(
+                                text = "ပမာဏ ယူနစ် (Quota Unit):",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                                    .padding(3.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                listOf(
+                                    Pair("MB", "💾 Megabytes (MB)"),
+                                    Pair("GB", "🚀 Gigabytes (GB)")
+                                ).forEach { (unitKey, unitLabel) ->
+                                    val isSelected = quotaUnit == unitKey
+                                    Surface(
+                                        onClick = {
+                                            quotaUnit = unitKey
+                                            if (unitKey == "MB" && dataVal in listOf("1", "2", "3", "5", "10")) {
+                                                dataVal = "500"
+                                            } else if (unitKey == "GB" && dataVal in listOf("100", "250", "500", "750", "1000")) {
+                                                dataVal = "1"
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.padding(vertical = 8.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = unitLabel,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                fontSize = 11.5.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
                             OutlinedTextField(
                                 value = dataVal,
                                 onValueChange = { input -> if (input.all { it.isDigit() }) dataVal = input },
-                                label = { Text("Quota in GB (e.g. 5)") },
+                                label = { Text("Quota ($quotaUnit)") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp),
                                 singleLine = true
                             )
+
                             Spacer(Modifier.height(8.dp))
+
+                            val quotaPresets = if (quotaUnit == "MB") listOf("100", "250", "500", "750", "1000") else listOf("1", "2", "3", "5", "10", "20", "30", "50")
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                items(listOf("1", "2", "3", "5", "10", "20", "30", "50")) { qGb ->
+                                items(quotaPresets) { q ->
                                     FilterChip(
-                                        selected = dataVal == qGb,
-                                        onClick = { dataVal = qGb },
-                                        label = { Text("${qGb}GB", fontSize = 11.sp) },
+                                        selected = dataVal == q,
+                                        onClick = { dataVal = q },
+                                        label = { Text("$q $quotaUnit", fontSize = 11.sp, fontWeight = if (dataVal == q) FontWeight.Bold else FontWeight.Normal) },
                                         modifier = Modifier.height(28.dp)
                                     )
                                 }
@@ -936,9 +1078,22 @@ fun AddProfileDialog(
                                 val speedNum = speedVal.trim().toIntOrNull() ?: 10
                                 val rateLimitStr = "${speedNum}M/${speedNum}M"
                                 val durVal = validityVal.trim().toIntOrNull() ?: 1
-                                val durationMinutes = if (validityUnit == "Hours") durVal * 60 else durVal * 24 * 60
-                                val validityDays = if (validityUnit == "Hours") 1 else durVal
-                                val dataMb = if (isUnlimitedData) 0 else (dataVal.trim().toIntOrNull() ?: 1) * 1024
+                                val durationMinutes = when (validityUnit) {
+                                    "Minutes" -> durVal
+                                    "Hours" -> durVal * 60
+                                    "Days" -> durVal * 1440
+                                    else -> durVal * 1440
+                                }
+                                val validityDays = when (validityUnit) {
+                                    "Minutes" -> 1
+                                    "Hours" -> 1
+                                    "Days" -> durVal
+                                    else -> 1
+                                }
+                                val dataNum = dataVal.trim().toIntOrNull() ?: 0
+                                val dataMb = if (isUnlimitedData) 0 else {
+                                    if (quotaUnit == "GB") dataNum * 1024 else dataNum
+                                }
                                 val priceVal = price.trim().toDoubleOrNull() ?: 0.0
 
                                 onAdd(
@@ -978,10 +1133,35 @@ fun EditProfileDialog(
     val dlPart = parts.getOrNull(0)?.trim() ?: ""
     val initialSpeedVal = dlPart.filter { it.isDigit() }.ifBlank { "10" }
 
+    val initValidityUnit = when {
+        profile.durationMinutes in 1..59 -> "Minutes"
+        profile.durationMinutes in 60..1439 && profile.durationMinutes % 60 == 0 -> "Hours"
+        profile.durationMinutes >= 1440 && profile.durationMinutes % 1440 == 0 -> "Days"
+        profile.durationMinutes > 0 -> "Minutes"
+        profile.validityDays > 0 -> "Days"
+        else -> "Days"
+    }
+    val initValidityVal = when (initValidityUnit) {
+        "Minutes" -> profile.durationMinutes.toString()
+        "Hours" -> (profile.durationMinutes / 60).toString()
+        "Days" -> if (profile.durationMinutes >= 1440) (profile.durationMinutes / 1440).toString() else if (profile.validityDays > 0) profile.validityDays.toString() else "1"
+        else -> "1"
+    }
+
     var speedVal by remember { mutableStateOf(initialSpeedVal) }
-    var validityVal by remember { mutableStateOf(if (profile.validityDays > 0) profile.validityDays.toString() else "1") }
-    var isUnlimitedData by remember { mutableStateOf(profile.dataLimitMb <= 0) }
-    var dataVal by remember { mutableStateOf(if (profile.dataLimitMb > 0) (profile.dataLimitMb / 1024).toString() else "5") }
+    var validityVal by remember { mutableStateOf(initValidityVal) }
+    var validityUnit by remember { mutableStateOf(initValidityUnit) }
+
+    val isUnlimited = profile.dataLimitMb <= 0
+    val initQuotaUnit = if (!isUnlimited && profile.dataLimitMb > 0 && profile.dataLimitMb < 1024) "MB" else "GB"
+    val initDataVal = when {
+        isUnlimited -> "0"
+        initQuotaUnit == "MB" -> profile.dataLimitMb.toString()
+        else -> (profile.dataLimitMb / 1024).coerceAtLeast(1).toString()
+    }
+    var quotaUnit by remember { mutableStateOf(initQuotaUnit) }
+    var dataVal by remember { mutableStateOf(initDataVal) }
+    var isUnlimitedData by remember { mutableStateOf(isUnlimited) }
     var sharedUsers by remember { mutableStateOf(profile.sharedUsers.toString()) }
     var price by remember { mutableStateOf(profile.price.toLong().toString()) }
 
@@ -995,7 +1175,7 @@ fun EditProfileDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
-                .fillMaxHeight(0.88f)
+                .fillMaxHeight(0.92f)
                 .imePadding(),
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
@@ -1066,7 +1246,7 @@ fun EditProfileDialog(
                         ) {
                             Text(name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                             Text(
-                                "⚡ ${speedVal}M • ${if (isUnlimitedData) "Unlim" else "${dataVal}GB"} • ${validityVal}D",
+                                "⚡ ${speedVal}M • ${if (isUnlimitedData) "Unlim" else "$dataVal$quotaUnit"} • $validityVal ${validityUnit.take(3)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold
@@ -1119,41 +1299,7 @@ fun EditProfileDialog(
                         }
                     }
 
-                    // Validity Days
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-                            .padding(12.dp)
-                    ) {
-                        Text("${strings.validity} (Days):", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(6.dp))
-                        OutlinedTextField(
-                            value = validityVal,
-                            onValueChange = { input -> if (input.all { it.isDigit() }) validityVal = input },
-                            label = { Text("Days") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            singleLine = true
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        LazyRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            items(listOf("1", "3", "7", "14", "30")) { dur ->
-                                FilterChip(
-                                    selected = validityVal == dur,
-                                    onClick = { validityVal = dur },
-                                    label = { Text("$dur Days", fontSize = 11.sp) },
-                                    modifier = Modifier.height(28.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // Data Quota Limit
+                    // 5. PROMINENT VALIDITY DURATION (Minutes / Hours / Days)
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1165,37 +1311,219 @@ fun EditProfileDialog(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(strings.dataLimitMb, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(if (isUnlimitedData) "Unlimited ♾️" else "Capped 📦", style = MaterialTheme.typography.labelSmall)
-                                Switch(
-                                    checked = isUnlimitedData,
-                                    onCheckedChange = { isUnlimitedData = it },
-                                    modifier = Modifier.height(26.dp).padding(start = 4.dp)
+                            Text(strings.validity, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    text = "⏳ $validityVal $validityUnit",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
                         }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        // PROMINENT 3-Segment Unit Selector Bar
+                        Text(
+                            text = "သက်တမ်း ယူနစ် (Validity Unit):",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                                .padding(3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            listOf(
+                                Pair("Minutes", "⏱️ မိနစ် (Mins)"),
+                                Pair("Hours", "🕒 နာရီ (Hours)"),
+                                Pair("Days", "📅 ရက် (Days)")
+                            ).forEach { (unitKey, unitLabel) ->
+                                val isSelected = validityUnit == unitKey
+                                Surface(
+                                    onClick = {
+                                        validityUnit = unitKey
+                                        if (unitKey == "Minutes" && validityVal !in listOf("15", "30", "45", "60", "120")) {
+                                            validityVal = "30"
+                                        } else if (unitKey == "Hours" && validityVal !in listOf("1", "2", "6", "12", "24")) {
+                                            validityVal = "2"
+                                        } else if (unitKey == "Days" && validityVal !in listOf("1", "3", "7", "14", "30")) {
+                                            validityVal = "1"
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 2.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = unitLabel,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = validityVal,
+                            onValueChange = { input -> if (input.all { it.isDigit() }) validityVal = input },
+                            label = { Text("Duration ($validityUnit)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true
+                        )
+
+                        Spacer(Modifier.height(8.dp))
+
+                        val durationPresets = when (validityUnit) {
+                            "Minutes" -> listOf("15", "30", "45", "60", "120")
+                            "Hours" -> listOf("1", "2", "6", "12", "24")
+                            else -> listOf("1", "3", "7", "14", "30")
+                        }
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(durationPresets) { dur ->
+                                val unitSuffix = when (validityUnit) {
+                                    "Minutes" -> "m"
+                                    "Hours" -> "h"
+                                    else -> "d"
+                                }
+                                FilterChip(
+                                    selected = validityVal == dur,
+                                    onClick = { validityVal = dur },
+                                    label = { Text("$dur$unitSuffix", fontSize = 11.sp, fontWeight = if (validityVal == dur) FontWeight.Bold else FontWeight.Normal) },
+                                    modifier = Modifier.height(28.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // 6. PROMINENT DATA QUOTA LIMIT (MB vs GB)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(strings.dataLimitMb, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = if (isUnlimitedData) "Unlimited Data ♾️ (အကန့်အသတ်မဲ့)" else "Capped Quota in $quotaUnit 📦",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = isUnlimitedData,
+                                onCheckedChange = { isUnlimitedData = it },
+                                modifier = Modifier.height(28.dp)
+                            )
+                        }
+
                         if (!isUnlimitedData) {
-                            Spacer(Modifier.height(6.dp))
+                            Spacer(Modifier.height(8.dp))
+
+                            // PROMINENT 2-Segment Unit Selector Bar for Quota
+                            Text(
+                                text = "ပမာဏ ယူနစ် (Quota Unit):",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                                    .padding(3.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                listOf(
+                                    Pair("MB", "💾 Megabytes (MB)"),
+                                    Pair("GB", "🚀 Gigabytes (GB)")
+                                ).forEach { (unitKey, unitLabel) ->
+                                    val isSelected = quotaUnit == unitKey
+                                    Surface(
+                                        onClick = {
+                                            quotaUnit = unitKey
+                                            if (unitKey == "MB" && dataVal in listOf("1", "2", "3", "5", "10")) {
+                                                dataVal = "500"
+                                            } else if (unitKey == "GB" && dataVal in listOf("100", "250", "500", "750", "1000")) {
+                                                dataVal = "1"
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isSelected) MaterialTheme.colorScheme.secondary else Color.Transparent,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.padding(vertical = 8.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = unitLabel,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                                color = if (isSelected) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                fontSize = 11.5.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
                             OutlinedTextField(
                                 value = dataVal,
                                 onValueChange = { input -> if (input.all { it.isDigit() }) dataVal = input },
-                                label = { Text("Quota in GB (e.g. 5)") },
+                                label = { Text("Quota ($quotaUnit)") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp),
                                 singleLine = true
                             )
+
                             Spacer(Modifier.height(8.dp))
+
+                            val quotaPresets = if (quotaUnit == "MB") listOf("100", "250", "500", "750", "1000") else listOf("1", "2", "3", "5", "10", "20", "30", "50")
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                items(listOf("1", "2", "3", "5", "10", "20", "30", "50")) { qGb ->
+                                items(quotaPresets) { q ->
                                     FilterChip(
-                                        selected = dataVal == qGb,
-                                        onClick = { dataVal = qGb },
-                                        label = { Text("${qGb}GB", fontSize = 11.sp) },
+                                        selected = dataVal == q,
+                                        onClick = { dataVal = q },
+                                        label = { Text("$q $quotaUnit", fontSize = 11.sp, fontWeight = if (dataVal == q) FontWeight.Bold else FontWeight.Normal) },
                                         modifier = Modifier.height(28.dp)
                                     )
                                 }
@@ -1251,8 +1579,23 @@ fun EditProfileDialog(
                         onClick = {
                             val speedNum = speedVal.trim().toIntOrNull() ?: 10
                             val rateLimitStr = "${speedNum}M/${speedNum}M"
-                            val vDays = validityVal.trim().toIntOrNull() ?: 1
-                            val dataMb = if (isUnlimitedData) 0 else (dataVal.trim().toIntOrNull() ?: 1) * 1024
+                            val durVal = validityVal.trim().toIntOrNull() ?: 1
+                            val durationMinutes = when (validityUnit) {
+                                "Minutes" -> durVal
+                                "Hours" -> durVal * 60
+                                "Days" -> durVal * 1440
+                                else -> durVal * 1440
+                            }
+                            val vDays = when (validityUnit) {
+                                "Minutes" -> 1
+                                "Hours" -> 1
+                                "Days" -> durVal
+                                else -> 1
+                            }
+                            val dataNum = dataVal.trim().toIntOrNull() ?: 0
+                            val dataMb = if (isUnlimitedData) 0 else {
+                                if (quotaUnit == "GB") dataNum * 1024 else dataNum
+                            }
                             val priceVal = price.trim().toDoubleOrNull() ?: 0.0
 
                             onSave(
@@ -1262,7 +1605,7 @@ fun EditProfileDialog(
                                     sharedUsers = sharedUsers.toIntOrNull() ?: 1,
                                     dataLimitMb = dataMb,
                                     validityDays = vDays,
-                                    durationMinutes = vDays * 24 * 60,
+                                    durationMinutes = durationMinutes,
                                     price = priceVal,
                                     sellingPrice = priceVal
                                 )

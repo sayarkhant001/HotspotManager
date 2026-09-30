@@ -722,8 +722,23 @@ fun VoucherItemCard(
                         )
                     }
                 }
+                val quotaDisplay = when {
+                    voucher.dataLimitMb <= 0 -> "Unlim"
+                    voucher.dataLimitMb >= 1024 && voucher.dataLimitMb % 1024 == 0 -> "${voucher.dataLimitMb / 1024} GB"
+                    voucher.dataLimitMb >= 1024 -> "${"%.1f".format(voucher.dataLimitMb / 1024.0)} GB"
+                    else -> "${voucher.dataLimitMb} MB"
+                }
+                val validityDisplay = when {
+                    voucher.durationMinutes in 1..59 -> "${voucher.durationMinutes} Mins"
+                    voucher.durationMinutes in 60..1439 && voucher.durationMinutes % 60 == 0 -> "${voucher.durationMinutes / 60} Hour(s)"
+                    voucher.durationMinutes in 60..1439 -> "${voucher.durationMinutes} Mins"
+                    voucher.durationMinutes >= 1440 && voucher.durationMinutes % 1440 == 0 -> "${voucher.durationMinutes / 1440} Day(s)"
+                    voucher.durationMinutes >= 1440 -> "${voucher.durationMinutes} Mins"
+                    voucher.validityDays > 0 -> "${voucher.validityDays} Day(s)"
+                    else -> "Unlimited"
+                }
                 Text(
-                    text = "${voucher.profileName} • ${if (voucher.dataLimitMb > 0) "${voucher.dataLimitMb} MB" else "Unlim"} • ${voucher.validityDays}D",
+                    text = "${voucher.profileName} • $quotaDisplay • $validityDisplay",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -987,9 +1002,23 @@ fun MikhmonGenerateVouchersDialog(
                                             fontWeight = FontWeight.ExtraBold,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
-                                        val quotaStr = if ((selectedProfile?.dataLimitMb ?: 0) > 0) "${selectedProfile?.dataLimitMb}MB" else "Unlim"
+                                        val quotaStr = when {
+                                            (selectedProfile?.dataLimitMb ?: 0) <= 0 -> "Unlim"
+                                            (selectedProfile?.dataLimitMb ?: 0) >= 1024 && (selectedProfile?.dataLimitMb ?: 0) % 1024 == 0 -> "${(selectedProfile?.dataLimitMb ?: 0) / 1024}GB"
+                                            (selectedProfile?.dataLimitMb ?: 0) >= 1024 -> "${"%.1f".format((selectedProfile?.dataLimitMb ?: 0) / 1024.0)}GB"
+                                            else -> "${selectedProfile?.dataLimitMb}MB"
+                                        }
+                                        val validityStr = when {
+                                            (selectedProfile?.durationMinutes ?: 0) in 1..59 -> "${selectedProfile?.durationMinutes}M"
+                                            (selectedProfile?.durationMinutes ?: 0) in 60..1439 && (selectedProfile?.durationMinutes ?: 0) % 60 == 0 -> "${(selectedProfile?.durationMinutes ?: 0) / 60}H"
+                                            (selectedProfile?.durationMinutes ?: 0) in 60..1439 -> "${selectedProfile?.durationMinutes}M"
+                                            (selectedProfile?.durationMinutes ?: 0) >= 1440 && (selectedProfile?.durationMinutes ?: 0) % 1440 == 0 -> "${(selectedProfile?.durationMinutes ?: 0) / 1440}D"
+                                            (selectedProfile?.durationMinutes ?: 0) >= 1440 -> "${selectedProfile?.durationMinutes}M"
+                                            (selectedProfile?.validityDays ?: 0) > 0 -> "${selectedProfile?.validityDays}D"
+                                            else -> "1D"
+                                        }
                                         Text(
-                                            text = "$quotaStr • ${selectedProfile?.validityDays ?: 1}D",
+                                            text = "$quotaStr • $validityStr",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant

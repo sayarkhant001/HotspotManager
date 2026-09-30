@@ -355,7 +355,7 @@ object BluetoothThermalPrinter {
                 autoFitTextSize(textPaint, voucher.profileName, rightMaxW, if (is80) 30f else 19f, 13f)
                 canvas.drawText(voucher.profileName, rightCenter, if (is80) 44f else 29f, textPaint)
 
-                val quota = if (voucher.dataLimitMb > 0) "${voucher.dataLimitMb}M" else "Unlim"
+                val quota = VoucherPrinter.formatQuotaString(voucher.dataLimitMb)
                 val priceStr = if (voucher.price > 0) "${"%,d".format(Locale.US, voucher.price.toLong())} Ks" else "Free"
                 autoFitTextSize(textPaint, "$quota • $priceStr", rightMaxW, if (is80) 28f else 18f, 13f)
                 canvas.drawText("$quota • $priceStr", rightCenter, if (is80) 88f else 58f, textPaint)
@@ -389,12 +389,13 @@ object BluetoothThermalPrinter {
                 val subCellMaxW = col1W - 6f
                 val botMidY = row2H + (cardHeight - 2f - row2H) / 2f
 
-                val quota = if (voucher.dataLimitMb > 0) "${voucher.dataLimitMb}MB" else "Unlim"
+                val quota = VoucherPrinter.formatQuotaString(voucher.dataLimitMb)
                 val qSize = autoFitTextSize(textPaint, quota, subCellMaxW, if (is80) 28f else 18f, 13f)
                 canvas.drawText(quota, marginX + col1W / 2f, botMidY + (qSize * 0.35f), textPaint)
 
-                val vSize = autoFitTextSize(textPaint, "${voucher.validityDays} Days", subCellMaxW, if (is80) 28f else 18f, 13f)
-                canvas.drawText("${voucher.validityDays} Days", marginX + col1W * 1.5f, botMidY + (vSize * 0.35f), textPaint)
+                val valStr = VoucherPrinter.formatValidityString(voucher.durationMinutes, voucher.validityDays)
+                val vSize = autoFitTextSize(textPaint, valStr, subCellMaxW, if (is80) 28f else 18f, 13f)
+                canvas.drawText(valStr, marginX + col1W * 1.5f, botMidY + (vSize * 0.35f), textPaint)
 
                 val priceStr = if (voucher.price > 0) "${"%,d".format(Locale.US, voucher.price.toLong())} Ks" else "Free"
                 val pSize = autoFitTextSize(textPaint, priceStr, subCellMaxW, if (is80) 34f else 22f, 14f)
@@ -446,10 +447,12 @@ object BluetoothThermalPrinter {
                 canvas.drawText(voucher.profileName, rightCenter, r1Center + (profSize * 0.35f), textPaint)
 
                 // Row 2: Quota & Validity
-                val quota = if (voucher.dataLimitMb > 0) "${voucher.dataLimitMb}MB" else "Unlim"
-                val qvSize = autoFitTextSize(textPaint, "$quota • ${voucher.validityDays}D", rightMaxW, if (is80) 30f else 19f, 13f)
+                val quota = VoucherPrinter.formatQuotaString(voucher.dataLimitMb)
+                val valStr = VoucherPrinter.formatValidityString(voucher.durationMinutes, voucher.validityDays)
+                val limitText = "$quota • $valStr"
+                val qvSize = autoFitTextSize(textPaint, limitText, rightMaxW, if (is80) 30f else 19f, 13f)
                 val r2Center = 2f + rowH + (rowH / 2f)
-                canvas.drawText("$quota • ${voucher.validityDays}D", rightCenter, r2Center + (qvSize * 0.35f), textPaint)
+                canvas.drawText(limitText, rightCenter, r2Center + (qvSize * 0.35f), textPaint)
 
                 // Row 3: Price in Ks (Extra Bold & Large)
                 val priceStr = if (voucher.price > 0) "${"%,d".format(Locale.US, voucher.price.toLong())} Ks" else "Free"

@@ -550,18 +550,30 @@ class MikrotikClient {
         apiMutex.withLock {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext false
+                val cleanMac = mac.trim().uppercase()
+
+                // 1. Collect client IPs from active sessions & hosts to purge open connections
+                val clientIps = mutableSetOf<String>()
+
+                // 2. Remove from active hotspot sessions immediately
                 try {
-                    val active = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,mac-address")
+                    val active = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,mac-address,address,user")
                     active.forEach {
-                        if (it["mac-address"].equals(mac, ignoreCase = true)) {
+                        if (it["mac-address"].equals(cleanMac, ignoreCase = true)) {
+                            it["address"]?.let { ip -> if (ip.isNotBlank()) clientIps.add(ip) }
                             val id = it[".id"]
-                            if (!id.isNullOrEmpty()) {
+                            if (!id.isNullOrBlank()) {
                                 try { conn.execute("/ip/hotspot/active/remove", ".id=$id") } catch (_: Exception) {}
                             }
                         }
                     }
-                    val hosts = conn.execute("/ip/hotspot/host/print", "=.proplist=.id,mac-address")
-                    hosts.filter { it["mac-address"].equals(mac, ignoreCase = true) }.forEach {
+                } catch (_: Exception) {}
+
+                // 3. Remove from host ARP/DHCP tracking table immediately
+                try {
+                    val hosts = conn.execute("/ip/hotspot/host/print", "=.proplist=.id,mac-address,address")
+                    hosts.filter { it["mac-address"].equals(cleanMac, ignoreCase = true) }.forEach {
+                        it["address"]?.let { ip -> if (ip.isNotBlank()) clientIps.add(ip) }
                         val hId = it[".id"]
                         if (!hId.isNullOrBlank()) {
                             try { conn.execute("/ip/hotspot/host/remove", ".id=$hId") } catch (_: Exception) {}
@@ -569,7 +581,41 @@ class MikrotikClient {
                     }
                 } catch (_: Exception) {}
 
-                conn.execute("/ip/hotspot/ip-binding/add", "mac-address=$mac", "type=blocked", "comment=Banned via App")
+                // 4. Remove any login cookies to prevent instant re-login
+                try {
+                    val cookies = conn.execute("/ip/hotspot/cookie/print", "=.proplist=.id,mac-address")
+                    cookies.filter { it["mac-address"].equals(cleanMac, ignoreCase = true) }.forEach {
+                        val cId = it[".id"]
+                        if (!cId.isNullOrBlank()) {
+                            try { conn.execute("/ip/hotspot/cookie/remove", ".id=$cId") } catch (_: Exception) {}
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // 5. Instantly kill any active TCP/UDP connection tracking sessions for this client
+                try {
+                    if (clientIps.isNotEmpty()) {
+                        val conns = conn.execute("/ip/firewall/connection/print", "=.proplist=.id,src-address")
+                        clientIps.forEach { clientIp ->
+                            conns.filter { it["src-address"]?.startsWith(clientIp) == true }.forEach {
+                                val cId = it[".id"]
+                                if (!cId.isNullOrBlank()) {
+                                    try { conn.execute("/ip/firewall/connection/remove", ".id=$cId") } catch (_: Exception) {}
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // 6. Check existing IP bindings - either set or add type=blocked
+                val bindings = conn.execute("/ip/hotspot/ip-binding/print", "=.proplist=.id,mac-address")
+                val matched = bindings.firstOrNull { it["mac-address"].equals(cleanMac, ignoreCase = true) }
+                if (matched != null) {
+                    val bId = matched[".id"]
+                    conn.execute("/ip/hotspot/ip-binding/set", ".id=$bId", "type=blocked", "comment=Banned via App")
+                } else {
+                    conn.execute("/ip/hotspot/ip-binding/add", "mac-address=$cleanMac", "type=blocked", "comment=Banned via App")
+                }
                 true
             } catch (e: Exception) {
                 handleApiError(e)
@@ -582,21 +628,22 @@ class MikrotikClient {
         apiMutex.withLock {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext false
+                val cleanMac = mac.trim().uppercase()
                 val bindings = conn.execute("/ip/hotspot/ip-binding/print", "=.proplist=.id,mac-address,type")
                 bindings.forEach {
-                    if (it["mac-address"].equals(mac, ignoreCase = true)) {
+                    if (it["mac-address"].equals(cleanMac, ignoreCase = true)) {
                         val id = it[".id"]
                         if (!id.isNullOrBlank()) {
-                            try { conn.execute("/ip/hotspot/ip-binding/remove", "=.id=$id") } catch (_: Exception) {}
+                            try { conn.execute("/ip/hotspot/ip-binding/remove", ".id=$id") } catch (_: Exception) {}
                         }
                     }
                 }
                 try {
                     val hosts = conn.execute("/ip/hotspot/host/print", "=.proplist=.id,mac-address")
-                    hosts.filter { it["mac-address"].equals(mac, ignoreCase = true) }.forEach {
+                    hosts.filter { it["mac-address"].equals(cleanMac, ignoreCase = true) }.forEach {
                         val hId = it[".id"]
                         if (!hId.isNullOrBlank()) {
-                            try { conn.execute("/ip/hotspot/host/remove", "=.id=$hId") } catch (_: Exception) {}
+                            try { conn.execute("/ip/hotspot/host/remove", ".id=$hId") } catch (_: Exception) {}
                         }
                     }
                 } catch (_: Exception) {}
@@ -806,10 +853,9 @@ class MikrotikClient {
                             params.add("limit-bytes-total=$limitBytes")
                         }
                         // Enforce strict limit-uptime on RouterOS so client connection is forcibly ended when duration expires!
-                        if (v.durationMinutes > 0) {
-                            params.add("limit-uptime=${v.durationMinutes}m")
-                        } else if (v.validityDays > 0) {
-                            params.add("limit-uptime=${v.validityDays}d")
+                        val uptimeStr = formatMikrotikUptime(v.durationMinutes, v.validityDays)
+                        if (uptimeStr.isNotBlank()) {
+                            params.add("limit-uptime=$uptimeStr")
                         }
 
                         conn.execute("/ip/hotspot/user/add", *params.toTypedArray())
@@ -1089,6 +1135,24 @@ class MikrotikClient {
             } catch (e: Exception) {
                 handleApiError(e)
                 false
+            }
+        }
+    }
+
+    companion object {
+        /**
+         * Formats uptime / session-timeout string for MikroTik RouterOS.
+         * RouterOS accepts formats like: 15m, 30m, 1h, 2h, 1d, 7d.
+         */
+        fun formatMikrotikUptime(durationMinutes: Int, validityDays: Int): String {
+            return when {
+                durationMinutes in 1..59 -> "${durationMinutes}m"
+                durationMinutes in 60..1439 && durationMinutes % 60 == 0 -> "${durationMinutes / 60}h"
+                durationMinutes in 60..1439 -> "${durationMinutes}m"
+                durationMinutes >= 1440 && durationMinutes % 1440 == 0 -> "${durationMinutes / 1440}d"
+                durationMinutes >= 1440 -> "${durationMinutes}m"
+                validityDays > 0 -> "${validityDays}d"
+                else -> ""
             }
         }
     }

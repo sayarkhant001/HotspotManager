@@ -428,7 +428,7 @@ object VoucherPrinter {
 
                 var subSize = (row3H * 0.55f).coerceIn(8.5f, if (is80) 13f else 10f)
                 textPaint.textSize = subSize
-                val quota = if (voucher.dataLimitMb > 0) "${voucher.dataLimitMb}MB" else "Unlim"
+                val quota = formatQuotaString(voucher.dataLimitMb)
                 while (textPaint.measureText(quota) > subCellMaxW && subSize > 7f) {
                     subSize -= 0.5f
                     textPaint.textSize = subSize
@@ -436,7 +436,7 @@ object VoucherPrinter {
                 val botMidY = row2H + (row3H / 2f) + (subSize * 0.35f)
                 canvas.drawText(quota, x + col1W / 2f, botMidY, textPaint)
 
-                val valStr = "${voucher.validityDays}D"
+                val valStr = formatValidityString(voucher.durationMinutes, voucher.validityDays)
                 canvas.drawText(valStr, x + col1W * 1.5f, botMidY, textPaint)
 
                 pricePaint.textSize = subSize + 0.5f
@@ -536,8 +536,9 @@ object VoucherPrinter {
                 )
 
                 // Row 2: Data Quota & Validity
-                val quotaStr = if (voucher.dataLimitMb > 0) "${voucher.dataLimitMb}MB" else "Unlim"
-                val limitStr = "$quotaStr • ${voucher.validityDays}D"
+                val quotaStr = formatQuotaString(voucher.dataLimitMb)
+                val valStr = formatValidityString(voucher.durationMinutes, voucher.validityDays)
+                val limitStr = "$quotaStr • $valStr"
                 var limitSize = (rowH * 0.50f).coerceIn(8f, if (is80) 14f else 11.5f)
                 textPaint.textSize = limitSize
                 while (textPaint.measureText(limitStr) > rightMaxW && limitSize > 7f) {
@@ -584,6 +585,27 @@ object VoucherPrinter {
         } catch (e: Exception) {
             e.printStackTrace()
             null
+        }
+    }
+
+    fun formatQuotaString(dataLimitMb: Int): String {
+        return when {
+            dataLimitMb <= 0 -> "Unlim"
+            dataLimitMb >= 1024 && dataLimitMb % 1024 == 0 -> "${dataLimitMb / 1024}GB"
+            dataLimitMb >= 1024 -> "${"%.1f".format(dataLimitMb / 1024.0)}GB"
+            else -> "${dataLimitMb}MB"
+        }
+    }
+
+    fun formatValidityString(durationMinutes: Int, validityDays: Int): String {
+        return when {
+            durationMinutes in 1..59 -> "${durationMinutes}M"
+            durationMinutes in 60..1439 && durationMinutes % 60 == 0 -> "${durationMinutes / 60}H"
+            durationMinutes in 60..1439 -> "${durationMinutes}M"
+            durationMinutes >= 1440 && durationMinutes % 1440 == 0 -> "${durationMinutes / 1440}D"
+            durationMinutes >= 1440 -> "${durationMinutes}M"
+            validityDays > 0 -> "${validityDays}D"
+            else -> "1D"
         }
     }
 }
