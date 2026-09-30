@@ -377,13 +377,34 @@ object VoucherPrinter {
                 val splitX = x + (width * 0.58f)
                 val maxW = (splitX - x) - 4f
                 val leftCenter = x + (splitX - x) / 2f
-                var cSize = if (is80) 22f else 17f
-                codePaint.textSize = cSize
-                while (codePaint.measureText(voucher.code) > maxW && cSize > 9.5f) {
-                    cSize -= 0.5f
+                val isAcc = voucher.isAccount || (voucher.password.isNotBlank() && voucher.password != voucher.username)
+                if (isAcc) {
+                    val uText = "U: ${voucher.username}"
+                    val pText = "P: ${voucher.password}"
+                    var uSize = if (is80) 15f else 11f
+                    codePaint.textSize = uSize
+                    while (codePaint.measureText(uText) > maxW && uSize > 7.5f) {
+                        uSize -= 0.5f
+                        codePaint.textSize = uSize
+                    }
+                    canvas.drawText(uText, leftCenter, y + (height * 0.36f) + (uSize * 0.32f), codePaint)
+
+                    var pSize = if (is80) 15f else 11f
+                    codePaint.textSize = pSize
+                    while (codePaint.measureText(pText) > maxW && pSize > 7.5f) {
+                        pSize -= 0.5f
+                        codePaint.textSize = pSize
+                    }
+                    canvas.drawText(pText, leftCenter, y + (height * 0.78f) + (pSize * 0.32f), codePaint)
+                } else {
+                    var cSize = if (is80) 22f else 17f
                     codePaint.textSize = cSize
+                    while (codePaint.measureText(voucher.code) > maxW && cSize > 9.5f) {
+                        cSize -= 0.5f
+                        codePaint.textSize = cSize
+                    }
+                    canvas.drawText(voucher.code, leftCenter, y + (height / 2f) + (cSize * 0.35f), codePaint)
                 }
-                canvas.drawText(voucher.code, leftCenter, y + (height / 2f) + (cSize * 0.35f), codePaint)
 
                 val rightCenter = splitX + (x + width - splitX) / 2f
                 val rightMaxW = (x + width - splitX) - 4f
@@ -403,20 +424,43 @@ object VoucherPrinter {
                 canvas.drawLine(x, row1H, x + width, row1H, linePaint)
                 canvas.drawLine(x, row2H, x + width, row2H, linePaint)
 
-                // Row 1: Header (HOTSPOT VOUCHER | Profile)
-                titlePaint.textSize = if (is80) 12f else 9.5f
-                canvas.drawText("HOTSPOT VOUCHER • ${voucher.profileName}", centerX, y + (height * 0.17f), titlePaint)
+                val isAcc = voucher.isAccount || (voucher.password.isNotBlank() && voucher.password != voucher.username)
 
-                // Row 2: MASSIVE VOUCHER CODE
+                // Row 1: Header (HOTSPOT ACCOUNT or HOTSPOT VOUCHER • Profile)
+                titlePaint.textSize = if (is80) 12f else 9.5f
+                val hText = if (isAcc) "HOTSPOT ACCOUNT • ${voucher.profileName}" else "HOTSPOT VOUCHER • ${voucher.profileName}"
+                canvas.drawText(hText, centerX, y + (height * 0.17f), titlePaint)
+
+                // Row 2: MASSIVE VOUCHER CODE or USER + PASS
                 val codeMaxW = width - 8f
-                var cSize = if (is80) 32f else 24f
-                codePaint.textSize = cSize
-                while (codePaint.measureText(voucher.code) > codeMaxW && cSize > 12f) {
-                    cSize -= 0.5f
+                if (isAcc) {
+                    val uText = "U: ${voucher.username}"
+                    val pText = "P: ${voucher.password}"
+                    var uSize = if (is80) 22f else 16f
+                    codePaint.textSize = uSize
+                    while (codePaint.measureText(uText) > codeMaxW && uSize > 10f) {
+                        uSize -= 0.5f
+                        codePaint.textSize = uSize
+                    }
+                    canvas.drawText(uText, centerX, row1H + (row2H - row1H) * 0.38f + (uSize * 0.32f), codePaint)
+
+                    var pSize = if (is80) 22f else 16f
+                    codePaint.textSize = pSize
+                    while (codePaint.measureText(pText) > codeMaxW && pSize > 10f) {
+                        pSize -= 0.5f
+                        codePaint.textSize = pSize
+                    }
+                    canvas.drawText(pText, centerX, row1H + (row2H - row1H) * 0.78f + (pSize * 0.32f), codePaint)
+                } else {
+                    var cSize = if (is80) 32f else 24f
                     codePaint.textSize = cSize
+                    while (codePaint.measureText(voucher.code) > codeMaxW && cSize > 12f) {
+                        cSize -= 0.5f
+                        codePaint.textSize = cSize
+                    }
+                    val midY = row1H + (row2H - row1H) / 2f
+                    canvas.drawText(voucher.code, centerX, midY + (cSize * 0.35f), codePaint)
                 }
-                val midY = row1H + (row2H - row1H) / 2f
-                canvas.drawText(voucher.code, centerX, midY + (cSize * 0.35f), codePaint)
 
                 // Row 3: 3 Sub-cells for Quota, Validity, Price
                 val col1W = width / 3f
@@ -460,24 +504,26 @@ object VoucherPrinter {
                 val headerH = (height * 0.28f).coerceIn(9f, 16f)
                 canvas.drawLine(x, y + headerH, splitX, y + headerH, linePaint)
 
+                val isAcc = voucher.isAccount || (voucher.password.isNotBlank() && voucher.password != voucher.username)
                 titlePaint.textSize = (headerH * 0.65f).coerceIn(7f, 12f)
                 canvas.drawText(
-                    if (voucher.isAccount) "ACCOUNT LOGIN" else "VOUCHER CODE",
+                    if (isAcc) "ACCOUNT LOGIN" else "VOUCHER CODE",
                     leftCenterX,
                     y + (headerH * 0.5f) + (titlePaint.textSize * 0.35f),
                     titlePaint
                 )
 
                 val codeAreaH = height - headerH
-                if (voucher.isAccount) {
+                if (isAcc) {
+                    val uText = "U: ${voucher.username}"
                     var codeSize = (codeAreaH * 0.36f).coerceIn(9f, if (is80) 22f else 16f)
                     codePaint.textSize = codeSize
-                    while (codePaint.measureText(voucher.code) > leftMaxW && codeSize > 8f) {
+                    while (codePaint.measureText(uText) > leftMaxW && codeSize > 8f) {
                         codeSize -= 0.5f
                         codePaint.textSize = codeSize
                     }
                     canvas.drawText(
-                        voucher.code,
+                        uText,
                         leftCenterX,
                         y + headerH + (codeAreaH * 0.36f) + (codeSize * 0.32f),
                         codePaint

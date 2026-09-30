@@ -397,12 +397,22 @@ object BluetoothThermalPrinter {
                 val splitX = marginX + boxW * 0.58f
                 canvas.drawLine(splitX, 2f, splitX, cardHeight - 2f, borderPaint)
 
-                // Left Cell: Huge Bold Code
+                // Left Cell: Huge Bold Code or Account (User + Pass)
                 val leftCenter = marginX + (splitX - marginX) / 2f
                 textPaint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                 val codeMaxW = (splitX - marginX) - 10f
-                val cSize = autoFitTextSize(textPaint, voucher.code, codeMaxW, if (is80) 58f else 36f, 18f)
-                canvas.drawText(voucher.code, leftCenter, cardHeight / 2f + (cSize * 0.35f), textPaint)
+                val isAcc = voucher.isAccount || (voucher.password.isNotBlank() && voucher.password != voucher.username)
+                if (isAcc) {
+                    val uText = "U: ${voucher.username}"
+                    val pText = "P: ${voucher.password}"
+                    val uSize = autoFitTextSize(textPaint, uText, codeMaxW, if (is80) 36f else 23f, 13f)
+                    canvas.drawText(uText, leftCenter, if (is80) 44f else 29f, textPaint)
+                    val pSize = autoFitTextSize(textPaint, pText, codeMaxW, if (is80) 36f else 23f, 13f)
+                    canvas.drawText(pText, leftCenter, if (is80) 88f else 58f, textPaint)
+                } else {
+                    val cSize = autoFitTextSize(textPaint, voucher.code, codeMaxW, if (is80) 58f else 36f, 18f)
+                    canvas.drawText(voucher.code, leftCenter, cardHeight / 2f + (cSize * 0.35f), textPaint)
+                }
 
                 // Right Cell: Profile & Price
                 val rightCenter = splitX + (marginX + boxW - splitX) / 2f
@@ -423,17 +433,29 @@ object BluetoothThermalPrinter {
                 canvas.drawLine(marginX, row1H, marginX + boxW, row1H, linePaint)
                 canvas.drawLine(marginX, row2H, marginX + boxW, row2H, linePaint)
 
-                // Row 1: Header (HOTSPOT VOUCHER | PROFILE)
+                val isAcc = voucher.isAccount || (voucher.password.isNotBlank() && voucher.password != voucher.username)
+
+                // Row 1: Header (HOTSPOT ACCOUNT or HOTSPOT VOUCHER | PROFILE)
                 textPaint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                 textPaint.textSize = if (is80) 25f else 16f
-                canvas.drawText("HOTSPOT VOUCHER   |   ${voucher.profileName}", totalWidth / 2f, if (is80) 28f else 19f, textPaint)
+                val titleHeader = if (isAcc) "HOTSPOT ACCOUNT" else "HOTSPOT VOUCHER"
+                canvas.drawText("$titleHeader   |   ${voucher.profileName}", totalWidth / 2f, if (is80) 28f else 19f, textPaint)
 
-                // Row 2: ENORMOUS VOUCHER CODE (Full Width, Centered)
+                // Row 2: ENORMOUS VOUCHER CODE or USER + PASS (Full Width, Centered)
                 textPaint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                 val codeMaxW = boxW - 16f
-                val cSize = autoFitTextSize(textPaint, voucher.code, codeMaxW, if (is80) 74f else 48f, 24f)
-                val midY = row1H + (row2H - row1H) / 2f
-                canvas.drawText(voucher.code, totalWidth / 2f, midY + (cSize * 0.35f), textPaint)
+                if (isAcc) {
+                    val uText = "U: ${voucher.username}"
+                    val pText = "P: ${voucher.password}"
+                    val uSize = autoFitTextSize(textPaint, uText, codeMaxW, if (is80) 46f else 30f, 16f)
+                    canvas.drawText(uText, totalWidth / 2f, row1H + (row2H - row1H) * 0.38f + (uSize * 0.32f), textPaint)
+                    val pSize = autoFitTextSize(textPaint, pText, codeMaxW, if (is80) 46f else 30f, 16f)
+                    canvas.drawText(pText, totalWidth / 2f, row1H + (row2H - row1H) * 0.78f + (pSize * 0.32f), textPaint)
+                } else {
+                    val cSize = autoFitTextSize(textPaint, voucher.code, codeMaxW, if (is80) 74f else 48f, 24f)
+                    val midY = row1H + (row2H - row1H) / 2f
+                    canvas.drawText(voucher.code, totalWidth / 2f, midY + (cSize * 0.35f), textPaint)
+                }
 
                 // Row 3: 3 Sub-cells for Quota, Validity, Price
                 val col1W = boxW / 3f
@@ -462,14 +484,16 @@ object BluetoothThermalPrinter {
                 val splitX = marginX + boxW * 0.58f
                 canvas.drawLine(splitX, 2f, splitX, cardHeight - 2f, borderPaint)
 
-                // Left Cell: Header label + Giant Centered Code
+                val isAcc = voucher.isAccount || (voucher.password.isNotBlank() && voucher.password != voucher.username)
+
+                // Left Cell: Header label + Giant Centered Code or Account
                 val leftCenter = marginX + (splitX - marginX) / 2f
                 val headerH = if (is80) 30f else 20f
                 canvas.drawLine(marginX, headerH, splitX, headerH, linePaint)
 
                 textPaint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                 textPaint.textSize = if (is80) 16f else 11.5f
-                canvas.drawText(if (voucher.isAccount) "ACCOUNT LOGIN" else "VOUCHER CODE", leftCenter, if (is80) 21f else 14.5f, textPaint)
+                canvas.drawText(if (isAcc) "ACCOUNT LOGIN" else "VOUCHER CODE", leftCenter, if (is80) 21f else 14.5f, textPaint)
 
                 val leftMaxW = (splitX - marginX) - 10f
                 textPaint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
@@ -477,11 +501,13 @@ object BluetoothThermalPrinter {
                 val codeAreaH = cardHeight - 2f - headerH
                 val codeCenterY = headerH + (codeAreaH / 2f)
 
-                if (voucher.isAccount) {
-                    val accSize = autoFitTextSize(textPaint, voucher.code, leftMaxW, if (is80) 44f else 28f, 18f)
-                    canvas.drawText(voucher.code, leftCenter, headerH + (codeAreaH * 0.40f) + (accSize * 0.32f), textPaint)
-                    val passSize = autoFitTextSize(textPaint, "P: ${voucher.password}", leftMaxW, if (is80) 32f else 20f, 14f)
-                    canvas.drawText("P: ${voucher.password}", leftCenter, headerH + (codeAreaH * 0.82f) + (passSize * 0.32f), textPaint)
+                if (isAcc) {
+                    val uText = "U: ${voucher.username}"
+                    val accSize = autoFitTextSize(textPaint, uText, leftMaxW, if (is80) 40f else 26f, 16f)
+                    canvas.drawText(uText, leftCenter, headerH + (codeAreaH * 0.38f) + (accSize * 0.32f), textPaint)
+                    val passText = "P: ${voucher.password}"
+                    val passSize = autoFitTextSize(textPaint, passText, leftMaxW, if (is80) 36f else 22f, 14f)
+                    canvas.drawText(passText, leftCenter, headerH + (codeAreaH * 0.80f) + (passSize * 0.32f), textPaint)
                 } else {
                     // Massive, centered voucher code
                     val cSize = autoFitTextSize(textPaint, voucher.code, leftMaxW, if (is80) 66f else 44f, 22f)

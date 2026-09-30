@@ -511,10 +511,18 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 else -> ('0'..'9').toList()
             }
 
-            // Initial comment on generation includes profile name and validity in days.
-            // When user logs in, router script 'voucher-activate' computes Myanmar Time (Asia/Yangon)
-            // expiration date starting at 12:00 AM midnight: "EXP: YYYY-MM-DD 12:00 AM".
-            val initialComment = "${profile.name} V:${profile.validityDays}D"
+            // Initial comment on generation includes profile name and validity.
+            // When user logs in, router script 'voucher-activate' reads validity and
+            // sets a continuous expiration countdown timer from the exact time of insertion!
+            val validityTag = when {
+                profile.durationMinutes in 1..59 -> "${profile.durationMinutes}m"
+                profile.durationMinutes in 60..1439 && profile.durationMinutes % 60 == 0 -> "${profile.durationMinutes / 60}h"
+                profile.durationMinutes in 60..1439 -> "${profile.durationMinutes}m"
+                profile.durationMinutes >= 1440 && profile.durationMinutes % 1440 == 0 -> "${profile.durationMinutes / 1440}d"
+                profile.validityDays > 0 -> "${profile.validityDays}d"
+                else -> "1d"
+            }
+            val initialComment = "${profile.name} V:$validityTag"
 
             val newVouchers = mutableListOf<Voucher>()
 
