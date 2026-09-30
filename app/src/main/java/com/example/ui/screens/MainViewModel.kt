@@ -538,7 +538,6 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
             if (res.isSuccess) {
                 userMessage.value = "✓ Generated ${newVouchers.size} vouchers on router instantly!"
                 onComplete?.invoke(newVouchers)
-                repository.syncVouchersFromRouter()
             } else {
                 userMessage.value = "✗ Router Error: ${res.exceptionOrNull()?.message ?: "Failed to push vouchers to router"}"
             }

@@ -1,9 +1,24 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.provider.Settings
+import android.widget.Toast
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -13,9 +28,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -23,18 +40,10 @@ import androidx.navigation.NavController
 import com.example.domain.models.UserProfile
 import com.example.domain.models.Voucher
 import com.example.ui.components.GlassCard
-import com.example.utils.VoucherPrinter
-
-import android.content.Intent
-import android.provider.Settings
-import android.widget.Toast
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.platform.LocalContext
 import com.example.utils.BluetoothPrinterDevice
 import com.example.utils.BluetoothThermalPrinter
+import com.example.utils.LanguageManager
+import com.example.utils.VoucherPrinter
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,6 +56,8 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val strings = LanguageManager.strings
+    val currentLang by LanguageManager.currentLanguage
 
     LaunchedEffect(userMsg) {
         userMsg?.let { msg ->
@@ -101,23 +112,37 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Vouchers (${vouchers.size})", fontWeight = FontWeight.Bold) },
+                title = { Text("${strings.vouchersHeader} (${vouchers.size})", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
                     }
                 },
                 actions = {
+                    // Language Switcher Chip
+                    Surface(
+                        onClick = { LanguageManager.toggleLanguage(context) },
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Text(
+                            text = "${currentLang.flag} ${currentLang.displayName}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                        )
+                    }
                     // Separate Printer Setup & Test Button as explicitly requested
                     IconButton(onClick = { showPrinterSetupDialog = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Printer Setup & Test")
+                        Icon(Icons.Default.Settings, contentDescription = strings.thermalPrinterSetupTitle)
                     }
                     IconButton(onClick = { viewModel.syncVouchers() }, enabled = !isSyncing) {
                         if (isSyncing) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         } else {
-                            Icon(Icons.Default.Sync, contentDescription = "Sync from Router")
+                            Icon(Icons.Default.Sync, contentDescription = strings.refresh)
                         }
                     }
                     IconButton(
@@ -127,7 +152,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         },
                         enabled = filteredVouchers.isNotEmpty()
                     ) {
-                        Icon(Icons.Default.Print, contentDescription = "Print Vouchers")
+                        Icon(Icons.Default.Print, contentDescription = strings.printAction)
                     }
                 }
             )
@@ -136,7 +161,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
             ExtendedFloatingActionButton(
                 onClick = { showGenerateDialog = true },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Generate") }
+                text = { Text(strings.generateVouchers) }
             )
         }
     ) { innerPadding ->
@@ -150,8 +175,8 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search vouchers by code or profile...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                placeholder = { Text(strings.searchVouchersHint) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = strings.search) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         IconButton(onClick = { searchQuery = "" }) {
@@ -180,7 +205,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                             printFilterMode = "ALL"
                             selectedProfileFilter = null
                         },
-                        label = { Text("All (${vouchers.size})") }
+                        label = { Text("${strings.filterAll} (${vouchers.size})") }
                     )
                 }
                 item {
@@ -189,7 +214,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         onClick = {
                             printFilterMode = if (printFilterMode == "USED") "ALL" else "USED"
                         },
-                        label = { Text("Used ($usedCount)") },
+                        label = { Text("${strings.filterUsed} ($usedCount)") },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Color(0xFFFF9800).copy(alpha = 0.2f),
                             selectedLabelColor = Color(0xFFE65100)
@@ -202,7 +227,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         onClick = {
                             printFilterMode = if (printFilterMode == "UNPRINTED") "ALL" else "UNPRINTED"
                         },
-                        label = { Text("Unprinted ($unprintedCount)") },
+                        label = { Text("${strings.filterUnprinted} ($unprintedCount)") },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -215,7 +240,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         onClick = {
                             printFilterMode = if (printFilterMode == "PRINTED") "ALL" else "PRINTED"
                         },
-                        label = { Text("Printed ($printedCount)") },
+                        label = { Text("${strings.filterPrinted} ($printedCount)") },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Color(0xFF2E7D32).copy(alpha = 0.2f),
                             selectedLabelColor = Color(0xFF2E7D32)
@@ -251,7 +276,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                 ) {
                     Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Printer Connect & Test Print")
+                    Text(strings.printerSetupBtn)
                 }
             }
 
@@ -267,7 +292,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Used Vouchers ($usedCount)",
+                            text = "${strings.usedVouchersBanner} ($usedCount)",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
@@ -279,7 +304,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                             ) {
                                 Icon(Icons.Default.Autorenew, contentDescription = null, modifier = Modifier.size(15.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text("Renew All", style = MaterialTheme.typography.labelMedium)
+                                Text(strings.renewAll, style = MaterialTheme.typography.labelMedium)
                             }
                             Button(
                                 onClick = { showDeleteAllUsedDialog = true },
@@ -288,7 +313,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                             ) {
                                 Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(15.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text("Delete All", style = MaterialTheme.typography.labelMedium)
+                                Text(strings.deleteAll, style = MaterialTheme.typography.labelMedium)
                             }
                         }
                     }
@@ -315,7 +340,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         ) {
                             Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Print (${selectedVoucherCodes.size})")
+                            Text("${strings.printAction} (${selectedVoucherCodes.size})")
                         }
                         Button(
                             onClick = { showDeleteSelectedDialog = true },
@@ -324,11 +349,11 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         ) {
                             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Delete (${selectedVoucherCodes.size})")
+                            Text("${strings.deleteAction} (${selectedVoucherCodes.size})")
                         }
                     }
                     TextButton(onClick = { selectedVoucherCodes = emptySet() }) {
-                        Text("Deselect All")
+                        Text(strings.deselectAll)
                     }
                 } else {
                     FilledTonalButton(
@@ -342,7 +367,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                     ) {
                         Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Print Only Unprinted ($unprintedCount)")
+                        Text("${strings.printOnlyUnprinted} ($unprintedCount)")
                     }
                     TextButton(
                         onClick = {
@@ -350,7 +375,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         },
                         enabled = filteredVouchers.isNotEmpty()
                     ) {
-                        Text("Select All")
+                        Text(strings.selectAll)
                     }
                 }
             }
@@ -413,10 +438,11 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
 
         // Print Format and Style Dialog
         if (showPrintDialog) {
+            val targetList = if (vouchersToPrint.isNotEmpty()) vouchersToPrint else filteredVouchers
             PrintOptionsDialog(
+                sampleVoucher = targetList.firstOrNull(),
                 onDismiss = { showPrintDialog = false },
-                onPrint = { style, format ->
-                    val targetList = if (vouchersToPrint.isNotEmpty()) vouchersToPrint else filteredVouchers
+                onPrint = { style, format, autoCut ->
                     if (format == VoucherPrinter.PaperFormat.THERMAL_58MM || format == VoucherPrinter.PaperFormat.THERMAL_80MM) {
                         val savedPrinter = BluetoothThermalPrinter.getSavedPrinter(context)
                         val paperWidth = if (format == VoucherPrinter.PaperFormat.THERMAL_80MM)
@@ -431,7 +457,9 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                                     context = context,
                                     vouchers = targetList,
                                     deviceAddress = savedPrinter.address,
-                                    paperWidth = paperWidth
+                                    paperWidth = paperWidth,
+                                    style = style,
+                                    autoCutEachVoucher = autoCut
                                 )
                                 if (res.isSuccess) {
                                     viewModel.markVouchersAsPrinted(targetList.map { it.code })
@@ -472,8 +500,8 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
             val v = voucherToDelete!!
             AlertDialog(
                 onDismissRequest = { voucherToDelete = null },
-                title = { Text("Delete Voucher") },
-                text = { Text("Are you sure you want to delete voucher code '${v.code}' from RouterOS and this app?") },
+                title = { Text(strings.deleteAction) },
+                text = { Text("Are you sure you want to delete voucher '${v.code}'?") },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -482,11 +510,11 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Text("Delete")
+                        Text(strings.delete)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { voucherToDelete = null }) { Text("Cancel") }
+                    TextButton(onClick = { voucherToDelete = null }) { Text(strings.cancel) }
                 }
             )
         }
@@ -496,8 +524,8 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
             val v = voucherToRenew!!
             AlertDialog(
                 onDismissRequest = { voucherToRenew = null },
-                title = { Text("Renew Voucher") },
-                text = { Text("Renew voucher code '${v.code}'? This resets its data usage and marks it active again on the router.") },
+                title = { Text(strings.renewAction) },
+                text = { Text("Renew voucher '${v.code}'?") },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -506,11 +534,11 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
                     ) {
-                        Text("Renew")
+                        Text(strings.renewAction)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { voucherToRenew = null }) { Text("Cancel") }
+                    TextButton(onClick = { voucherToRenew = null }) { Text(strings.cancel) }
                 }
             )
         }
@@ -519,8 +547,8 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
         if (showRenewAllUsedDialog) {
             AlertDialog(
                 onDismissRequest = { showRenewAllUsedDialog = false },
-                title = { Text("Renew All Used Vouchers") },
-                text = { Text("Are you sure you want to renew all $usedCount used vouchers on the router?") },
+                title = { Text(strings.renewAll) },
+                text = { Text("Renew all $usedCount used vouchers on the router?") },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -529,11 +557,11 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
                     ) {
-                        Text("Renew All")
+                        Text(strings.renewAll)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showRenewAllUsedDialog = false }) { Text("Cancel") }
+                    TextButton(onClick = { showRenewAllUsedDialog = false }) { Text(strings.cancel) }
                 }
             )
         }
@@ -542,8 +570,8 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
         if (showDeleteAllUsedDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteAllUsedDialog = false },
-                title = { Text("Delete All Used Vouchers") },
-                text = { Text("Permanently delete all $usedCount used vouchers from RouterOS and this app?") },
+                title = { Text(strings.deleteAllUsedConfirmTitle) },
+                text = { Text(strings.deleteAllUsedConfirmMsg) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -552,11 +580,11 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Text("Delete All Used")
+                        Text(strings.deleteAll)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showDeleteAllUsedDialog = false }) { Text("Cancel") }
+                    TextButton(onClick = { showDeleteAllUsedDialog = false }) { Text(strings.cancel) }
                 }
             )
         }
@@ -565,8 +593,8 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
         if (showDeleteSelectedDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteSelectedDialog = false },
-                title = { Text("Delete Selected Vouchers") },
-                text = { Text("Are you sure you want to permanently delete ${selectedVoucherCodes.size} selected vouchers from RouterOS and this app?") },
+                title = { Text(strings.deleteSelectedConfirmTitle) },
+                text = { Text(strings.deleteSelectedConfirmMsg) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -577,11 +605,11 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Text("Delete Selected")
+                        Text(strings.delete)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showDeleteSelectedDialog = false }) { Text("Cancel") }
+                    TextButton(onClick = { showDeleteSelectedDialog = false }) { Text(strings.cancel) }
                 }
             )
         }
@@ -598,6 +626,7 @@ fun VoucherItemCard(
 ) {
     val clipboardManager = LocalClipboardManager.current
     var copied by remember { mutableStateOf(false) }
+    val strings = LanguageManager.strings
 
     GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
         Row(
@@ -642,9 +671,9 @@ fun VoucherItemCard(
                         else -> MaterialTheme.colorScheme.outline
                     }
                     val badgeText = when {
-                        voucher.isUsed -> "USED"
-                        voucher.isPrinted -> "PRINTED"
-                        else -> "UNPRINTED"
+                        voucher.isUsed -> strings.statusUsed
+                        voucher.isPrinted -> strings.statusPrinted
+                        else -> strings.statusUnprinted
                     }
                     Surface(
                         shape = RoundedCornerShape(4.dp),
@@ -698,7 +727,7 @@ fun VoucherItemCard(
                 IconButton(onClick = onRenew) {
                     Icon(
                         imageVector = Icons.Default.Autorenew,
-                        contentDescription = "Renew Voucher",
+                        contentDescription = strings.renewAction,
                         tint = Color(0xFF2E7D32),
                         modifier = Modifier.size(20.dp)
                     )
@@ -720,7 +749,7 @@ fun VoucherItemCard(
             IconButton(onClick = onDelete) {
                 Icon(
                     imageVector = Icons.Default.DeleteOutline,
-                    contentDescription = "Delete Voucher",
+                    contentDescription = strings.deleteAction,
                     tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                     modifier = Modifier.size(20.dp)
                 )
@@ -741,171 +770,444 @@ fun MikhmonGenerateVouchersDialog(
     var quantity by remember { mutableStateOf("10") }
     var length by remember { mutableStateOf("8") }
     var prefix by remember { mutableStateOf("") }
+    val strings = LanguageManager.strings
 
     val numberStyles = listOf(
         "Hyphenated Numbers (1819-9733)",
         "Numbers Only (18199733)",
-        "Alphanumeric (AG3HG6Q4)",
-        "Hyphenated Alphanumeric (AG3H-G6Q4)",
+        "Alphanumeric (AG3H-G6Q4)",
         "Uppercase Letters (ABCDEFGH)",
         "Lowercase Letters (abcdefgh)",
-        "Mixed Letters & Numbers (aB3kE8q9)"
+        "Mixed Letters & Numbers (aB3k-E8q9)"
     )
     var selectedNumberStyle by remember { mutableStateOf(numberStyles[0]) }
-
     var profileExpanded by remember { mutableStateOf(false) }
     var styleExpanded by remember { mutableStateOf(false) }
 
+    // Live preview code computation
+    val previewCode = remember(prefix, length, selectedNumberStyle) {
+        val len = (length.toIntOrNull() ?: 8).coerceIn(4, 16)
+        val sampleDigits = "8492015372189420"
+        val sampleUpper = "H7W8K4M2PX9Y3B5Q"
+        val sampleLower = "h7w8k4m2px9y3b5q"
+        val raw = when {
+            selectedNumberStyle.startsWith("Numbers Only") -> sampleDigits.take(len)
+            selectedNumberStyle.startsWith("Uppercase") -> sampleUpper.filter { it.isLetter() }.take(len)
+            selectedNumberStyle.startsWith("Lowercase") -> sampleLower.filter { it.isLetter() }.take(len)
+            selectedNumberStyle.startsWith("Hyphenated Numbers") -> {
+                val half = (len / 2).coerceAtLeast(2)
+                val part1 = sampleDigits.take(half)
+                val part2 = sampleDigits.substring(half, len.coerceAtMost(sampleDigits.length))
+                "$part1-$part2"
+            }
+            selectedNumberStyle.startsWith("Alphanumeric") -> {
+                val half = (len / 2).coerceAtLeast(2)
+                val part1 = sampleUpper.take(half)
+                val part2 = sampleUpper.substring(half, len.coerceAtMost(sampleUpper.length))
+                "$part1-$part2"
+            }
+            else -> sampleUpper.take(len)
+        }
+        prefix + raw
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Generate Vouchers", fontWeight = FontWeight.Bold) },
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.ConfirmationNumber,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(strings.generateVouchers, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
+                        Text("Mikhmon POS Engine", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        },
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (profiles.isEmpty()) {
                     Text("No profiles configured. Please create a user profile first.", color = MaterialTheme.colorScheme.error)
                 } else {
-                    // Mode Selector: Voucher vs Account (clean without "(User+ Pass)")
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilterChip(
-                            selected = !isAccountMode,
-                            onClick = { isAccountMode = false },
-                            label = {
-                                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                    Text("Voucher", fontWeight = if (!isAccountMode) FontWeight.Bold else FontWeight.Normal)
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                        FilterChip(
-                            selected = isAccountMode,
-                            onClick = { isAccountMode = true },
-                            label = {
-                                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                    Text("Account", fontWeight = if (isAccountMode) FontWeight.Bold else FontWeight.Normal)
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    // Profile Dropdown Selector
-                    ExposedDropdownMenuBox(
-                        expanded = profileExpanded,
-                        onExpandedChange = { profileExpanded = !profileExpanded },
+                    // 1. LIVE TICKET PREVIEW CARD (Matches physical 58mm 2-compartment box)
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        val profileText = selectedProfile?.let { p ->
-                            val speed = if (p.rateLimit.isNotBlank()) p.rateLimit else "Unlimited"
-                            val price = if (p.price > 0) " • %,d Ks".format(p.price.toInt()) else ""
-                            "${p.name} ($speed • ${p.validityDays}D$price)"
-                        } ?: "Select Profile"
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.ReceiptLong,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(15.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        "TICKET LIVE PREVIEW (58mm Box)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                ) {
+                                    Text(
+                                        text = selectedProfile?.name ?: "Default",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
 
-                        OutlinedTextField(
-                            value = profileText,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Profile") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = profileExpanded) },
-                            modifier = Modifier
-                                .menuAnchor()
-                                .fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        ExposedDropdownMenu(
-                            expanded = profileExpanded,
-                            onDismissRequest = { profileExpanded = false }
-                        ) {
-                            profiles.forEach { p ->
-                                val priceFormatted = if (p.price > 0) " • %,d Ks".format(p.price.toInt()) else ""
-                                val speedInfo = if (p.rateLimit.isNotBlank()) p.rateLimit else "Unlimited"
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(p.name, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(8.dp))
+
+                            // 2-Compartment Box Render
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Left Compartment: Big Bold Code
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1.05f)
+                                            .padding(8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Text(
+                                            text = if (isAccountMode) "ACCOUNT CODE" else "VOUCHER CODE",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontSize = 9.sp
+                                        )
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(
+                                            text = previewCode,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Black,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        if (isAccountMode) {
                                             Text(
-                                                "$speedInfo • ${p.validityDays} Days$priceFormatted",
-                                                style = MaterialTheme.typography.bodySmall,
+                                                text = "P: " + previewCode.reversed().take(previewCode.length.coerceAtMost(6)),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontFamily = FontFamily.Monospace,
+                                                fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
-                                    },
-                                    onClick = {
-                                        selectedProfile = p
-                                        profileExpanded = false
                                     }
-                                )
+
+                                    // Vertical Box Divider
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .width(1.dp)
+                                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                                    )
+
+                                    // Right Compartment: Profile & Limits
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(0.95f)
+                                            .padding(8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Text(
+                                            text = selectedProfile?.name ?: "Profile",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        val quotaStr = if ((selectedProfile?.dataLimitMb ?: 0) > 0) "${selectedProfile?.dataLimitMb}MB" else "Unlim"
+                                        Text(
+                                            text = "$quotaStr • ${selectedProfile?.validityDays ?: 1}D",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        val price = selectedProfile?.price ?: 0.0
+                                        Text(
+                                            text = if (price > 0) "%,d Ks".format(price.toInt()) else "FREE",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Black,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
 
-                    // Number / Code Style Dropdown Selector
-                    ExposedDropdownMenuBox(
-                        expanded = styleExpanded,
-                        onExpandedChange = { styleExpanded = !styleExpanded },
-                        modifier = Modifier.fillMaxWidth()
+                    // 2. SEGMENTED MODE SELECTOR (Voucher vs Account)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        OutlinedTextField(
-                            value = selectedNumberStyle,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Number / Code Style") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = styleExpanded) },
-                            modifier = Modifier
-                                .menuAnchor()
-                                .fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        ExposedDropdownMenu(
-                            expanded = styleExpanded,
-                            onDismissRequest = { styleExpanded = false }
+                        Surface(
+                            onClick = { isAccountMode = false },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (!isAccountMode) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            modifier = Modifier.weight(1f)
                         ) {
-                            numberStyles.forEach { style ->
-                                DropdownMenuItem(
-                                    text = { Text(style, style = MaterialTheme.typography.bodyMedium) },
-                                    onClick = {
-                                        selectedNumberStyle = style
-                                        styleExpanded = false
-                                    }
+                            Row(
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.ConfirmationNumber,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (!isAccountMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = strings.userModeSame,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (!isAccountMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Surface(
+                            onClick = { isAccountMode = true },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isAccountMode) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (isAccountMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = strings.userModeSeparate,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isAccountMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     }
 
-                    // Prefix with Clear & Quick Chips
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    // 3. QUICK PROFILE CAROUSEL + DROPDOWN
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Profile (Package):",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            if (profiles.size > 3) {
+                                TextButton(
+                                    onClick = { profileExpanded = true },
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text("More...", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(profiles) { p ->
+                                val isSelected = selectedProfile?.name == p.name
+                                Surface(
+                                    onClick = { selectedProfile = p },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                    ),
+                                    modifier = Modifier.width(IntrinsicSize.Min)
+                                ) {
+                                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (isSelected) {
+                                                Icon(
+                                                    Icons.Default.CheckCircle,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(Modifier.width(4.dp))
+                                            }
+                                            Text(
+                                                text = p.name,
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                maxLines = 1
+                                            )
+                                        }
+                                        val priceFmt = if (p.price > 0) "%,d Ks".format(p.price.toInt()) else "Free"
+                                        Text(
+                                            text = priceFmt,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (profileExpanded) {
+                            ExposedDropdownMenuBox(
+                                expanded = profileExpanded,
+                                onExpandedChange = { profileExpanded = !profileExpanded },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedProfile?.name ?: "Select",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("All Profiles") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = profileExpanded) },
+                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = profileExpanded,
+                                    onDismissRequest = { profileExpanded = false }
+                                ) {
+                                    profiles.forEach { p ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Column {
+                                                    Text(p.name, fontWeight = FontWeight.Bold)
+                                                    Text("${p.rateLimit} • ${p.validityDays}D • %,d Ks".format(p.price.toInt()), style = MaterialTheme.typography.bodySmall)
+                                                }
+                                            },
+                                            onClick = {
+                                                selectedProfile = p
+                                                profileExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 4. CODE STYLE / FORMAT CHIPS
+                    Column {
+                        Text(
+                            strings.characterType + ":",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf(
+                                "Hyphenated Numbers" to "1234-5678",
+                                "Numbers Only" to "12345678",
+                                "Alphanumeric" to "AG3H-G6Q4"
+                            ).forEach { (styleKey, previewLabel) ->
+                                val isSelected = selectedNumberStyle.startsWith(styleKey)
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                        selectedNumberStyle = numberStyles.firstOrNull { it.startsWith(styleKey) } ?: numberStyles[0]
+                                    },
+                                    label = { Text(previewLabel, style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+
+                    // 5. PREFIX WITH QUICK PRESETS
+                    Column {
                         OutlinedTextField(
                             value = prefix,
                             onValueChange = { prefix = it },
-                            label = { Text("Prefix (Optional)") },
-                            placeholder = { Text("e.g. HS-, AG-") },
+                            label = { Text(strings.prefixOptional) },
+                            placeholder = { Text("e.g. HS-, VIP-, NET-") },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp),
                             singleLine = true,
                             trailingIcon = if (prefix.isNotEmpty()) {
                                 {
                                     IconButton(onClick = { prefix = "" }) {
-                                        Icon(Icons.Default.Clear, contentDescription = "Clear Prefix", modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
                                     }
                                 }
                             } else null
                         )
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 4.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Quick:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            listOf("None", "HS-", "AG-", "WIFI-").forEach { chipText ->
+                            Text("Prefix:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            listOf("None", "HS-", "VIP-", "NET-", "WF-").forEach { chipText ->
                                 val isSelected = (chipText == "None" && prefix.isEmpty()) || (chipText != "None" && prefix == chipText)
                                 SuggestionChip(
                                     onClick = { prefix = if (chipText == "None") "" else chipText },
@@ -919,24 +1221,101 @@ fun MikhmonGenerateVouchersDialog(
                         }
                     }
 
-                    // Quantity and Length
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = quantity,
-                            onValueChange = { quantity = it },
-                            label = { Text("Qty (e.g. 10)") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = length,
-                            onValueChange = { length = it },
-                            label = { Text("Length (>= 4)") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp),
-                            singleLine = true
-                        )
+                    // 6. QUANTITY & CODE LENGTH WITH INTERACTIVE STEPPERS
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Quantity Row with Minus / Plus Steppers
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(strings.quantity, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Text("Total vouchers to generate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = {
+                                        val q = (quantity.toIntOrNull() ?: 10) - 5
+                                        quantity = q.coerceAtLeast(1).toString()
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(Icons.Default.RemoveCircleOutline, contentDescription = "Decrease", tint = MaterialTheme.colorScheme.primary)
+                                }
+                                OutlinedTextField(
+                                    value = quantity,
+                                    onValueChange = { input -> if (input.all { it.isDigit() }) quantity = input },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
+                                    modifier = Modifier.width(68.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    singleLine = true,
+                                    textStyle = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                )
+                                IconButton(
+                                    onClick = {
+                                        val q = (quantity.toIntOrNull() ?: 10) + 5
+                                        quantity = q.toString()
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(Icons.Default.AddCircleOutline, contentDescription = "Increase", tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+
+                        // Quick Add Quantity Chips
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Quick:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            listOf(10, 25, 50, 100).forEach { qtyAdd ->
+                                SuggestionChip(
+                                    onClick = {
+                                        val current = quantity.toIntOrNull() ?: 0
+                                        quantity = (current + qtyAdd).toString()
+                                    },
+                                    label = { Text("+$qtyAdd", style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.height(28.dp)
+                                )
+                            }
+                            SuggestionChip(
+                                onClick = { quantity = "10" },
+                                label = { Text("Reset", style = MaterialTheme.typography.labelSmall) },
+                                modifier = Modifier.height(28.dp)
+                            )
+                        }
+
+                        // Code Length Chips
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(strings.codeLength + ":", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            listOf(4, 6, 8, 10).forEach { lVal ->
+                                val isSelected = length == lVal.toString()
+                                SuggestionChip(
+                                    onClick = { length = lVal.toString() },
+                                    label = { Text("$lVal Digits", style = MaterialTheme.typography.labelSmall, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                    colors = SuggestionChipDefaults.suggestionChipColors(
+                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    modifier = Modifier.height(28.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -951,9 +1330,12 @@ fun MikhmonGenerateVouchersDialog(
                             onGenerate(selectedProfile!!, q, l, selectedNumberStyle, isAccountMode, prefix, false)
                         }
                     },
-                    enabled = profiles.isNotEmpty()
+                    enabled = profiles.isNotEmpty() && (quantity.toIntOrNull() ?: 0) > 0,
+                    shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("Generate")
+                    Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("${strings.generateVouchers} (${quantity})")
                 }
                 Button(
                     onClick = {
@@ -963,100 +1345,315 @@ fun MikhmonGenerateVouchersDialog(
                             onGenerate(selectedProfile!!, q, l, selectedNumberStyle, isAccountMode, prefix, true)
                         }
                     },
-                    enabled = profiles.isNotEmpty(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                    enabled = profiles.isNotEmpty() && (quantity.toIntOrNull() ?: 0) > 0,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                    shape = RoundedCornerShape(10.dp)
                 ) {
                     Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Generate & Print")
+                    Text(strings.printAction)
                 }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(strings.cancel) }
         }
     )
 }
 
 @Composable
 fun PrintOptionsDialog(
+    sampleVoucher: Voucher? = null,
     onDismiss: () -> Unit,
-    onPrint: (Int, VoucherPrinter.PaperFormat) -> Unit
+    onPrint: (Int, VoucherPrinter.PaperFormat, Boolean) -> Unit
 ) {
-    var selectedStyle by remember { mutableIntStateOf(1) } // 1: Voucher | Profile, 2: Compact, 3: QR Scannable
-    var selectedFormat by remember { mutableStateOf(VoucherPrinter.PaperFormat.A4_PAGE) }
+    var selectedStyle by remember { mutableIntStateOf(1) } // 1: 2-Compartment Box, 2: Slim Row, 3: 3-Tier Full-Width
+    var selectedFormat by remember { mutableStateOf(VoucherPrinter.PaperFormat.THERMAL_58MM) }
+    var autoCutEachVoucher by remember { mutableStateOf(true) }
+    var a4PreviewMode by remember { mutableIntStateOf(0) } // 0: Full A4 Sheet, 1: Single Ticket Zoom
+    val strings = LanguageManager.strings
+
+    val v = sampleVoucher ?: Voucher(
+        code = "1819-9733",
+        username = "1819-9733",
+        profileName = "5M_Daily",
+        price = 1000.0,
+        dataLimitMb = 1024,
+        validityDays = 1
+    )
+
+    val isThermal = selectedFormat == VoucherPrinter.PaperFormat.THERMAL_58MM || selectedFormat == VoucherPrinter.PaperFormat.THERMAL_80MM
+    val paperWidth = if (selectedFormat == VoucherPrinter.PaperFormat.THERMAL_80MM)
+        BluetoothThermalPrinter.PaperWidth.WIDTH_80MM
+    else
+        BluetoothThermalPrinter.PaperWidth.WIDTH_58MM
+
+    // Generate real preview bitmaps matching exact printer/PDF output
+    val previewBitmap = remember(v, selectedFormat, selectedStyle, autoCutEachVoucher, a4PreviewMode) {
+        if (selectedFormat == VoucherPrinter.PaperFormat.A4_PAGE) {
+            if (a4PreviewMode == 0) {
+                VoucherPrinter.renderA4PreviewBitmap(v, selectedStyle)
+            } else {
+                BluetoothThermalPrinter.renderVoucherExcelBitmap(v, BluetoothThermalPrinter.PaperWidth.WIDTH_80MM, selectedStyle)
+            }
+        } else {
+            BluetoothThermalPrinter.renderThermalPreviewBitmap(v, paperWidth, selectedStyle, showAutoCut = autoCutEachVoucher)
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Print Vouchers", fontWeight = FontWeight.Bold) },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Print, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(8.dp))
+                Text(strings.printVouchersTitle, fontWeight = FontWeight.Bold)
+            }
+        },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text("Paper Format:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(4.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Header with preview mode badges
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (selectedFormat == VoucherPrinter.PaperFormat.A4_PAGE) "📄 A4 Paper Sheet Preview" else "🖨️ Thermal Roll Preview",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    if (selectedFormat == VoucherPrinter.PaperFormat.A4_PAGE) {
+                        // Switch between Full A4 Page and Single Ticket Zoom
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (a4PreviewMode == 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.clickable { a4PreviewMode = 0 }
+                            ) {
+                                Text(
+                                    "Full Page",
+                                    fontSize = 11.sp,
+                                    fontWeight = if (a4PreviewMode == 0) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (a4PreviewMode == 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (a4PreviewMode == 1) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.clickable { a4PreviewMode = 1 }
+                            ) {
+                                Text(
+                                    "Zoom",
+                                    fontSize = 11.sp,
+                                    fontWeight = if (a4PreviewMode == 1) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (a4PreviewMode == 1) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    } else if (selectedFormat == VoucherPrinter.PaperFormat.THERMAL_80MM) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                "⚡ 80mm Big Fonts",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                }
+
+                // VISUAL PREVIEW CARD
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFFF5F5F7),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (selectedFormat == VoucherPrinter.PaperFormat.A4_PAGE && a4PreviewMode == 0) {
+                            // Full A4 paper aspect ratio display (1 : 1.414)
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                shadowElevation = 3.dp,
+                                color = Color.White,
+                                modifier = Modifier
+                                    .fillMaxWidth(0.92f)
+                                    .aspectRatio(1f / 1.414f)
+                            ) {
+                                Image(
+                                    bitmap = previewBitmap.asImageBitmap(),
+                                    contentDescription = "A4 Page Preview",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            val sheetCapacity = when (selectedStyle) {
+                                2 -> "115 vouchers (5 cols × 23 rows)"
+                                3 -> "33 vouchers (3 cols × 11 rows)"
+                                else -> "68 vouchers (4 cols × 17 rows)"
+                            }
+                            Text(
+                                text = "✂️ Cut lines included • $sheetCapacity per A4 page",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            // Thermal slip display (or single ticket zoom)
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                shadowElevation = 2.dp,
+                                color = Color.White,
+                                modifier = Modifier
+                                    .fillMaxWidth(if (selectedFormat == VoucherPrinter.PaperFormat.THERMAL_80MM) 0.95f else 0.78f)
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Image(
+                                    bitmap = previewBitmap.asImageBitmap(),
+                                    contentDescription = "Ticket Preview",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .wrapContentHeight(),
+                                    contentScale = ContentScale.FillWidth
+                                )
+                            }
+                            if (isThermal && autoCutEachVoucher) {
+                                Text(
+                                    text = "✂️ Auto-cuts paper after each printed voucher",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFFC62828)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // AUTO-CUT TOGGLE CARD (shown for thermal printers / POS phones)
+                if (isThermal) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (autoCutEachVoucher) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (autoCutEachVoucher) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Auto-Cut Each Voucher ✂️", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text(
+                                    "Feed & cut paper between tickets on printers and phones with auto-cutter hardware",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = 10.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = autoCutEachVoucher,
+                                onCheckedChange = { autoCutEachVoucher = it },
+                                modifier = Modifier.scale(0.85f)
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+
+                Text("Paper Format (Paper-Saver):", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(
                         selected = selectedFormat == VoucherPrinter.PaperFormat.THERMAL_58MM,
                         onClick = { selectedFormat = VoucherPrinter.PaperFormat.THERMAL_58MM }
                     )
-                    Text("58 mm Thermal Printer")
+                    Column {
+                        Text("58 mm Thermal (Default / Saves 75% Paper)", fontWeight = FontWeight.SemiBold)
+                        Text("Direct Bluetooth print. Compact ticket height, minimal line feeds.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(
                         selected = selectedFormat == VoucherPrinter.PaperFormat.THERMAL_80MM,
                         onClick = { selectedFormat = VoucherPrinter.PaperFormat.THERMAL_80MM }
                     )
-                    Text("80 mm POS Printer")
+                    Column {
+                        Text("80 mm POS Thermal (Desktop POS / Extra-Large Fonts)", fontWeight = FontWeight.SemiBold)
+                        Text("Wide 80mm roll with giant 50sp+ bold typography. Easy to read.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(
                         selected = selectedFormat == VoucherPrinter.PaperFormat.A4_PAGE,
                         onClick = { selectedFormat = VoucherPrinter.PaperFormat.A4_PAGE }
                     )
-                    Text("A4 Sheet Grid (Cut Sheet)")
+                    Column {
+                        Text("A4 Sheet Grid (Paper-Saving 68-115 per sheet)", fontWeight = FontWeight.SemiBold)
+                        Text("High-density cut grid with scissor guides. Massive paper savings.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
                 HorizontalDivider()
-                Spacer(modifier = Modifier.height(14.dp))
 
-                Text("Voucher Style:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(4.dp))
+                Text("Voucher Box Style (Excel Borders):", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = selectedStyle == 1, onClick = { selectedStyle = 1 })
                     Column {
-                        Text("Style 1: Voucher | Profile", fontWeight = FontWeight.SemiBold)
-                        Text("Standard ticket with login code, limits, and price", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Style 1: 2-Compartment Box [ Code | Profile ] (Default)", fontWeight = FontWeight.SemiBold)
+                        Text("Excel solid black border. Huge code on left, plan details on right.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = selectedStyle == 2, onClick = { selectedStyle = 2 })
                     Column {
-                        Text("Style 2: Ultra-Compact (58mm × 12mm)", fontWeight = FontWeight.SemiBold)
-                        Text("Voucher & profile only. Prints 5 columns per A4 sheet (100+ per page)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Style 2: Slim Compact Excel Row (Maximum Paper Saving)", fontWeight = FontWeight.SemiBold)
+                        Text("Single line code & plan. Absolute minimum paper consumption.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = selectedStyle == 3, onClick = { selectedStyle = 3 })
                     Column {
-                        Text("Style 3: QR Scannable Voucher", fontWeight = FontWeight.SemiBold)
-                        Text("Includes QR code for instant camera scan login", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Style 3: 3-Tier Full-Width Stacked Excel Box (Giant Code)", fontWeight = FontWeight.SemiBold)
+                        Text("Full-width massive code centered, 3 plan columns at bottom.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         },
         confirmButton = {
-            Button(onClick = { onPrint(selectedStyle, selectedFormat) }) {
+            Button(onClick = { onPrint(selectedStyle, selectedFormat, autoCutEachVoucher) }) {
                 Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Print Document")
+                Text(strings.printAction)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(strings.cancel) }
         }
     )
 }
@@ -1269,7 +1866,7 @@ fun PrinterSetupAndTestDialog(
                         )
                         isPrintingTest = false
                         if (res.isSuccess) {
-                            Toast.makeText(context, "✓ Test ticket printed successfully!", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "✓ Print Success", Toast.LENGTH_SHORT).show()
                         } else {
                             Toast.makeText(context, "✗ Print failed: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
                         }

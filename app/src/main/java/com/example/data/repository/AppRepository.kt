@@ -33,7 +33,8 @@ class AppRepository(
         if (!mikrotikClient.isConnected()) {
             return Result.failure(Exception("Router is not connected. Cannot add profile."))
         }
-        val ok = mikrotikClient.addRouterProfile(profile.name, profile.rateLimit, profile.sharedUsers)
+        val sessionTimeout = if (profile.durationMinutes > 0) "${profile.durationMinutes}m" else if (profile.validityDays > 0) "${profile.validityDays}d" else ""
+        val ok = mikrotikClient.addRouterProfile(profile.name, profile.rateLimit, profile.sharedUsers, sessionTimeout)
         if (!ok) {
             return Result.failure(Exception("Router rejected creating profile '${profile.name}'."))
         }
@@ -121,11 +122,13 @@ class AppRepository(
         if (!mikrotikClient.isConnected()) {
             return Result.failure(Exception("Router is not connected. Cannot update profile."))
         }
+        val sessionTimeout = if (profile.durationMinutes > 0) "${profile.durationMinutes}m" else if (profile.validityDays > 0) "${profile.validityDays}d" else ""
         val ok = mikrotikClient.updateRouterProfile(
             oldName = oldName,
             newName = profile.name,
             rateLimit = profile.rateLimit,
-            sharedUsers = profile.sharedUsers
+            sharedUsers = profile.sharedUsers,
+            sessionTimeout = sessionTimeout
         )
         if (!ok) {
             return Result.failure(Exception("Router rejected updating profile '$oldName'."))

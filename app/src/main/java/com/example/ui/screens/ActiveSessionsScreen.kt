@@ -22,10 +22,13 @@ import androidx.navigation.NavController
 import com.example.domain.models.ActiveUser
 import com.example.ui.components.GlassCard
 
+import com.example.utils.LanguageManager
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController) {
     val users by viewModel.activeUsers.collectAsStateWithLifecycle()
+    val strings = LanguageManager.strings
     var searchQuery by remember { mutableStateOf("") }
     var userToBan by remember { mutableStateOf<ActiveUser?>(null) }
     var userToKick by remember { mutableStateOf<ActiveUser?>(null) }
@@ -47,16 +50,16 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
         containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
-                title = { Text("Active Sessions (${users.size})", fontWeight = FontWeight.Bold) },
+                title = { Text("${strings.activeSessionsTitle} (${users.size})", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
                     }
                 },
                 actions = {
                     TextButton(onClick = { viewModel.fetchRouterData() }) {
-                        Text("Refresh", fontWeight = FontWeight.Bold)
+                        Text(strings.refresh, fontWeight = FontWeight.Bold)
                     }
                 }
             )
@@ -75,12 +78,12 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
-                placeholder = { Text("Search by user, IP, or MAC...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                placeholder = { Text(strings.searchSessionsHint) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = strings.search) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                            Icon(Icons.Default.Close, contentDescription = strings.close)
                         }
                     }
                 },
@@ -95,6 +98,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                 items(filteredUsers) { user ->
                     ActiveUserCard(
                         user = user,
+                        strings = strings,
                         onKick = { userToKick = user },
                         onBan = { userToBan = user }
                     )
@@ -108,7 +112,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = if (searchQuery.isEmpty()) "No active clients connected." else "No clients match \"$searchQuery\"",
+                                text = if (searchQuery.isEmpty()) strings.noActiveSessions else "\"$searchQuery\" နှင့် ကိုက်ညီသော စက်မရှိပါ။",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -122,8 +126,8 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
         if (userToKick != null) {
             AlertDialog(
                 onDismissRequest = { userToKick = null },
-                title = { Text("Disconnect Session") },
-                text = { Text("Are you sure you want to disconnect user \"${userToKick?.user}\" (${userToKick?.address})?") },
+                title = { Text(strings.kickConfirmTitle) },
+                text = { Text("\"${userToKick?.user}\" (${userToKick?.address})\n\n${strings.kickConfirmMsg}") },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -132,11 +136,11 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Text("Disconnect")
+                        Text(strings.kickAction)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { userToKick = null }) { Text("Cancel") }
+                    TextButton(onClick = { userToKick = null }) { Text(strings.cancel) }
                 }
             )
         }
@@ -145,9 +149,9 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
         if (userToBan != null) {
             AlertDialog(
                 onDismissRequest = { userToBan = null },
-                title = { Text("Ban MAC Address") },
+                title = { Text(strings.banConfirmTitle) },
                 text = {
-                    Text("Are you sure you want to permanently BAN MAC \"${userToBan?.macAddress}\" from the network?\n\nThis will terminate their session and block future connections on the router.")
+                    Text("MAC: \"${userToBan?.macAddress}\"\n\n${strings.banConfirmMsg}")
                 },
                 confirmButton = {
                     Button(
@@ -157,11 +161,11 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Text("Ban Client")
+                        Text(strings.banAction)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { userToBan = null }) { Text("Cancel") }
+                    TextButton(onClick = { userToBan = null }) { Text(strings.cancel) }
                 }
             )
         }
@@ -169,7 +173,12 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
 }
 
 @Composable
-fun ActiveUserCard(user: ActiveUser, onKick: () -> Unit, onBan: () -> Unit) {
+fun ActiveUserCard(
+    user: ActiveUser,
+    strings: com.example.utils.AppStrings,
+    onKick: () -> Unit,
+    onBan: () -> Unit
+) {
     GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -232,7 +241,7 @@ fun ActiveUserCard(user: ActiveUser, onKick: () -> Unit, onBan: () -> Unit) {
                     IconButton(onClick = onKick) {
                         Icon(
                             Icons.Default.Close,
-                            contentDescription = "Disconnect Client",
+                            contentDescription = strings.kickClient,
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
@@ -240,7 +249,7 @@ fun ActiveUserCard(user: ActiveUser, onKick: () -> Unit, onBan: () -> Unit) {
                     IconButton(onClick = onBan) {
                         Icon(
                             Icons.Default.Block,
-                            contentDescription = "Ban Client MAC",
+                            contentDescription = strings.banMac,
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
@@ -260,7 +269,7 @@ fun ActiveUserCard(user: ActiveUser, onKick: () -> Unit, onBan: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Quota: ${user.quotaUsedMb.toInt()} MB / %,d MB".format(user.quotaTotalMb),
+                        text = "${strings.totalDataUsage}: ${user.quotaUsedMb.toInt()} MB / %,d MB".format(user.quotaTotalMb),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Medium
                     )
@@ -292,7 +301,7 @@ fun ActiveUserCard(user: ActiveUser, onKick: () -> Unit, onBan: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Data Used: ${user.quotaUsedMb.toInt()} MB",
+                        text = "${strings.totalDataUsage}: ${user.quotaUsedMb.toInt()} MB",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Medium
                     )
@@ -322,7 +331,7 @@ fun ActiveUserCard(user: ActiveUser, onKick: () -> Unit, onBan: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "Uptime: ${user.uptime}",
+                    text = "${strings.uptime}: ${user.uptime}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -338,11 +347,11 @@ fun ActiveUserCard(user: ActiveUser, onKick: () -> Unit, onBan: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Download: ${formatBytesVal(bytesOut)}",
+                    text = "${strings.downloadRx}: ${formatBytesVal(bytesOut)}",
                     style = MaterialTheme.typography.labelSmall
                 )
                 Text(
-                    text = "Upload: ${formatBytesVal(bytesIn)}",
+                    text = "${strings.uploadTx}: ${formatBytesVal(bytesIn)}",
                     style = MaterialTheme.typography.labelSmall
                 )
             }

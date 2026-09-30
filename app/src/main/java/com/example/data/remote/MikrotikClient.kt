@@ -473,7 +473,36 @@ class MikrotikClient {
         apiMutex.withLock {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext false
+                val activeList = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,user,address,mac-address")
+                val target = activeList.firstOrNull { it[".id"] == id }
                 conn.execute("/ip/hotspot/active/remove", ".id=$id")
+                if (target != null) {
+                    val user = target["user"] ?: ""
+                    val ip = target["address"] ?: ""
+                    val mac = target["mac-address"] ?: ""
+                    // Clear cookie
+                    if (user.isNotBlank()) {
+                        try {
+                            val cookies = conn.execute("/ip/hotspot/cookie/print", "=.proplist=.id,user")
+                            cookies.filter { it["user"] == user }.forEach {
+                                val cId = it[".id"]
+                                if (!cId.isNullOrBlank()) {
+                                    try { conn.execute("/ip/hotspot/cookie/remove", ".id=$cId") } catch (_: Exception) {}
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
+                    // Drop host entry so client internet is instantly revoked without toggling Wi-Fi
+                    try {
+                        val hosts = conn.execute("/ip/hotspot/host/print", "=.proplist=.id,address,mac-address")
+                        hosts.filter { it["address"] == ip || it["mac-address"] == mac }.forEach {
+                            val hId = it[".id"]
+                            if (!hId.isNullOrBlank()) {
+                                try { conn.execute("/ip/hotspot/host/remove", ".id=$hId") } catch (_: Exception) {}
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
                 true
             } catch (e: Exception) {
                 handleApiError(e)
@@ -496,9 +525,69 @@ class MikrotikClient {
                             }
                         }
                     }
+                    val hosts = conn.execute("/ip/hotspot/host/print", "=.proplist=.id,mac-address")
+                    hosts.filter { it["mac-address"].equals(mac, ignoreCase = true) }.forEach {
+                        val hId = it[".id"]
+                        if (!hId.isNullOrBlank()) {
+                            try { conn.execute("/ip/hotspot/host/remove", ".id=$hId") } catch (_: Exception) {}
+                        }
+                    }
                 } catch (_: Exception) {}
 
                 conn.execute("/ip/hotspot/ip-binding/add", "mac-address=$mac", "type=blocked", "comment=Banned via App")
+                true
+            } catch (e: Exception) {
+                handleApiError(e)
+                false
+            }
+        }
+    }
+
+    suspend fun unbanMacAddress(mac: String): Boolean = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withContext false
+                val bindings = conn.execute("/ip/hotspot/ip-binding/print", "=.proplist=.id,mac-address,type")
+                bindings.forEach {
+                    if (it["mac-address"].equals(mac, ignoreCase = true)) {
+                        val id = it[".id"]
+                        if (!id.isNullOrBlank()) {
+                            try { conn.execute("/ip/hotspot/ip-binding/remove", "=.id=$id") } catch (_: Exception) {}
+                        }
+                    }
+                }
+                try {
+                    val hosts = conn.execute("/ip/hotspot/host/print", "=.proplist=.id,mac-address")
+                    hosts.filter { it["mac-address"].equals(mac, ignoreCase = true) }.forEach {
+                        val hId = it[".id"]
+                        if (!hId.isNullOrBlank()) {
+                            try { conn.execute("/ip/hotspot/host/remove", "=.id=$hId") } catch (_: Exception) {}
+                        }
+                    }
+                } catch (_: Exception) {}
+                true
+            } catch (e: Exception) {
+                handleApiError(e)
+                false
+            }
+        }
+    }
+
+    suspend fun unbanAllMacAddresses(): Boolean = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withContext false
+                val bindings = conn.execute("/ip/hotspot/ip-binding/print", "=.proplist=.id,type,comment")
+                bindings.forEach {
+                    val type = it["type"] ?: ""
+                    val comment = it["comment"] ?: ""
+                    val id = it[".id"]
+                    if (type == "blocked" || comment.contains("Banned", ignoreCase = true)) {
+                        if (!id.isNullOrBlank()) {
+                            try { conn.execute("/ip/hotspot/ip-binding/remove", "=.id=$id") } catch (_: Exception) {}
+                        }
+                    }
+                }
                 true
             } catch (e: Exception) {
                 handleApiError(e)
@@ -528,7 +617,12 @@ class MikrotikClient {
         }
     }
 
-    suspend fun addRouterProfile(name: String, rateLimit: String, sharedUsers: Int = 1): Boolean = withContext(Dispatchers.IO) {
+    suspend fun addRouterProfile(
+        name: String,
+        rateLimit: String,
+        sharedUsers: Int = 1,
+        sessionTimeout: String = ""
+    ): Boolean = withContext(Dispatchers.IO) {
         apiMutex.withLock {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext false
@@ -536,12 +630,16 @@ class MikrotikClient {
                 val params = mutableListOf(
                     "name=$name",
                     "shared-users=$sharedUsers",
-                    "keepalive-timeout=none",
-                    "idle-timeout=none",
+                    "keepalive-timeout=00:02:00",
+                    "status-autorefresh=00:01:00",
                     "on-login=$onLoginScript"
                 )
+                if (sessionTimeout.isNotBlank()) {
+                    params.add("session-timeout=$sessionTimeout")
+                }
                 if (rateLimit.isNotBlank()) {
-                    params.add("rate-limit=$rateLimit")
+                    val cleanRate = if (!rateLimit.contains("/")) "$rateLimit/$rateLimit" else rateLimit
+                    params.add("rate-limit=$cleanRate")
                 }
                 conn.execute("/ip/hotspot/user/profile/add", *params.toTypedArray())
                 true
@@ -575,7 +673,8 @@ class MikrotikClient {
         oldName: String,
         newName: String,
         rateLimit: String,
-        sharedUsers: Int = 1
+        sharedUsers: Int = 1,
+        sessionTimeout: String = ""
     ): Boolean = withContext(Dispatchers.IO) {
         apiMutex.withLock {
             try {
@@ -590,12 +689,16 @@ class MikrotikClient {
                     ".id=$profId",
                     "name=$targetName",
                     "shared-users=$sharedUsers",
-                    "keepalive-timeout=none",
-                    "idle-timeout=none",
+                    "keepalive-timeout=00:02:00",
+                    "status-autorefresh=00:01:00",
                     "on-login=$onLoginScript"
                 )
+                if (sessionTimeout.isNotBlank()) {
+                    params.add("session-timeout=$sessionTimeout")
+                }
                 if (rateLimit.isNotBlank()) {
-                    params.add("rate-limit=$rateLimit")
+                    val cleanRate = if (!rateLimit.contains("/")) "$rateLimit/$rateLimit" else rateLimit
+                    params.add("rate-limit=$cleanRate")
                 }
                 conn.execute("/ip/hotspot/user/profile/set", *params.toTypedArray())
                 true
@@ -611,7 +714,8 @@ class MikrotikClient {
         password: String,
         profile: String,
         comment: String,
-        limitBytesTotal: Long = 0L
+        limitBytesTotal: Long = 0L,
+        limitUptime: String = ""
     ): Boolean = withContext(Dispatchers.IO) {
         apiMutex.withLock {
             try {
@@ -629,6 +733,9 @@ class MikrotikClient {
                 }
                 if (limitBytesTotal > 0L) {
                     params.add("limit-bytes-total=$limitBytesTotal")
+                }
+                if (limitUptime.isNotBlank()) {
+                    params.add("limit-uptime=$limitUptime")
                 }
                 conn.execute("/ip/hotspot/user/add", *params.toTypedArray())
                 true
@@ -663,6 +770,13 @@ class MikrotikClient {
                         if (limitBytes > 0L) {
                             params.add("limit-bytes-total=$limitBytes")
                         }
+                        // Enforce strict limit-uptime on RouterOS so client connection is forcibly ended when duration expires!
+                        if (v.durationMinutes > 0) {
+                            params.add("limit-uptime=${v.durationMinutes}m")
+                        } else if (v.validityDays > 0) {
+                            params.add("limit-uptime=${v.validityDays}d")
+                        }
+
                         conn.execute("/ip/hotspot/user/add", *params.toTypedArray())
                         successCount++
                     } catch (e: Exception) {
@@ -691,13 +805,30 @@ class MikrotikClient {
                 if (!id.isNullOrBlank()) {
                     conn.execute("/ip/hotspot/user/remove", ".id=$id")
                 }
-                // Drop any active session for this user
+                // Drop any active session for this user and drop host so connection cuts off immediately!
                 try {
-                    val activeRes = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,user")
-                    activeRes.filter { it["user"] == target || it["user"] == targetClean }.forEach {
+                    val activeRes = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,user,address,mac-address")
+                    val matching = activeRes.filter { it["user"] == target || it["user"] == targetClean }
+                    val ips = matching.mapNotNull { it["address"] }
+                    val macs = matching.mapNotNull { it["mac-address"] }
+                    matching.forEach {
                         val activeId = it[".id"]
                         if (!activeId.isNullOrBlank()) {
                             try { conn.execute("/ip/hotspot/active/remove", ".id=$activeId") } catch (_: Exception) {}
+                        }
+                    }
+                    val cookieRes = conn.execute("/ip/hotspot/cookie/print", "=.proplist=.id,user")
+                    cookieRes.filter { it["user"] == target || it["user"] == targetClean }.forEach {
+                        val cId = it[".id"]
+                        if (!cId.isNullOrBlank()) {
+                            try { conn.execute("/ip/hotspot/cookie/remove", ".id=$cId") } catch (_: Exception) {}
+                        }
+                    }
+                    val hostRes = conn.execute("/ip/hotspot/host/print", "=.proplist=.id,user,address,mac-address")
+                    hostRes.filter { it["user"] == target || it["user"] == targetClean || it["address"] in ips || it["mac-address"] in macs }.forEach {
+                        val hId = it[".id"]
+                        if (!hId.isNullOrBlank()) {
+                            try { conn.execute("/ip/hotspot/host/remove", ".id=$hId") } catch (_: Exception) {}
                         }
                     }
                 } catch (_: Exception) {}
@@ -737,10 +868,17 @@ class MikrotikClient {
                     } catch (_: Exception) {}
                 }
 
-                // 3. Drop active sessions for deleted users
+                // 3. Drop active sessions and collect client IPs/MACs
+                val activeIps = mutableSetOf<String>()
+                val activeMacs = mutableSetOf<String>()
                 try {
-                    val activeRes = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,user")
-                    val activeIds = activeRes.filter { it["user"] in allCodes }.mapNotNull { it[".id"] }
+                    val activeRes = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,user,address,mac-address")
+                    val matching = activeRes.filter { it["user"] in allCodes }
+                    matching.forEach {
+                        it["address"]?.let { ip -> activeIps.add(ip) }
+                        it["mac-address"]?.let { mac -> activeMacs.add(mac) }
+                    }
+                    val activeIds = matching.mapNotNull { it[".id"] }
                     for (chunk in activeIds.chunked(50)) {
                         try {
                             conn.execute("/ip/hotspot/active/remove", ".id=" + chunk.joinToString(","))
@@ -755,6 +893,17 @@ class MikrotikClient {
                     for (chunk in cookieIds.chunked(50)) {
                         try {
                             conn.execute("/ip/hotspot/cookie/remove", ".id=" + chunk.joinToString(","))
+                        } catch (_: Exception) {}
+                    }
+                } catch (_: Exception) {}
+
+                // 5. Drop host entries immediately to sever active connections without needing to toggle phone Wi-Fi
+                try {
+                    val hostRes = conn.execute("/ip/hotspot/host/print", "=.proplist=.id,user,address,mac-address")
+                    val hostIds = hostRes.filter { it["user"] in allCodes || it["address"] in activeIps || it["mac-address"] in activeMacs }.mapNotNull { it[".id"] }
+                    for (chunk in hostIds.chunked(50)) {
+                        try {
+                            conn.execute("/ip/hotspot/host/remove", ".id=" + chunk.joinToString(","))
                         } catch (_: Exception) {}
                     }
                 } catch (_: Exception) {}

@@ -18,6 +18,7 @@ class MainActivity : ComponentActivity() {
     val database = AppDatabase.getDatabase(this)
     val mikrotikClient = MikrotikClient()
     val repository = AppRepository(database.routerDao(), mikrotikClient)
+    com.example.utils.LanguageManager.init(this)
 
     setContent {
       MyApplicationTheme {

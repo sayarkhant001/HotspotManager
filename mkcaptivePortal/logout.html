@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>Yadanar Tun Wifi – Logged Out</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta name="description" content="Yadanar Tun Wifi – You have been logged out." />
+  <!--
+    logout.html – Logout confirmation page.
+  -->
+  <link rel="icon" href="img/favicon.ico" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* ── Logout Page Extras ── */
+    .logout-icon-wrap {
+      display: flex; justify-content: center; margin-bottom: 20px;
+    }
+    .logout-circle {
+      width: 80px; height: 80px; border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #2a0e0e, #180606);
+      border: 2px solid rgba(251,113,113,.45);
+      box-shadow: 0 0 0 6px rgba(251,113,113,.08), 0 0 28px rgba(251,113,113,.18);
+      display: flex; align-items: center; justify-content: center;
+      animation: pop-in .5s cubic-bezier(.22,1,.36,1) both;
+    }
+    @keyframes pop-in {
+      from { transform: scale(.6); opacity: 0; }
+      to   { transform: scale(1);  opacity: 1; }
+    }
+    .logout-title {
+      text-align: center;
+      font-size: 24px; font-weight: 800; letter-spacing: .05em;
+      color: #fff; margin-bottom: 4px;
+    }
+    .logout-sub {
+      text-align: center;
+      font-size: 13px; color: rgba(255,255,255,.45);
+      margin-bottom: 24px;
+    }
+    /* Session summary box */
+    .session-summary {
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 20px;
+    }
+    .session-summary-title {
+      font-size: 10px; font-weight: 600; letter-spacing: .12em;
+      color: rgba(212,148,10,.70); text-transform: uppercase;
+      margin-bottom: 14px; text-align: center;
+    }
+    .summary-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .summary-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .summary-row:first-of-type { padding-top: 0; }
+    .summary-label {
+      font-size: 12px; color: rgba(255,255,255,.45); font-weight: 500;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .summary-label svg { opacity: .55; flex-shrink: 0; }
+    .summary-value {
+      font-size: 14px; font-weight: 700; color: #fff; text-align: right;
+    }
+    .summary-value.gold { color: var(--gold-bright); }
+    /* Login again button */
+    .login-again-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 100%; height: 50px;
+      border: none; border-radius: var(--radius-input);
+      background: linear-gradient(135deg, var(--gold-deep) 0%, var(--gold-mid) 50%, var(--gold-bright) 100%);
+      color: #1a0800; font-family: 'Outfit', sans-serif;
+      font-size: 14px; font-weight: 800; letter-spacing: .10em;
+      cursor: pointer; text-decoration: none;
+      box-shadow: 0 4px 24px rgba(212,148,10,.40);
+      transition: transform .2s, box-shadow .2s;
+      position: relative; overflow: hidden;
+      gap: 8px;
+    }
+    .login-again-btn::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,.15) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .login-again-btn:hover  { transform: translateY(-2px); box-shadow: 0 7px 32px rgba(212,148,10,.55); }
+    .login-again-btn:active { transform: translateY(0);    box-shadow: 0 2px 12px rgba(212,148,10,.30); }
+  </style>
+</head>
+<body>
+
+  <!-- Loading Overlay -->
+  <div class="body-loading" id="body_loading">
+    <div class="loading-inner">
+      <div class="loading-ring"></div>
+      <p class="loading-text">Loading…</p>
+    </div>
+  </div>
+
+  <div class="body-wrapper">
+
+    <div class="body-background">
+      <div class="body-background-mask"></div>
+    </div>
+
+    <div class="particles" aria-hidden="true">
+      <span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span>
+    </div>
+
+    <div class="body-content-wrapper">
+      <div class="login-card">
+
+        <!-- Logout Icon -->
+        <div class="logout-icon-wrap">
+          <div class="logout-circle">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+                 xmlns="http://www.w3.org/2000/svg">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
+                    stroke="#fb7171" stroke-width="2.2"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+              <polyline points="16 17 21 12 16 7"
+                        stroke="#fb7171" stroke-width="2.2"
+                        stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="21" y1="12" x2="9" y2="12"
+                    stroke="#fb7171" stroke-width="2.2"
+                    stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+
+        <h1 class="logout-title">Logged Out</h1>
+        <p class="logout-sub">ကျေးဇူးတင်ပါသည် • Thanks for using Yadanar Tun Wifi!</p>
+
+        <!-- Session Summary -->
+        <div class="session-summary">
+          <p class="session-summary-title">Session Summary</p>
+
+          <!-- Session Time used — $(uptime) injected by MikroTik -->
+          <div class="summary-row">
+            <span class="summary-label">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+              Session Time
+            </span>
+            <span class="summary-value gold" id="logout_uptime">$(uptime)</span>
+          </div>
+
+          <!-- Bytes Downloaded — $(bytes-in) injected by MikroTik -->
+          <div class="summary-row">
+            <span class="summary-label">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="8 17 12 21 16 17"/>
+                <line x1="12" y1="3" x2="12" y2="21"/>
+              </svg>
+              Downloaded
+            </span>
+            <span class="summary-value" id="logout_bytes_in">$(bytes-in)</span>
+          </div>
+
+          <!-- Bytes Uploaded — $(bytes-out) injected by MikroTik -->
+          <div class="summary-row">
+            <span class="summary-label">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="16 7 12 3 8 7"/>
+                <line x1="12" y1="21" x2="12" y2="3"/>
+              </svg>
+              Uploaded
+            </span>
+            <span class="summary-value" id="logout_bytes_out">$(bytes-out)</span>
+          </div>
+        </div>
+
+        <!-- Login Again — returns to captive login -->
+        <a class="login-again-btn" href="$(link-login)" id="login_again_btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.2">
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+            <polyline points="10 17 15 12 10 7"/>
+            <line x1="15" y1="12" x2="3" y2="12"/>
+          </svg>
+          LOGIN AGAIN
+        </a>
+
+        <!-- Feature tags -->
+        <div class="feature-row">
+          <span class="feature-tag">&#10022; HIGH SPEED</span>
+          <span class="feature-tag">&#10022; STABLE LINK</span>
+          <span class="feature-tag">&#10022; 24/7 UP TIME</span>
+        </div>
+
+        <p class="card-footer">
+          Yadanar Tun Wifi &nbsp;&bull;&nbsp; Powered by MikroTik
+        </p>
+
+      </div><!-- /.login-card -->
+    </div>
+
+  </div><!-- /.body-wrapper -->
+
+  <script>
+    (function () {
+      setTimeout(function () {
+        var overlay = document.getElementById('body_loading');
+        if (overlay) overlay.classList.add('hide');
+      }, 600);
+
+      function formatBytes(el) {
+        if (!el) return;
+        var raw = el.textContent.trim();
+        if (raw.startsWith('$(')) return;
+        var n = parseInt(raw, 10);
+        if (isNaN(n)) return;
+        var units = ['B','KB','MB','GB','TB'];
+        var i = 0;
+        while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+        el.textContent = n.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        formatBytes(document.getElementById('logout_bytes_in'));
+        formatBytes(document.getElementById('logout_bytes_out'));
+
+        var btn = document.getElementById('login_again_btn');
+        if (btn) {
+          var origin = (window.location.origin && window.location.origin.startsWith('http'))
+            ? window.location.origin
+            : 'http://10.10.10.1';
+          var targetUrl = origin + '/login';
+          try {
+            var saved = localStorage.getItem('yadanartun_voucher') || localStorage.getItem('allgood_voucher');
+            var exp   = localStorage.getItem('yadanartun_voucher_expiry') || localStorage.getItem('allgood_voucher_expiry');
+            var isExpired = false;
+            if (exp) {
+              var expTime = parseInt(exp, 10);
+              if (!isNaN(expTime) && Date.now() > expTime) {
+                isExpired = true;
+                localStorage.removeItem('yadanartun_voucher');
+                localStorage.removeItem('allgood_voucher');
+                localStorage.removeItem('yadanartun_voucher_expiry');
+                localStorage.removeItem('allgood_voucher_expiry');
+              }
+            }
+            if (!isExpired && saved && saved.length >= 4) {
+              targetUrl += '?voucher=' + encodeURIComponent(saved);
+            }
+          } catch (e) {}
+          btn.setAttribute('href', targetUrl);
+        }
+      });
+    })();
+  </script>
+
+</body>
+</html>

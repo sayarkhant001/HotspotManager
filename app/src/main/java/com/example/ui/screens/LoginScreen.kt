@@ -10,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import com.example.ui.components.GlassCard
 import androidx.compose.ui.text.font.FontWeight
@@ -23,6 +24,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
 import androidx.compose.ui.platform.LocalContext
 
+import com.example.utils.AppLanguage
+import com.example.utils.LanguageManager
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
@@ -30,6 +34,8 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit
 ) {
     val context = LocalContext.current
+    val currentLang by LanguageManager.currentLanguage
+    val strings = LanguageManager.strings
     val prefs = remember { context.getSharedPreferences("hotspot_login_prefs", Context.MODE_PRIVATE) }
 
     val authState by viewModel.authState.collectAsStateWithLifecycle()
@@ -72,30 +78,43 @@ fun LoginScreen(
                     .padding(horizontal = 24.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(32.dp),
+                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Surface(
-                        modifier = Modifier.size(72.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Router,
-                            contentDescription = "Router",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                        FilledTonalButton(
+                            onClick = { LanguageManager.toggleLanguage(context) },
+                            shape = RoundedCornerShape(20.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text(
+                                text = if (currentLang == AppLanguage.MYANMAR) "🇲🇲 မြန်မာ" else "🇬🇧 English",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
+
+                    androidx.compose.foundation.Image(
+                        painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.app_logo),
+                        contentDescription = "Hotspot Manager Logo",
+                        modifier = Modifier
+                            .size(76.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = "Hotspot Manager",
+                        text = strings.appName,
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Connect to MikroTik RouterOS",
+                        text = strings.connectToRouter,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -105,7 +124,7 @@ fun LoginScreen(
                     OutlinedTextField(
                         value = ip,
                         onValueChange = { ip = it },
-                        label = { Text("Router IP") },
+                        label = { Text(strings.routerIp) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true
@@ -114,7 +133,7 @@ fun LoginScreen(
                     OutlinedTextField(
                         value = user,
                         onValueChange = { user = it },
-                        label = { Text("Username") },
+                        label = { Text(strings.username) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true
@@ -123,7 +142,7 @@ fun LoginScreen(
                     OutlinedTextField(
                         value = pass,
                         onValueChange = { pass = it },
-                        label = { Text("Password") },
+                        label = { Text(strings.password) },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,
@@ -145,7 +164,7 @@ fun LoginScreen(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Remember Password for Easy Login",
+                            text = strings.rememberPassword,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -183,7 +202,7 @@ fun LoginScreen(
                         } else {
                             Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Secure Connect")
+                            Text(strings.secureConnect)
                         }
                     }
                 }

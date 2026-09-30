@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>Yadanar Tun Wifi – Redirecting…</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!--
+    redirect.html – MikroTik Hotspot "silent intercept" page.
+    This page is served to Android / iOS Captive Portal detectors.
+    The 0-second meta refresh immediately redirects the client to the
+    MikroTik $(link-redirect) variable, which is the user's original
+    destination URL. The OS then displays the "Sign in to network" popup.
+  -->
+  <meta http-equiv="refresh" content="0; url=$(link-redirect)" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <link rel="icon" href="img/favicon.ico" />  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    html,body{height:100%;font-family:'Outfit',sans-serif;background:#0d0600;color:#fff;
+              display:flex;align-items:center;justify-content:center;}
+    .wrap{text-align:center;padding:24px;}
+    .ring{width:48px;height:48px;border-radius:50%;border:3px solid rgba(212,148,10,.18);
+          border-top-color:#d4940a;animation:spin .85s linear infinite;margin:0 auto 18px;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    p{font-size:13px;color:rgba(255,255,255,.45);letter-spacing:.08em;text-transform:uppercase;}
+    a{color:#d4940a;text-decoration:none;font-size:12px;display:block;margin-top:14px;}
+    a:hover{text-decoration:underline;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="ring"></div>
+    <p>Redirecting…</p>
+    <a href="$(link-redirect)">Click here if not redirected</a>
+  </div>
+  <script>
+    (function () {
+      var dest = '$(link-redirect)';
+      if (!dest || dest.indexOf('$(') !== -1 || dest.trim() === '') {
+        var origin = (window.location.origin && window.location.origin.startsWith('http'))
+          ? window.location.origin
+          : 'http://10.10.10.1';
+        dest = origin + '/login';
+      }
+      try {
+        window.location.replace(dest);
+      } catch (e) {
+        window.location.href = dest;
+      }
+    })();
+  </script>
+</body>
+</html>

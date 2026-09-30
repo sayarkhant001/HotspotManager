@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.ui.components.GlassCard
+import com.example.utils.AppLanguage
+import com.example.utils.LanguageManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,6 +38,9 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     val cpuHistory by viewModel.cpuLoadHistory.collectAsStateWithLifecycle()
     val userMsg by viewModel.userMessage.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    val currentLang by LanguageManager.currentLanguage
+    val strings = LanguageManager.strings
 
     val appUpdateInfo by viewModel.appUpdateInfo.collectAsStateWithLifecycle()
     val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsStateWithLifecycle()
@@ -69,7 +74,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = stats?.boardName ?: "Hotspot Manager",
+                            text = stats?.boardName ?: strings.appName,
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.titleLarge
                         )
@@ -77,7 +82,19 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 actions = {
-                    // Replaced refresh button with update app button as requested
+                    FilledTonalButton(
+                        onClick = { LanguageManager.toggleLanguage(context) },
+                        shape = RoundedCornerShape(20.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Text(
+                            text = if (currentLang == AppLanguage.MYANMAR) "🇲🇲 မြန်မာ" else "🇬🇧 EN",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
                     IconButton(
                         onClick = {
                             if (appUpdateInfo?.isNewer == true) {
@@ -105,14 +122,14 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.SystemUpdate,
-                                    contentDescription = "Update Available",
+                                    contentDescription = strings.updateAvailable,
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                         } else {
                             Icon(
                                 imageVector = Icons.Default.SystemUpdate,
-                                contentDescription = "Update App"
+                                contentDescription = strings.checkUpdate
                             )
                         }
                     }
@@ -129,7 +146,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
         ) {
             // Live Real-Time Network Speed Banner
             Text(
-                text = "Real-Time Traffic Rate",
+                text = strings.realTimeTraffic,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -154,7 +171,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                "Download (Rx)",
+                                strings.downloadRx,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -183,7 +200,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                "Upload (Tx)",
+                                strings.uploadTx,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -203,7 +220,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
 
             // Router Hardware Health Section
             Text(
-                text = "Hardware Conditions",
+                text = strings.hardwareConditions,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -213,7 +230,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CpuStatCard(
                     modifier = Modifier.weight(1f),
-                    title = "CPU Load",
+                    title = strings.cpuLoad,
                     value = "${stats?.cpuLoad ?: "0"}%",
                     icon = Icons.Default.Memory,
                     color = MaterialTheme.colorScheme.primary,
@@ -221,7 +238,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
-                    title = "Uptime",
+                    title = strings.uptime,
                     value = stats?.uptime ?: "00:00",
                     icon = Icons.Default.Schedule,
                     color = MaterialTheme.colorScheme.tertiary
@@ -231,14 +248,14 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatCard(
                     modifier = Modifier.weight(1f),
-                    title = "Free Memory",
+                    title = strings.freeMemory,
                     value = formatBytes(stats?.freeMemory?.toLongOrNull() ?: 0L),
                     icon = Icons.Default.Storage,
                     color = MaterialTheme.colorScheme.secondary
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
-                    title = "RouterOS",
+                    title = strings.routerOs,
                     value = stats?.version ?: "v7.x",
                     icon = Icons.Default.Router,
                     color = MaterialTheme.colorScheme.primary
@@ -256,7 +273,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Usage Metrics",
+                    text = strings.usageMetrics,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -267,13 +284,13 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 ) {
                     Icon(
                         Icons.Default.RestartAlt,
-                        contentDescription = "Reset Stats",
+                        contentDescription = strings.resetStats,
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        "Reset Stats",
+                        strings.resetStats,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.error,
                         fontWeight = FontWeight.SemiBold
@@ -285,9 +302,9 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 AlertDialog(
                     onDismissRequest = { showResetDialog = false },
                     icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                    title = { Text("Reset All Statistics?") },
+                    title = { Text(strings.resetStatsTitle) },
                     text = {
-                        Text("This will reset all router interface traffic counters, reset all hotspot user data counters, and clear local usage session tracking history to zero.")
+                        Text(strings.resetStatsMsg)
                     },
                     confirmButton = {
                         Button(
@@ -297,12 +314,12 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                         ) {
-                            Text("Reset All to Zero", color = Color.White)
+                            Text(strings.resetAllToZero, color = Color.White)
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { showResetDialog = false }) {
-                            Text("Cancel")
+                            Text(strings.cancel)
                         }
                     }
                 )
@@ -310,16 +327,22 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             Spacer(modifier = Modifier.height(8.dp))
 
             // Date Filter Chips (with up to 30 days)
-            val filterOptions = listOf("Today", "Yesterday", "Last 7 Days", "Last 30 Days", "All")
+            val filterOptions = listOf(
+                "Today" to strings.dateToday,
+                "Yesterday" to strings.dateYesterday,
+                "Last 7 Days" to strings.date7Days,
+                "Last 30 Days" to strings.date30Days,
+                "All" to strings.dateAll
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                filterOptions.forEach { filter ->
+                filterOptions.forEach { (filterKey, filterLabel) ->
                     FilterChip(
-                        selected = selectedFilter == filter,
-                        onClick = { viewModel.setDateFilter(filter) },
-                        label = { Text(filter, style = MaterialTheme.typography.labelSmall) },
+                        selected = selectedFilter == filterKey,
+                        onClick = { viewModel.setDateFilter(filterKey) },
+                        label = { Text(filterLabel, style = MaterialTheme.typography.labelSmall) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -340,7 +363,6 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             } else {
                 "${Math.round(totalDataRawMb * 10.0) / 10.0} MB"
             }
-            val activatedCount = vouchers.count { it.isUsed }
 
             GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -349,26 +371,27 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text("Active Sessions", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(strings.activeSessionsStat, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text("${activeUsers.size}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
                         }
                         Column {
-                            Text("Total Data Usage", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(strings.totalDataUsage, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(formattedDataUsage, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
                         Column {
-                            Text("Tracked Clients", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(strings.trackedClients, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text("${filteredSessions.size}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     Spacer(modifier = Modifier.height(12.dp))
+                    val activeFilterLabel = filterOptions.firstOrNull { it.first == selectedFilter }?.second ?: selectedFilter
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Activated Voucher Sales ($selectedFilter):", style = MaterialTheme.typography.bodySmall)
+                        Text("${strings.activatedVoucherSales} ($activeFilterLabel):", style = MaterialTheme.typography.bodySmall)
                         Text("${"%,d".format(java.util.Locale.US, activatedSales.toLong())} Ks", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     }
 
@@ -379,7 +402,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
 
             // Management Navigation
             Text(
-                text = "Hotspot Controls",
+                text = strings.hotspotControls,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -387,22 +410,22 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             )
 
             DashboardMenuCard(
-                title = "Active Sessions",
-                subtitle = "${activeUsers.size} clients online • Kick / Ban MAC",
+                title = strings.activeSessionsTitle,
+                subtitle = "${activeUsers.size} ${strings.activeSessionsSubtitle}",
                 icon = Icons.Default.NetworkWifi,
                 badgeCount = activeUsers.size,
                 onClick = { navController.navigate("active_sessions") }
             )
             DashboardMenuCard(
-                title = "Vouchers & Accounts",
-                subtitle = "Generate Mikhmon codes • 58/80mm & A4 Print",
+                title = strings.vouchersAccountsTitle,
+                subtitle = strings.vouchersAccountsSubtitle,
                 icon = Icons.Default.ConfirmationNumber,
                 badgeCount = vouchers.size,
                 onClick = { navController.navigate("vouchers") }
             )
             DashboardMenuCard(
-                title = "User Profiles",
-                subtitle = "Bandwidth limits (Rate-limit) • Validity • Prices",
+                title = strings.userProfilesTitle,
+                subtitle = strings.userProfilesSubtitle,
                 icon = Icons.Default.GroupWork,
                 onClick = { navController.navigate("profiles") }
             )
@@ -423,7 +446,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 },
                 title = {
                     Text(
-                        if (update.isNewer) "Update Available!" else "App Version Info",
+                        if (update.isNewer) strings.updateAvailable else strings.appVersionInfo,
                         fontWeight = FontWeight.Bold
                     )
                 },
@@ -443,7 +466,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                 color = MaterialTheme.colorScheme.surfaceVariant
                             ) {
                                 Text(
-                                    "Current: v${com.example.BuildConfig.VERSION_NAME}",
+                                    "${strings.currentVersion}: v${com.example.BuildConfig.VERSION_NAME}",
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     style = MaterialTheme.typography.labelMedium
                                 )
@@ -454,7 +477,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                 color = if (update.isNewer) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
                             ) {
                                 Text(
-                                    "Latest: v${update.versionName}",
+                                    "${strings.latestVersion}: v${update.versionName}",
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
@@ -493,7 +516,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                "Downloading update: ${(downloadProgress * 100).toInt()}%",
+                                "${strings.downloadingUpdate}: ${(downloadProgress * 100).toInt()}%",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -511,16 +534,16 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                             if (isDownloadingUpdate) {
                                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
                                 Spacer(Modifier.width(8.dp))
-                                Text("Downloading...")
+                                Text("${strings.downloadingUpdate}...")
                             } else {
                                 Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Update Now")
+                                Text(strings.downloadAndInstall)
                             }
                         }
                     } else {
                         Button(onClick = { viewModel.dismissUpdateDialog() }) {
-                            Text("OK")
+                            Text(strings.close)
                         }
                     }
                 },
@@ -530,7 +553,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                             onClick = { viewModel.dismissUpdateDialog() },
                             enabled = !isDownloadingUpdate
                         ) {
-                            Text("Later")
+                            Text(strings.later)
                         }
                     }
                 }
