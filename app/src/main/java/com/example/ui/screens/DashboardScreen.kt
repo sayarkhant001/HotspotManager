@@ -77,11 +77,22 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                 .background(Color(0xFF4CAF50), CircleShape)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = stats?.boardName ?: strings.appName,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleLarge
-                        )
+                        Column {
+                            Text(
+                                text = stats?.boardName ?: strings.appName,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (stats != null) {
+                                Text(
+                                    text = "RouterOS v${stats?.version}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),

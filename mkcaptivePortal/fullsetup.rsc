@@ -26,6 +26,11 @@
 :put "       ALL GOOD WIFI - STARTING FULL SETUP       "
 :put "================================================="
 
+:local rosVer [/system resource get version]
+:local boardName [/system resource get board-name]
+:put ("Detected Hardware : " . $boardName)
+:put ("Detected RouterOS : " . $rosVer)
+
 # ── GLOBAL VARIABLES ──────────────────────────────────────────
 :global wifiSsid   "AllGood_Wifi"
 :global dnsName    ""
@@ -407,7 +412,17 @@
     /ip hotspot user set [find name=$u] comment=($curComm . " [ACT:" . [:tostr $cDate] . " " . [:tostr $cTime] . "]");
     :log info ("Hotspot: Voucher " . $u . " activated! Continuous timer set for " . [:tostr $vDur] . " from " . [:tostr $cDate] . " " . [:tostr $cTime]);
   } on-error={
-    :log warning ("Hotspot: Could not set continuous countdown scheduler for " . $u);
+    # Fallback for universal RouterOS version compatibility (v6 and v7)
+    :do {
+      /system scheduler add name=$u start-time=startup interval=$vDur \
+        on-event=("/ip hotspot active remove [find user=\"" . $u . "\"]; /ip hotspot user remove [find name=\"" . $u . "\"]; /ip hotspot cookie remove [find user=\"" . $u . "\"]; /system scheduler remove [find name=\"" . $u . "\"]") \
+        comment=("Voucher continuous timer: " . [:tostr $vDur] . " (fallback)");
+      :local curComm [/ip hotspot user get [find name=$u] comment];
+      /ip hotspot user set [find name=$u] comment=($curComm . " [ACT:" . [:tostr $cDate] . " " . [:tostr $cTime] . "]");
+      :log info ("Hotspot: Voucher " . $u . " activated (fallback timer set for " . [:tostr $vDur] . ")!");
+    } on-error={
+      :log warning ("Hotspot: Could not set continuous countdown scheduler for " . $u);
+    };
   };
 }
 }
@@ -523,7 +538,13 @@
 :put "=== Step 11: Clock & NTP ==="
 :do { /system clock set time-zone-name=Asia/Yangon } on-error={}
 :do { /system ntp client set enabled=yes } on-error={}
-:do { /system ntp client servers add address=pool.ntp.org } on-error={}
+:do {
+  # RouterOS v7 NTP
+  /system ntp client servers add address=pool.ntp.org
+} on-error={
+  # RouterOS v6 NTP fallback
+  :do { /system ntp client set enabled=yes server-dns-names=pool.ntp.org } on-error={}
+}
 :put "  Clock & NTP configured."
 
 # ── STEP 12: Firewall & Security Rules ────────────────────────
@@ -620,6 +641,8 @@
 :put "================================================="
 :put "      ALL GOOD WIFI - FULL SETUP COMPLETED       "
 :put "================================================="
+:put ("Router Model    : " . $boardName)
+:put ("RouterOS Version: " . $rosVer)
 :put "Gateway IP      : 10.10.10.1"
 :put "Hotspot DNS     : allgood.lan (Points to 10.10.10.1)"
 :put "Network Range   : 10.10.10.0/23"
