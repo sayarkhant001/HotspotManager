@@ -1367,14 +1367,89 @@ fun MikhmonGenerateVouchersDialog(
                             Text(strings.codeLength + ":", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             listOf(4, 6, 8, 10).forEach { lVal ->
                                 val isSelected = length == lVal.toString()
+                                val isPortalStandard = lVal == 8
                                 SuggestionChip(
                                     onClick = { length = lVal.toString() },
-                                    label = { Text("$lVal Digits", style = MaterialTheme.typography.labelSmall, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                    label = {
+                                        Text(
+                                            text = if (isPortalStandard) "8 Digits (8-Box ⭐)" else "$lVal Digits",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
                                     colors = SuggestionChipDefaults.suggestionChipColors(
-                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else if (isPortalStandard) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant
                                     ),
                                     modifier = Modifier.height(28.dp)
                                 )
+                            }
+                        }
+
+                        // 8-Box Captive Portal Compatibility Indicator & One-Click Fix
+                        val rawCodeLen = previewCode.replace("-", "").length
+                        val hasPrefixOrHyphen = prefix.isNotBlank() || previewCode.contains("-")
+                        val isExact8Boxes = rawCodeLen == 8 && !hasPrefixOrHyphen
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isExact8Boxes) Color(0xFF2E7D32).copy(alpha = 0.12f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isExact8Boxes) Color(0xFF2E7D32).copy(alpha = 0.4f) else MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
+                            ),
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = if (isExact8Boxes) Icons.Default.CheckCircle else Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = if (isExact8Boxes) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isExact8Boxes) "8-Box Captive Portal Compatible ✓" else "Captive Portal 8-Box Warning (အကွက် ၈ ကွက် သတိပေးချက်)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isExact8Boxes) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
+                                    )
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                if (isExact8Boxes) {
+                                    Text(
+                                        text = "ကုတ်နံပါတ် ၈ လုံးသည် Captive Portal အကွက် ၈ ကွက်နှင့် အတိအကျ ကိုက်ညီသဖြင့် အသုံးပြုသူ အဆင်ပြေစွာ ရိုက်ထည့်နိုင်ပါသည်။ (Perfect 8-digit match for 8-box portal)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF1B5E20)
+                                    )
+                                } else {
+                                    Text(
+                                        text = if (rawCodeLen > 8) {
+                                            "အကွက် ၈ ကွက်သာရှိသော Portal တွင် ${rawCodeLen} လုံးပါကုတ်ကို ရိုက်ထည့်၍ မရနိုင်ပါ။ (Cannot type >8 digits into an 8-box portal!)"
+                                        } else if (hasPrefixOrHyphen) {
+                                            "Prefix သို့မဟုတ် Hyphen (-) ပါရှိပါက အကွက် ၈ ကွက်သာရှိသော Portal တွင် ရိုက်ထည့်ရန် မဆံ့နိုင်ပါ။ (Numbers Only 8-digits recommended)"
+                                        } else {
+                                            "ကုတ်အလျားသည် ${rawCodeLen} လုံး ဖြစ်နေပါသည်။ 8-Box Portal အတွက် ၈ လုံး အတိအကျ အကြံပြုပါသည်။"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    FilledTonalButton(
+                                        onClick = {
+                                            length = "8"
+                                            prefix = ""
+                                            selectedNumberStyle = "Numbers Only (18199733)"
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        modifier = Modifier.height(28.dp)
+                                    ) {
+                                        Text("⭐ 8-Box စံနှုန်း (8 Digits Only) သို့ ပြောင်းမည်", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                             }
                         }
                     }
