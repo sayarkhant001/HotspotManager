@@ -15,28 +15,44 @@
 </head>
 <body onload="startRedirect()">
 
-  <div class="compact-wrapper">
-    <div class="compact-card" style="text-align: center;">
+  <!-- Ambient Glowing Aurora Mesh -->
+  <div class="aurora-bg" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="grid-mesh"></div>
+  </div>
 
-      <div style="width: 54px; height: 54px; border-radius: 50%; background: rgba(16, 185, 129, 0.15); border: 1.5px solid rgba(16, 185, 129, 0.40); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; color: #34D399;">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+  <div class="portal-wrapper">
+    <div class="portal-card" style="text-align: center;">
+
+      <!-- Success Beacon -->
+      <div style="width: 58px; height: 58px; border-radius: 18px; background: rgba(16, 185, 129, 0.15); border: 1.5px solid rgba(16, 185, 129, 0.40); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; color: #34D399; box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25);">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
           <polyline points="20 6 9 17 4 12"/>
         </svg>
       </div>
 
-      <h1 class="compact-title" style="font-size: 18px; margin-bottom: 4px;">ချိတ်ဆက်မှု အောင်မြင်ပါသည်</h1>
-      <p style="font-size: 12px; color: #A7F3D0; margin-bottom: 16px;">အင်တာနက် အသုံးပြုနိုင်ပါပြီ...</p>
+      <h1 class="brand-title" style="font-size: 19px; margin-bottom: 4px;">ချိတ်ဆက်မှု အောင်မြင်ပါသည်</h1>
+      <p style="font-size: 12px; color: #A7F3D0; margin-bottom: 18px;">အင်တာနက် အသုံးပြုနိုင်ပါပြီ...</p>
 
-      <div style="background: rgba(255,255,255,0.06); border-radius: 100px; height: 5px; overflow: hidden; margin: 16px 0;">
-        <div style="height: 100%; width: 100%; background: linear-gradient(90deg, #06B6D4, #2563EB); border-radius: 100px;"></div>
+      <!-- Animated Progress Glow Bar -->
+      <div style="background: rgba(255,255,255,0.06); border-radius: 100px; height: 5px; overflow: hidden; margin: 18px 0;">
+        <div style="height: 100%; width: 100%; background: var(--grad-primary); border-radius: 100px; animation: progressSlide 1.5s ease-in-out infinite;"></div>
       </div>
 
-      <a href="$(link-status)" class="btn-submit-compact" style="text-decoration:none;">
+      <style>
+        @keyframes progressSlide {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+      </style>
+
+      <a href="$(link-status)" class="btn-connect" style="text-decoration:none;">
         ဆက်လက် အသုံးပြုမည်
       </a>
 
-      <p class="copy-compact">
-        အရိပ်စစ် Wifi
+      <p class="footer-text">
+        အရိပ်စစ် Wifi &bull; Version 2.0 Next-Gen Edition
       </p>
 
     </div>
