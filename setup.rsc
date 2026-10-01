@@ -31,9 +31,23 @@
 :put ("Detected Hardware : " . $boardName)
 :put ("Detected RouterOS : " . $rosVer)
 
+# Check RouterOS Device-Mode (Hotspot & Scheduler restrictions)
+:do {
+  :local dmHotspot [/system device-mode get hotspot]
+  :if ($dmHotspot = false or $dmHotspot = "no") do={
+    :put "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    :put "  CRITICAL: HOTSPOT IS DISABLED IN ROUTEROS DEVICE-MODE!"
+    :put "  Router is currently in 'mode: home' (hotspot: no)."
+    :put "  To activate Hotspot, run in Terminal:"
+    :put "    /system/device-mode/update hotspot=yes scheduler=yes"
+    :put "  Then power-cycle router (unplug & replug power) to confirm."
+    :put "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+  }
+} on-error={}
+
 # ── GLOBAL VARIABLES ──────────────────────────────────────────
 :global wifiSsid   "AyeikSitt_WiFi"
-:global dnsName    ""
+:global dnsName    "ayeiksitt.wifi"
 :global apiPass    "Khant1234@"
 # To bypass admin devices permanently without voucher, enter MACs: {"XX:XX:XX:XX:XX:XX"; "YY:YY:YY:YY:YY:YY"}
 :global adminMacs  [:toarray ""]
@@ -58,6 +72,11 @@
   /ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="WAN Masquerade"
 } on-error={
   :do { /ip firewall nat set [find comment="WAN Masquerade"] out-interface=ether1 action=masquerade } on-error={}
+}
+:do {
+  /ip firewall nat add chain=srcnat out-interface-list=WAN action=masquerade comment="WAN List Masquerade"
+} on-error={
+  :do { /ip firewall nat set [find comment="WAN List Masquerade"] out-interface-list=WAN action=masquerade } on-error={}
 }
 :put "  WAN Configured."
 
@@ -94,6 +113,8 @@
     }
   }
 }
+# Disable FastPath so Hotspot packet inspection & captive portal redirection are NEVER bypassed!
+:do { /interface bridge settings set allow-fast-path=no } on-error={}
 :put "  LAN Bridge & Interface Lists Configured."
 
 # ── STEP 3: Wi-Fi Setup ───────────────────────────────────────
@@ -102,7 +123,7 @@
 
 # 1. Try RouterOS v7 wifi / wifi-qcom interface (Open network for Hotspot)
 :do {
-  :local wCmd (":foreach w in=[/interface wifi find] do={ :do { /interface wifi set \$w configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" datapath.bridge=hotspot-bridge disabled=no } on-error={ /interface wifi set \$w mode=ap ssid=\"" . $wifiSsid . "\" disabled=no }; :local wName [/interface wifi get \$w name]; :do { /interface bridge port add bridge=hotspot-bridge interface=\$wName } on-error={ :do { /interface bridge port set [find interface=\$wName] bridge=hotspot-bridge } on-error={} } }")
+  :local wCmd (":foreach w in=[/interface wifi find] do={ :do { /interface wifi set \$w configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" datapath.bridge=hotspot-bridge security.authentication-types=\"\" disabled=no } on-error={ /interface wifi set \$w mode=ap ssid=\"" . $wifiSsid . "\" disabled=no }; :local wName [/interface wifi get \$w name]; :do { /interface bridge port add bridge=hotspot-bridge interface=\$wName } on-error={ :do { /interface bridge port set [find interface=\$wName] bridge=hotspot-bridge } on-error={} } }")
   [ :parse $wCmd ]
   :set wifiConfigured true
   :put ("  Configured Wi-Fi interface (v7, Open Hotspot AP, SSID: " . $wifiSsid . ").")
@@ -191,18 +212,18 @@
 
 :do {
   /ip hotspot profile add name=hs-profile hotspot-address=$gwIp dns-name=$dnsName html-directory=$hsDir \
-    login-by=mac-cookie,http-chap,http-pap rate-limit=""
+    login-by=http-chap,http-pap rate-limit=""
 } on-error={
   :do {
     /ip hotspot profile set [find name=hs-profile] hotspot-address=$gwIp dns-name=$dnsName html-directory=$hsDir \
-      login-by=mac-cookie,http-chap,http-pap rate-limit=""
+      login-by=http-chap,http-pap rate-limit=""
   } on-error={}
 }
 
-# Update all existing hotspot server profiles on the router to use mac-cookie (removing 30-day cookie bloat)
+# Update all existing hotspot server profiles on the router to require voucher authentication
 :foreach hp in=[/ip hotspot profile find] do={
   :do {
-    /ip hotspot profile set $hp login-by=mac-cookie,http-chap,http-pap html-directory=$hsDir hotspot-address=$gwIp dns-name=$dnsName
+    /ip hotspot profile set $hp login-by=http-chap,http-pap html-directory=$hsDir hotspot-address=$gwIp dns-name=$dnsName
   } on-error={}
 }
 
@@ -542,10 +563,10 @@
   /ip service enable [find name="winbox"]
 } on-error={}
 :do {
-  /ip service set [find name="www"] disabled=no port=80
+  /ip service set [find name="www"] disabled=no port=8080
   /ip service enable [find name="www"]
 } on-error={}
-:put "  RouterOS API service enabled on port 8728 (all IPs allowed)."
+:put "  RouterOS API service enabled on port 8728 (WebFig moved to port 8080 to prevent Hotspot collision)."
 
 # Set admin password to Khant1234@ (default in HotspotManager app)
 :do {
@@ -674,11 +695,12 @@
 # Reject DoT (forces clients to use router DNS so captive portal pops up)
 :do { /ip firewall filter add action=reject chain=forward in-interface=hotspot-bridge protocol=tcp dst-port=853 reject-with=tcp-reset comment="Reject DoT" } on-error={}
 # Accept ONLY authorized Hotspot clients (logged in via voucher or bypassed in ip-binding)
-:do { /ip firewall filter add action=accept chain=forward hotspot=auth in-interface=hotspot-bridge out-interface=ether1 comment="Accept authorized Hotspot clients" } on-error={}
+:do { /ip firewall filter add action=accept chain=forward hotspot=auth in-interface=hotspot-bridge comment="Accept authorized Hotspot clients" } on-error={}
 # Drop all unauthorized Hotspot forwarding to WAN (forces captive portal login)
-:do { /ip firewall filter add action=drop chain=forward in-interface=hotspot-bridge out-interface=ether1 comment="Drop unauthorized Hotspot clients" } on-error={}
-# Drop all new unsolicited connections coming from WAN (ether1)
-:do { /ip firewall filter add action=drop chain=forward connection-state=new connection-nat-state=!dstnat in-interface=ether1 comment="Drop WAN unsolicited forward" } on-error={}
+:do { /ip firewall filter add action=drop chain=forward in-interface=hotspot-bridge out-interface-list=WAN comment="Drop unauthorized Hotspot clients (WAN List)" } on-error={}
+:do { /ip firewall filter add action=drop chain=forward in-interface=hotspot-bridge out-interface=ether1 comment="Drop unauthorized Hotspot clients (ether1)" } on-error={}
+# Drop all new unsolicited connections coming from WAN
+:do { /ip firewall filter add action=drop chain=forward connection-state=new connection-nat-state=!dstnat in-interface-list=WAN comment="Drop WAN unsolicited forward" } on-error={}
 
 # 5. DNS redirection (forces all clients through router DNS for captive portal)
 :do { /ip firewall nat add action=redirect chain=dstnat dst-port=53 protocol=udp to-ports=53 in-interface=hotspot-bridge comment="Redirect DNS UDP" } on-error={}
@@ -797,7 +819,11 @@
 :put ("Router Model    : " . $boardName)
 :put ("RouterOS Version: " . $rosVer)
 :put "Gateway IP      : 10.10.10.1"
-:put "Hotspot DNS     : (Blank - Gateway IP 10.10.10.1)"
+:if ([:len $dnsName] > 0) do={
+  :put ("Hotspot DNS     : " . $dnsName . " (" . $gwIp . ")")
+} else={
+  :put ("Hotspot DNS     : (IP-based: " . $gwIp . ")")
+}
 :put "Network Range   : 10.10.10.0/23"
 :put ("SSID            : " . $wifiSsid)
 :put "Portal Directory: flash/hotspot (or hotspot)"
