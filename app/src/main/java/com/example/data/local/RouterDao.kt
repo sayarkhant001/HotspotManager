@@ -105,6 +105,17 @@ interface RouterDao {
         }
     }
 
+    @Query("UPDATE vouchers SET isUsed = 1 WHERE code IN (:codes)")
+    suspend fun markVouchersUsedChunk(codes: List<String>)
+
+    @androidx.room.Transaction
+    suspend fun markVouchersUsed(codes: List<String>) {
+        if (codes.isEmpty()) return
+        codes.chunked(250).forEach { chunk ->
+            markVouchersUsedChunk(chunk)
+        }
+    }
+
     @Query("SELECT * FROM vouchers WHERE isPrinted = 0 ORDER BY generatedAt DESC")
     fun getUnprintedVouchers(): Flow<List<Voucher>>
 

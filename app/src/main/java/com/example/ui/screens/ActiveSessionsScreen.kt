@@ -34,7 +34,10 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
     var userToKick by remember { mutableStateOf<ActiveUser?>(null) }
 
     LaunchedEffect(Unit) {
-        viewModel.fetchRouterData()
+        while (true) {
+            viewModel.fetchRouterData()
+            kotlinx.coroutines.delay(3000)
+        }
     }
 
     val filteredUsers = remember(users, searchQuery) {

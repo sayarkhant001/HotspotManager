@@ -76,9 +76,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
     }
 
     LaunchedEffect(Unit) {
-        if (vouchers.isEmpty()) {
-            viewModel.syncVouchers()
-        }
+        viewModel.syncVouchers()
     }
 
     var searchQuery by remember { mutableStateOf("") }

@@ -6,7 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="refresh" content="$(refresh-timeout-secs); url=$(link-status)" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta http-equiv="refresh" content="60; url=$(link-status)" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -47,14 +49,14 @@
 
         <div class="status-row-item">
           <span class="status-row-label">အသုံးပြုပြီးဒေတာ</span>
-          <span class="status-row-value" style="color:#38BDF8;" id="stat_data_used">...</span>
+          <span class="status-row-value" style="color:#38BDF8;" id="stat_data_used">$(bytes-in-nice) / $(bytes-out-nice)</span>
           <span id="stat_bytes_in" style="display:none;">$(bytes-in)</span>
           <span id="stat_bytes_out" style="display:none;">$(bytes-out)</span>
         </div>
 
         <div class="status-row-item">
           <span class="status-row-label">လက်ကျန်ဒေတာ</span>
-          <span class="status-row-value" style="color:#A7F3D0;" id="stat_data_remaining">$(remain-bytes-total-nice)</span>
+          <span class="status-row-value" style="color:#A7F3D0;" id="stat_data_remaining">$(remain-bytes-total)</span>
         </div>
       </div>
 
@@ -72,7 +74,7 @@
           လက်ကျန်အချိန်နှင့် ဒေတာကို <strong style="color:#FBBF24;">$(link-status)</strong> တွင် အချိန်မရွေး စစ်ဆေးနိုင်ပါသည်။
         </p>
         <div style="font-size:10.5px; color:#94A3B8;">
-          🌐 လော့ဂ်အင်လိပ်စာ: <span style="color:#38BDF8; font-weight:600;">http://$(hostname)</span>
+          🌐 လော့ဂ်အင်လိပ်စာ: <span style="color:#38BDF8; font-weight:600;">http://$(server-address)</span>
         </div>
       </div>
 

@@ -342,6 +342,10 @@ class AppRepository(
                 )
             }
             dao.insertSessions(logs)
+            val activeCodes = users.map { it.user }.filter { it.isNotBlank() && it != "admin" }
+            if (activeCodes.isNotEmpty()) {
+                dao.markVouchersUsed(activeCodes)
+            }
         } finally {
             recordMutex.unlock()
         }

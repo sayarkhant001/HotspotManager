@@ -406,71 +406,36 @@ object BluetoothThermalPrinter {
                 val splitX = marginX + boxW * 0.55f
                 canvas.drawLine(splitX, 2f, splitX, boxHeight - 2f, borderPaint)
 
-                // Left Cell: Bold Code or Account (User + Pass) with Login URL right beneath
+                // Left Cell: Bold Code or Account (User + Pass) - Centered with full vertical space
                 val leftCenter = marginX + (splitX - marginX) / 2f
                 textPaint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                 val codeMaxW = (splitX - marginX) - 10f
                 val isAcc = voucher.isAccount || (voucher.password.isNotBlank() && voucher.password != voucher.username)
                 
-                if (hasUrl) {
-                    val cleanUrl = if (loginUrl!!.startsWith("http://") || loginUrl.startsWith("https://")) loginUrl else "http://$loginUrl"
-                    val urlText = cleanUrl
-                    val urlPaint = Paint().apply {
-                        color = Color.BLACK
-                        isAntiAlias = true
-                        isFakeBoldText = true
-                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                        textAlign = Paint.Align.CENTER
-                    }
-                    autoFitTextSize(urlPaint, urlText, codeMaxW, if (is80) 13f else 9f, 6.5f)
-
-                    if (isAcc) {
-                        val uText = "U: ${voucher.username}"
-                        val pText = "P: ${voucher.password}"
-                        val uSize = autoFitTextSize(textPaint, uText, codeMaxW, if (is80) 26f else 17f, 10f)
-                        canvas.drawText(uText, leftCenter, if (is80) 34f else 22f, textPaint)
-                        val pSize = autoFitTextSize(textPaint, pText, codeMaxW, if (is80) 26f else 17f, 10f)
-                        canvas.drawText(pText, leftCenter, if (is80) 68f else 46f, textPaint)
-                    } else {
-                        val preferredCodeSize = when {
-                            voucher.code.length <= 4 -> if (is80) 38f else 25f
-                            voucher.code.length <= 6 -> if (is80) 34f else 22f
-                            voucher.code.length <= 8 -> if (is80) 30f else 19f
-                            voucher.code.length <= 10 -> if (is80) 26f else 17f
-                            else -> if (is80) 22f else 15f
-                        }
-                        val cSize = autoFitTextSize(textPaint, voucher.code, codeMaxW, preferredCodeSize, if (is80) 14f else 10f)
-                        canvas.drawText(voucher.code, leftCenter, (boxHeight * 0.44f) + (cSize * 0.35f), textPaint)
-                    }
-
-                    // Login URL right beneath the code, inside the box
-                    canvas.drawText(urlText, leftCenter, boxHeight - 2f - (if (is80) 6f else 4f), urlPaint)
+                if (isAcc) {
+                    val uText = "U: ${voucher.username}"
+                    val pText = "P: ${voucher.password}"
+                    val uSize = autoFitTextSize(textPaint, uText, codeMaxW, if (is80) 34f else 22f, 11f)
+                    canvas.drawText(uText, leftCenter, if (is80) 44f else 29f, textPaint)
+                    val pSize = autoFitTextSize(textPaint, pText, codeMaxW, if (is80) 34f else 22f, 11f)
+                    canvas.drawText(pText, leftCenter, if (is80) 88f else 58f, textPaint)
                 } else {
-                    if (isAcc) {
-                        val uText = "U: ${voucher.username}"
-                        val pText = "P: ${voucher.password}"
-                        val uSize = autoFitTextSize(textPaint, uText, codeMaxW, if (is80) 34f else 22f, 11f)
-                        canvas.drawText(uText, leftCenter, if (is80) 44f else 29f, textPaint)
-                        val pSize = autoFitTextSize(textPaint, pText, codeMaxW, if (is80) 34f else 22f, 11f)
-                        canvas.drawText(pText, leftCenter, if (is80) 88f else 58f, textPaint)
-                    } else {
-                        val preferredCodeSize = when {
-                            voucher.code.length <= 4 -> if (is80) 42f else 28f
-                            voucher.code.length <= 6 -> if (is80) 38f else 25f
-                            voucher.code.length <= 8 -> if (is80) 34f else 22f
-                            voucher.code.length <= 10 -> if (is80) 30f else 19f
-                            else -> if (is80) 26f else 16.5f
-                        }
-                        val cSize = autoFitTextSize(textPaint, voucher.code, codeMaxW, preferredCodeSize, if (is80) 15f else 10.5f)
-                        canvas.drawText(voucher.code, leftCenter, boxHeight / 2f + (cSize * 0.35f), textPaint)
+                    val preferredCodeSize = when {
+                        voucher.code.length <= 4 -> if (is80) 42f else 28f
+                        voucher.code.length <= 6 -> if (is80) 38f else 25f
+                        voucher.code.length <= 8 -> if (is80) 34f else 22f
+                        voucher.code.length <= 10 -> if (is80) 30f else 19f
+                        else -> if (is80) 26f else 16.5f
                     }
+                    val cSize = autoFitTextSize(textPaint, voucher.code, codeMaxW, preferredCodeSize, if (is80) 15f else 10.5f)
+                    canvas.drawText(voucher.code, leftCenter, boxHeight / 2f + (cSize * 0.35f), textPaint)
                 }
 
-                // Right Cell: Profile & Price (Guaranteed ample room to prevent right-edge cut-off)
+                // Right Cell: Profile & Price (Clean, no SSID)
                 val rightCenter = splitX + (marginX + boxW - splitX) / 2f
                 val rightMaxW = (marginX + boxW - splitX) - 10f
                 textPaint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                val profLabel = if (!routerSsid.isNullOrBlank()) "${routerSsid} • ${voucher.profileName}" else voucher.profileName
+                val profLabel = voucher.profileName
                 val profSize = autoFitTextSize(textPaint, profLabel, rightMaxW, if (is80) 28f else 18f, 10f)
                 canvas.drawText(profLabel, rightCenter, if (is80) 42f else 28f, textPaint)
 
@@ -489,18 +454,17 @@ object BluetoothThermalPrinter {
 
                 val isAcc = voucher.isAccount || (voucher.password.isNotBlank() && voucher.password != voucher.username)
 
-                // Row 1: Header (Router SSID or HOTSPOT VOUCHER | PROFILE)
+                // Row 1: Header (HOTSPOT VOUCHER | PROFILE)
                 textPaint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                val titleHeader = if (isAcc) "HOTSPOT ACCOUNT" else (routerSsid?.takeIf { it.isNotBlank() } ?: "HOTSPOT VOUCHER")
+                val titleHeader = if (isAcc) "HOTSPOT ACCOUNT" else "HOTSPOT VOUCHER"
                 val hText = "$titleHeader   |   ${voucher.profileName}"
                 val hSize = autoFitTextSize(textPaint, hText, boxW - 12f, if (is80) 24f else 15.5f, 10f)
                 canvas.drawText(hText, totalWidth / 2f, if (is80) 28f else 19f, textPaint)
 
-                // Row 2: ENORMOUS VOUCHER CODE or USER + PASS + Login URL right beneath
+                // Row 2: ENORMOUS VOUCHER CODE or USER + PASS - Centered with full vertical room
                 textPaint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                val urlH = if (hasUrl) (if (is80) 22f else 15f) else 0f
                 val codeMaxW = boxW - 16f
-                val codeAreaH = (row2H - row1H) - urlH
+                val codeAreaH = row2H - row1H
                 val codeCenterY = row1H + (codeAreaH / 2f)
 
                 if (isAcc) {
@@ -520,21 +484,6 @@ object BluetoothThermalPrinter {
                     }
                     val cSize = autoFitTextSize(textPaint, voucher.code, codeMaxW, preferredCodeSize, if (is80) 18f else 12f)
                     canvas.drawText(voucher.code, totalWidth / 2f, codeCenterY + (cSize * 0.35f), textPaint)
-                }
-
-                // Login URL right beneath the code, inside Row 2 of the box
-                if (hasUrl) {
-                    val cleanUrl = if (loginUrl!!.startsWith("http://") || loginUrl.startsWith("https://")) loginUrl else "http://$loginUrl"
-                    val urlText = cleanUrl
-                    val urlPaint = Paint().apply {
-                        color = Color.BLACK
-                        isAntiAlias = true
-                        isFakeBoldText = true
-                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                        textAlign = Paint.Align.CENTER
-                    }
-                    autoFitTextSize(urlPaint, urlText, codeMaxW, if (is80) 15f else 10f, 7.5f)
-                    canvas.drawText(urlText, totalWidth / 2f, row2H - (if (is80) 5f else 3.5f), urlPaint)
                 }
 
                 // Row 3: 3 Sub-cells for Quota, Validity, Price
@@ -566,21 +515,20 @@ object BluetoothThermalPrinter {
 
                 val isAcc = voucher.isAccount || (voucher.password.isNotBlank() && voucher.password != voucher.username)
 
-                // Left Cell: Header label + Giant Centered Code or Account + Login URL right beneath code
+                // Left Cell: Header label + Giant Centered Code or Account (Clean, No URL)
                 val leftCenter = marginX + (splitX - marginX) / 2f
                 val headerH = if (is80) 30f else 20f
                 canvas.drawLine(marginX, headerH, splitX, headerH, linePaint)
 
                 val leftMaxW = (splitX - marginX) - 10f
                 textPaint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                val headerText = if (isAcc) "ACCOUNT LOGIN" else (routerSsid?.takeIf { it.isNotBlank() } ?: "VOUCHER CODE")
+                val headerText = if (isAcc) "ACCOUNT LOGIN" else "VOUCHER CODE"
                 val hSize = autoFitTextSize(textPaint, headerText, leftMaxW, if (is80) 15f else 10.5f, 8.5f)
                 canvas.drawText(headerText, leftCenter, if (is80) 21f else 14.5f, textPaint)
 
                 textPaint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
 
-                val urlH = if (hasUrl) (if (is80) 22f else 16f) else 0f
-                val codeAreaH = boxHeight - 2f - headerH - urlH
+                val codeAreaH = boxHeight - 2f - headerH
                 val codeCenterY = headerH + (codeAreaH / 2f)
 
                 if (isAcc) {
@@ -592,29 +540,14 @@ object BluetoothThermalPrinter {
                     canvas.drawText(passText, leftCenter, headerH + (codeAreaH * 0.78f) + (passSize * 0.32f), textPaint)
                 } else {
                     val preferredCodeSize = when {
-                        voucher.code.length <= 4 -> if (is80) 44f else 29f
-                        voucher.code.length <= 6 -> if (is80) 38f else 25f
-                        voucher.code.length <= 8 -> if (is80) 34f else 22f
-                        voucher.code.length <= 10 -> if (is80) 29f else 19f
-                        else -> if (is80) 25f else 16f
+                        voucher.code.length <= 4 -> if (is80) 48f else 32f
+                        voucher.code.length <= 6 -> if (is80) 42f else 28f
+                        voucher.code.length <= 8 -> if (is80) 36f else 24f
+                        voucher.code.length <= 10 -> if (is80) 32f else 21f
+                        else -> if (is80) 28f else 18f
                     }
                     val cSize = autoFitTextSize(textPaint, voucher.code, leftMaxW, preferredCodeSize, if (is80) 18f else 12f)
                     canvas.drawText(voucher.code, leftCenter, codeCenterY + (cSize * 0.35f), textPaint)
-                }
-
-                // Login URL right beneath the code, inside the box
-                if (hasUrl) {
-                    val cleanUrl = if (loginUrl!!.startsWith("http://") || loginUrl.startsWith("https://")) loginUrl else "http://$loginUrl"
-                    val urlText = cleanUrl
-                    val urlPaint = Paint().apply {
-                        color = Color.BLACK
-                        isAntiAlias = true
-                        isFakeBoldText = true
-                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                        textAlign = Paint.Align.CENTER
-                    }
-                    autoFitTextSize(urlPaint, urlText, leftMaxW, if (is80) 14f else 9.5f, 7f)
-                    canvas.drawText(urlText, leftCenter, boxHeight - 2f - (if (is80) 5f else 3.5f), urlPaint)
                 }
 
                 // Right Cell: 3 neat Excel rows

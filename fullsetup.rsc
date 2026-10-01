@@ -117,9 +117,9 @@
 }
 
 :do {
-  /ip dhcp-server add name=hs-dhcp interface=hotspot-bridge address-pool=hs-pool lease-time=1d disabled=no
+  /ip dhcp-server add name=hs-dhcp interface=hotspot-bridge address-pool=hs-pool lease-time=2h disabled=no
 } on-error={
-  :do { /ip dhcp-server set [find name=hs-dhcp] interface=hotspot-bridge address-pool=hs-pool disabled=no } on-error={}
+  :do { /ip dhcp-server set [find name=hs-dhcp] interface=hotspot-bridge address-pool=hs-pool lease-time=2h disabled=no } on-error={}
 }
 
 :do {
@@ -129,7 +129,7 @@
 }
 
 :do {
-  /ip dns set allow-remote-requests=yes servers="8.8.8.8,1.1.1.1"
+  /ip dns set allow-remote-requests=yes servers="8.8.8.8,1.1.1.1" cache-size=1024KiB
 } on-error={}
 
 # Static DNS mapping (only if dnsName is provided)
@@ -640,6 +640,49 @@
 # ── STEP 14: Internet Connectivity Test ───────────────────────
 :put "=== Step 14: Connectivity Test ==="
 :do { /ping 8.8.8.8 count=3 } on-error={ :put "  WAN ping check failed (check internet cable or ISP)." }
+
+# ── STEP 15: RAM & Performance Optimization ───────────────────
+:put "=== Step 15: RAM & Performance Optimization ==="
+
+# 1. Cap DNS cache memory & TTL
+:do {
+  /ip dns set cache-size=1024KiB cache-max-ttl=1d
+} on-error={}
+
+# 2. Reduce logging RAM buffer (1000 lines -> 150 lines saves memory)
+:do {
+  /system logging action set [find name=memory] memory-lines=150
+} on-error={}
+
+# 3. Connection tracking dead-state optimization (cleans stale TCP sessions in 10s instead of 2m)
+:do {
+  /ip firewall connection tracking set tcp-close-wait-timeout=10s tcp-time-wait-timeout=10s tcp-fin-wait-timeout=10s tcp-syn-sent-timeout=10s
+} on-error={}
+
+# 4. Optimized DHCP lease time (2 hours instead of 24h prevents stale phone lease bloat)
+:do {
+  /ip dhcp-server set [find name=hs-dhcp] lease-time=2h
+} on-error={}
+
+# 5. Disable unused resource-heavy background services
+:do { /ip smb set enabled=no } on-error={}
+:do { /ip socks set enabled=no } on-error={}
+:do { /ip upnp set enabled=no } on-error={}
+:do { /ip cloud set ddns-enabled=no update-time=no } on-error={}
+:do { /tool bandwidth-server set enabled=no } on-error={}
+
+# 6. Clean stale unauthorized hotspot hosts & orphaned cookies to reclaim memory immediately
+:foreach h in=[/ip hotspot host find where authorized=no and bypassed=no] do={
+  :do { /ip hotspot host remove $h } on-error={}
+}
+:foreach c in=[/ip hotspot cookie find] do={
+  :local cUser ""
+  :do { :set cUser [/ip hotspot cookie get $c user] } on-error={}
+  :if ([:len [/ip hotspot user find name=$cUser]] = 0) do={
+    :do { /ip hotspot cookie remove $c } on-error={}
+  }
+}
+:put "  RAM & Performance settings tuned."
 
 :put ""
 :put "================================================="

@@ -246,8 +246,20 @@
     var bytesOutEl = gid('stat_bytes_out');
     var dataUsedEl = gid('stat_data_used');
     var dataRemainingEl = gid('stat_data_remaining');
+    var timeLeftEl = gid('stat_timeleft');
+    var uEl = gid('display_username');
+    var upEl = gid('stat_uptime');
 
-    if (!dataUsedEl || !bytesInEl || !bytesOutEl) return;
+    // Local preview fallback if not parsed by router
+    if (uEl && uEl.textContent.indexOf('$(') !== -1) uEl.textContent = '44851299';
+    if (upEl && upEl.textContent.indexOf('$(') !== -1) upEl.textContent = '12m 30s';
+
+    if (timeLeftEl) {
+      var tl = timeLeftEl.textContent.trim();
+      if (!tl || tl.indexOf('$(') !== -1 || tl === '0s' || tl === '0') {
+        timeLeftEl.textContent = 'အကန့်အသတ်မရှိ (Unlim)';
+      }
+    }
 
     function formatBytes(bytes) {
       var b = parseFloat(bytes) || 0;
@@ -257,28 +269,61 @@
       return (b / 1073741824).toFixed(2) + ' GB';
     }
 
-    var inBytes = parseFloat(bytesInEl.textContent) || 0;
-    var outBytes = parseFloat(bytesOutEl.textContent) || 0;
+    var inBytes = parseFloat(bytesInEl ? bytesInEl.textContent : 0) || 0;
+    var outBytes = parseFloat(bytesOutEl ? bytesOutEl.textContent : 0) || 0;
     var totalBytes = inBytes + outBytes;
-    dataUsedEl.textContent = formatBytes(totalBytes);
+    if (totalBytes > 0 && dataUsedEl) {
+      dataUsedEl.textContent = formatBytes(totalBytes);
+    } else if (dataUsedEl && dataUsedEl.textContent.indexOf('$(') !== -1) {
+      dataUsedEl.textContent = '14.9 MB / 959.3 MB';
+    }
 
     if (dataRemainingEl) {
-      var uName = (gid('display_username') ? gid('display_username').textContent : '').toUpperCase();
-      var quotaMatch = uName.match(/(\d+)\s*(GB|MB|G|M)/i);
-      if (quotaMatch) {
-        var num = parseFloat(quotaMatch[1]);
-        var unit = quotaMatch[2].toUpperCase();
-        var quotaBytes = num * (unit.indexOf('G') !== -1 ? 1073741824 : 1048576);
-        var rem = Math.max(0, quotaBytes - totalBytes);
-        dataRemainingEl.textContent = formatBytes(rem);
+      var rawRem = parseFloat(dataRemainingEl.textContent.trim());
+      if (!isNaN(rawRem) && rawRem > 0) {
+        dataRemainingEl.textContent = formatBytes(rawRem);
       } else {
-        dataRemainingEl.textContent = 'အကန့်အသတ်မရှိ (Unlim)';
+        var uName = (gid('display_username') ? gid('display_username').textContent : '').toUpperCase();
+        var quotaMatch = uName.match(/(\d+)\s*(GB|MB|G|M)/i);
+        if (quotaMatch) {
+          var num = parseFloat(quotaMatch[1]);
+          var unit = quotaMatch[2].toUpperCase();
+          var quotaBytes = num * (unit.indexOf('G') !== -1 ? 1073741824 : 1048576);
+          var rem = Math.max(0, quotaBytes - totalBytes);
+          dataRemainingEl.textContent = formatBytes(rem);
+        } else {
+          dataRemainingEl.textContent = 'အကန့်အသတ်မရှိ (Unlim)';
+        }
       }
     }
   }
 
+  function cleanPreviewTags() {
+    try {
+      var elements = document.querySelectorAll('strong, span, div, a');
+      for (var i = 0; i < elements.length; i++) {
+        var el = elements[i];
+        if (el.children.length === 0 && el.textContent) {
+          if (el.textContent.indexOf('$(server-address)') !== -1) {
+            el.textContent = el.textContent.replace(/\$\(server-address\)/g, '10.10.10.1');
+          }
+          if (el.textContent.indexOf('$(ip)') !== -1) {
+            el.textContent = el.textContent.replace(/\$\(ip\)/g, '10.10.10.16');
+          }
+          if (el.textContent.indexOf('$(mac)') !== -1) {
+            el.textContent = el.textContent.replace(/\$\(mac\)/g, 'CC:15:31:83:26:BF');
+          }
+          if (el.textContent.indexOf('$(link-status)') !== -1) {
+            el.textContent = el.textContent.replace(/\$\(link-status\)/g, 'http://10.10.10.1/status');
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
   /* ── DOM Ready Initialization ────────────────────────────── */
   window.addEventListener('DOMContentLoaded', function () {
+    cleanPreviewTags();
     initVoucherInput();
     initPasswordToggle();
     initTabs();

@@ -61,7 +61,10 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     }
 
     LaunchedEffect(Unit) {
-        viewModel.fetchRouterData()
+        while (true) {
+            viewModel.fetchRouterData()
+            kotlinx.coroutines.delay(3000)
+        }
     }
 
     Scaffold(

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>အရိပ်စစ် Wifi – အင်တာနက် ချိတ်ဆက်နေပါသည်...</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta http-equiv="refresh" content="2; url=$(link-status)" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script>
+    function startRedirect() {
+      window.location.href = "$(link-status)";
+    }
+  </script>
+</head>
+<body onload="startRedirect()">
+
+  <div class="bg-ambient">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+  </div>
+
+  <div class="portal-container">
+    <div class="glass-card" style="text-align: center;">
+
+      <div style="width: 72px; height: 72px; border-radius: 50%; background: rgba(52, 211, 153, 0.15); border: 1.5px solid rgba(52, 211, 153, 0.45); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px; color: #34D399;">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+
+      <h1 class="brand-title" style="font-size: 22px;">အင်တာနက် ချိတ်ဆက်မှု အောင်မြင်ပါသည်</h1>
+      <p class="brand-subtitle" style="margin-bottom: 20px; color: #A7F3D0;">
+        အသုံးပြုမှု အခြေအနေသို့ ခေတ္တအတွင်း ရောက်ရှိပါမည်...
+      </p>
+
+      <div style="background: rgba(255,255,255,0.06); border-radius: 100px; height: 6px; overflow: hidden; margin: 18px 0;">
+        <div style="height: 100%; width: 100%; background: linear-gradient(90deg, #00F2FE, #4FACFE); border-radius: 100px; animation: progress 2s ease forwards;"></div>
+      </div>
+
+      <a href="$(link-status)" class="btn-connect" style="text-decoration:none; margin-top:14px;">
+        ချက်ချင်း သွားမည် (Continue)
+      </a>
+
+      <p class="footer-copy">
+        အရိပ်စစ် Wifi &bull; မြန်နှုန်းမြင့် ကွန်ရက်
+      </p>
+
+    </div>
+  </div>
+
+</body>
+</html>
