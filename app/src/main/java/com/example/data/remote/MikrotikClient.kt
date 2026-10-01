@@ -6,6 +6,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
@@ -64,14 +66,15 @@ class RawRouterOSConnection {
     val isConnected: Boolean
         get() = socket?.isConnected == true && socket?.isClosed == false
 
-    fun connect(host: String, port: Int = 8728, timeoutMs: Int = 4000) {
+    fun connect(host: String, port: Int = 8728, timeoutMs: Int = 15000) {
         close()
         val s = Socket()
+        s.tcpNoDelay = true
         s.soTimeout = timeoutMs
-        s.connect(InetSocketAddress(host, port), timeoutMs)
+        s.connect(InetSocketAddress(host, port), 6000)
         socket = s
-        inStream = s.getInputStream()
-        outStream = s.getOutputStream()
+        inStream = BufferedInputStream(s.getInputStream(), 32768)
+        outStream = BufferedOutputStream(s.getOutputStream(), 16384)
     }
 
     fun login(user: String, pass: String) {
@@ -264,7 +267,7 @@ class MikrotikClient {
                 lastPass = pass
                 connection?.close()
                 val conn = RawRouterOSConnection()
-                conn.connect(ip, 8728, 4000)
+                conn.connect(ip, 8728, 15000)
                 conn.login(user, pass)
                 connection = conn
                 Result.success(Unit)
@@ -382,7 +385,7 @@ class MikrotikClient {
             try {
                 connection?.close()
                 val conn = RawRouterOSConnection()
-                conn.connect(lastIp, 8728, 4000)
+                conn.connect(lastIp, 8728, 15000)
                 conn.login(lastUser, lastPass)
                 connection = conn
             } catch (e: Exception) {
@@ -1151,7 +1154,10 @@ class MikrotikClient {
         apiMutex.withLock {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext emptyList()
-                val res = conn.execute("/ip/hotspot/user/print")
+                val res = conn.execute(
+                    "/ip/hotspot/user/print",
+                    "=.proplist=.id,name,password,profile,limit-bytes-total,uptime,bytes-in,bytes-out,comment,disabled"
+                )
                 val users = res.mapNotNull {
                     val name = it["name"] ?: return@mapNotNull null
                     if (name.isBlank() || name == "default-trial") return@mapNotNull null

@@ -190,12 +190,20 @@ class AppRepository(
     }
 
     suspend fun syncVouchersFromRouter(): Int {
+        if (!mikrotikClient.isConnected()) {
+            mikrotikClient.ensureConnected()
+        }
         if (!mikrotikClient.isConnected()) return 0
+
+        var profilesList = dao.getAllProfilesSync()
+        if (profilesList.isEmpty()) {
+            syncProfilesFromRouter()
+            profilesList = dao.getAllProfilesSync()
+        }
+        val profileMap = profilesList.associateBy { it.name }
+
         val routerUsers = mikrotikClient.getAllHotspotUsers()
         if (routerUsers.isEmpty()) return 0
-
-        val profilesList = dao.getAllProfilesSync()
-        val profileMap = profilesList.associateBy { it.name }
 
         val vouchers = routerUsers.map { u ->
             val prof = profileMap[u.profile]
@@ -225,7 +233,9 @@ class AppRepository(
             )
         }
         dao.clearAllVouchers()
-        dao.insertVouchers(vouchers)
+        vouchers.chunked(250).forEach { chunk ->
+            dao.insertVouchers(chunk)
+        }
         return vouchers.size
     }
 

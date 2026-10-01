@@ -3,14 +3,14 @@
 <div align="center">
 
 ![HotspotManager Banner](https://img.shields.io/badge/MikroTik-RouterOS_v7-red?style=for-the-badge&logo=mikrotik)
-![Android Version](https://img.shields.io/badge/Android_App-v1.3.4-green?style=for-the-badge&logo=android)
+![Android Version](https://img.shields.io/badge/Android_App-v1.3.5-green?style=for-the-badge&logo=android)
 ![SSID](https://img.shields.io/badge/SSID-Hide%20Wifi-blue?style=for-the-badge&logo=wi-fi)
 
 <h3>High-Performance MikroTik Hotspot System with Real-Time Profile Alignment & Luxury Captive Portal</h3>
 
 <p>
-  <a href="https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.3.4.apk">
-    <img src="https://img.shields.io/badge/Download_APK-v1.3.4_(Direct)-success?style=for-the-badge&logo=android" alt="Download APK" />
+  <a href="https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.3.5.apk">
+    <img src="https://img.shields.io/badge/Download_APK-v1.3.5_(Direct)-success?style=for-the-badge&logo=android" alt="Download APK" />
   </a>
 </p>
 
@@ -20,12 +20,41 @@
 
 ## 📱 App Download for Users
 
-- **Direct Download Link:** [HotspotManager-v1.3.4.apk](https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.3.4.apk)
-- **Version:** v1.3.4 (versionCode: 11)
-- **Features in v1.3.4:**
+- **Direct Download Link:** [HotspotManager-v1.3.5.apk](https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.3.5.apk)
+- **Version:** v1.3.5 (versionCode: 12)
+- **What's New in v1.3.5:**
+  - **Ultra-Fast Bulk Voucher Synchronization:** Buffered TCP streams, 15-second socket timeout, and chunked Room database transactions to smoothly synchronize 4,500+ accounts without timeouts.
   - **Dynamic Profile Alignment:** When an admin modifies any profile (Speed, Quota, Validity, Price), all unused vouchers and active online users automatically align with the new settings in real time on both MikroTik and local database.
   - **Single & Dual-Field Authentication:** Seamless support for Voucher PIN numbers and Username/Password accounts.
   - **Direct RouterOS API Integration:** Connects directly via port `8728` with zero third-party cloud dependency.
+
+---
+
+## 👤 Where to Find Accounts in Winbox vs App
+
+### 1. In MikroTik Winbox:
+> ⚠️ **Important:** Do NOT look under `System` > `Users`. That menu is only for router admin logins (`admin`, `flutter_app`).
+> 
+> 👉 **Hotspot Accounts are located under:**
+> **IP** ➔ **Hotspot** ➔ **Users** tab (contains all 4,586 imported voucher accounts).
+
+### 2. In the HotspotManager App:
+1. Open the app and log in with your Router IP (`192.168.1.164` or `10.10.10.1`), user `admin`, password `Khant1234@`.
+2. Tap the **Vouchers** tab. The app automatically fetches all 4,586 accounts and displays them with their profile badges, quotas, and PIN passwords.
+
+---
+
+## ⚡ Setup & Accounts Scripts (`setup.rsc` & `accounts.rsc`)
+
+1. **`setup.rsc`**: Master configuration formula (Bridge, DHCP, DNS, Wi-Fi `Hide Wifi`, 5 Profiles, Firewall, Captive Portal).
+2. **`accounts.rsc`**: Automatically generated from `Accounts.xlsx` containing all 4,586 non-expired accounts.
+
+To run both on any MikroTik router:
+```routeros
+# In MikroTik Terminal:
+/import file-name=setup.rsc
+/import file-name=accounts.rsc
+```
 
 ---
 
@@ -38,30 +67,6 @@
 - **SSID Broadcast Option:**
   - Standard broadcast: `:global hideSsid no` (Default - phones detect and open captive portal immediately)
   - Hidden broadcast: `:global hideSsid yes` (Manual network addition required)
-
----
-
-## ⚡ Master Setup Formula (`setup.rsc`)
-
-The single, definitive script to configure the entire MikroTik Hotspot router from scratch:
-
-```routeros
-# In MikroTik Terminal:
-/import file-name=setup.rsc
-```
-
-### Key Features of `setup.rsc`:
-1. **Universal Port Bridging:** Automatically maps all Ethernet (`ether2` through `ether10`) and SFP interfaces (`sfp1`) to `hotspot-bridge`, reserving `ether1` for WAN.
-2. **Wi-Fi 6 & Legacy Wireless:** Automatically sets up `wifi1` (RouterOS v7) or `wlan1` (RouterOS v6) with SSID `Hide Wifi`.
-3. **5 Pre-configured Profiles:**
-   - `5GB` (20M/20M, 1 Day, 5 GB)
-   - `30Day` (10M/10M, 30 Days, 60 GB)
-   - `2GB` (20M/20M, 1 Day, 2 GB)
-   - `2Hour` (5M/5M, 2 Hours, Unlimited)
-   - `VIP` (5M/5M, Unlimited)
-4. **Continuous Validity Countdown:** On first voucher login, starts a persistent `/system scheduler` countdown timer that never pauses even when devices disconnect.
-5. **MAC Roaming:** Devices with randomized MAC addresses can log back in seamlessly without quota corruption.
-6. **Firewall & Security Hardening:** Prevents DoT circumvention, blocks unauthorized WAN forward, secures LAN management, and stops mobile tethering via TTL mangling.
 
 ---
 
@@ -90,12 +95,12 @@ To connect existing Ruijie Access Points to the MikroTik Hotspot:
 > 📢 **Yadanar Tun WiFi Update:**
 > Please connect to the Wi-Fi network: **Hide Wifi**
 > When prompted, log in with your Voucher Code or Account Number.
-> Download the official Hotspot Manager app (v1.3.4) here:
-> 👉 https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.3.4.apk
+> Download the official Hotspot Manager app (v1.3.5) here:
+> 👉 https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.3.5.apk
 
 ### မြန်မာဘာသာ (Myanmar Unicode):
 > 📢 **ရတနာထွန်း WiFi အသိပေးချက် -**
-> ယခုအခါ Wi-Fi အမည် (SSID) ကို **Hide Wifi** သို့ ပြောင်းလဲထားပါသည်။
-> Wi-Fi ချိတ်ဆက်ပြီးပါက မိမိတို့၏ Voucher ကုတ် သို့မဟုတ် အကောင့်နံပါတ်ဖြင့် Login ပြုလုပ်၍ အင်တာနက် အသုံးပြုနိုင်ပါသည်။
-> HotspotManager App ဗားရှင်းသစ် (v1.3.4) ကို အောက်ပါလင့်ခ်မှ တိုက်ရိုက်ဒေါင်းလုဒ်ရယူနိုင်ပါသည် -
-> 👉 https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.3.4.apk
+> ယခုအခါ Wi-Fi အမည် (SSID) ကို **Hide Wifi** ဟု ပြောင်းလဲထားပါသည်။
+> Wi-Fi ချိတ်ဆက်ပြီးပါက မိမိတို့၏ Voucher Code (သို့မဟုတ်) အကောင့်နံပါတ်ဖြင့် Login ပြုလုပ်၍ အင်တာနက် အသုံးပြုနိုင်ပါသည်။
+> HotspotManager App ဗားရှင်းသစ် (v1.3.5) ကို အောက်ပါလင့်ခ်မှ တိုက်ရိုက်ဒေါင်းလုဒ်ရယူနိုင်ပါသည် -
+> 👉 https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.3.5.apk

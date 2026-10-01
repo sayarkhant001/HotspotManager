@@ -828,6 +828,14 @@
 } on-error={}
 :put "  Voucher optimization and normalization completed."
 
+# ── STEP 13b: Hotspot Accounts Auto-Import ─────────────────────
+:if ([:len [/file find name="accounts.rsc"]] > 0 or [:len [/file find name="flash/accounts.rsc"]] > 0) do={
+  :put "=== Step 13b: Importing Hotspot Accounts (accounts.rsc) ==="
+  :do { /import file-name=accounts.rsc } on-error={
+    :do { /import file-name=flash/accounts.rsc } on-error={}
+  }
+}
+
 # ── STEP 14: Internet Connectivity Test ───────────────────────
 :put "=== Step 14: Connectivity Test ==="
 :do { /ping 8.8.8.8 count=3 } on-error={ :put "  WAN ping check failed (check internet cable or ISP)." }
