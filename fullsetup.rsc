@@ -217,14 +217,12 @@
 # - keepalive-timeout=none prevents dropping sleeping mobile devices
 :do {
   /ip hotspot user profile add name="1GB_1H" rate-limit="10M/10M" session-timeout=1h \
-    mac-cookie-timeout=1h keepalive-timeout=none idle-timeout=none shared-users=2 \
-    on-login=$macFixScript comment="1GB 1Hour"
+    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
   :put "  Profile 1GB_1H created (session-timeout=1h, rate-limit=10M/10M, MAC-roaming & continuous countdown enabled)."
 } on-error={
   :do {
     /ip hotspot user profile set [find name="1GB_1H"] rate-limit="10M/10M" session-timeout=1h \
-      mac-cookie-timeout=1h keepalive-timeout=none idle-timeout=none shared-users=2 \
-      on-login=$macFixScript comment="1GB 1Hour"
+      keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
     :put "  Profile 1GB_1H updated (MAC-roaming & continuous countdown enabled)."
   } on-error={}
 }
@@ -232,14 +230,12 @@
 # 2. Create or update 15M profile (15 Minutes validity):
 :do {
   /ip hotspot user profile add name="15M" rate-limit="10M/10M" session-timeout=15m \
-    mac-cookie-timeout=15m keepalive-timeout=none idle-timeout=none shared-users=2 \
-    on-login=$macFixScript comment="15 Minutes"
+    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
   :put "  Profile 15M created (session-timeout=15m, rate-limit=10M/10M, MAC-roaming & continuous countdown enabled)."
 } on-error={
   :do {
     /ip hotspot user profile set [find name="15M"] rate-limit="10M/10M" session-timeout=15m \
-      mac-cookie-timeout=15m keepalive-timeout=none idle-timeout=none shared-users=2 \
-      on-login=$macFixScript comment="15 Minutes"
+      keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
     :put "  Profile 15M updated (MAC-roaming & continuous countdown enabled)."
   } on-error={}
 }
@@ -247,7 +243,7 @@
 # 3. Update default profile with safe matching values and MAC roaming & continuous countdown
 :do {
   /ip hotspot user profile set [find name="default"] rate-limit="10M/10M" session-timeout=1h \
-    mac-cookie-timeout=1h keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
+    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
 } on-error={}
 :put "  Default profile updated."
 
@@ -317,7 +313,7 @@
 
     # 2. Update existing profile properties
     :do {
-      /ip hotspot user profile set $p shared-users=2 keepalive-timeout=none idle-timeout=none mac-cookie-timeout=$dur
+      /ip hotspot user profile set $p shared-users=2 keepalive-timeout=none idle-timeout=none
       :local curOnLogin ""
       :do { :set curOnLogin [/ip hotspot user profile get $p on-login] } on-error={}
       :if ([:len $curOnLogin] = 0) do={
@@ -327,7 +323,7 @@
           /ip hotspot user profile set $p on-login=($curOnLogin . "; " . $macFixScript)
         }
       }
-      :put ("  Edited profile '" . $pName . "': mac-cookie-timeout=" . [:tostr $dur] . ", shared-users=2, roaming & continuous countdown=active.")
+      :put ("  Edited profile '" . $pName . "': shared-users=2, roaming & continuous countdown=active.")
     } on-error={
       :put ("  Could not edit profile: " . $pName)
     }
