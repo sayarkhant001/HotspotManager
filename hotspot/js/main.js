@@ -1,6 +1,6 @@
 /* ─────────────────────────────────────────────────────────────
-   အရိပ်စစ် WIFI (A YEIK SITT 1) – main.js
-   ၄ လုံးမှ ၁၂ လုံး အထိ ဘောင်ချာကုဒ်များကို အပြည့်အဝ ထောက်ပံ့ပေးထားသည်
+   အရိပ်စစ် WIFI (A YEIK SITT 2) – Compact main.js
+   ၄ လုံးမှ ၁၂ လုံး အထိ အလွယ်တကူ ရိုက်ထည့်နိုင်သည်
    ─────────────────────────────────────────────────────────── */
 
 (function () {
@@ -12,19 +12,18 @@
   function saveVoucher(code) {
     if (!code) return;
     try {
-      localStorage.setItem('ayeiksitt_voucher', code.trim());
-      localStorage.setItem('ayeiksitt_voucher_time', Date.now().toString());
+      localStorage.setItem('ayeiksitt2_voucher', code.trim());
+      localStorage.setItem('ayeiksitt2_voucher_time', Date.now().toString());
     } catch (e) {}
   }
 
   function getStoredVoucher() {
     try {
-      var code = localStorage.getItem('ayeiksitt_voucher');
-      var time = localStorage.getItem('ayeiksitt_voucher_time');
+      var code = localStorage.getItem('ayeiksitt2_voucher');
+      var time = localStorage.getItem('ayeiksitt2_voucher_time');
       if (!code) return '';
-      // Expire after 30 days
       if (time && (Date.now() - parseInt(time, 10)) > 30 * 24 * 3600 * 1000) {
-        localStorage.removeItem('ayeiksitt_voucher');
+        localStorage.removeItem('ayeiksitt2_voucher');
         return '';
       }
       return code.trim();
@@ -48,7 +47,7 @@
     return params;
   }
 
-  /* ── Voucher Input Logic (Supports 4 to 12 Digits) ───────── */
+  /* ── Voucher Input (4 to 12 Digits Resilient) ────────────── */
   function initVoucherInput() {
     var vInput = gid('voucher_input');
     var clearBtn = gid('clear_voucher_btn');
@@ -56,15 +55,10 @@
     if (!vInput) return;
 
     function formatVoucherValue() {
-      // Remove spaces, uppercase, supports 4 to 12+ digits or prefix
       var val = vInput.value.replace(/[\s]/g, '').toUpperCase();
       vInput.value = val;
-      if (clearBtn) {
-        clearBtn.style.display = val.length > 0 ? 'flex' : 'none';
-      }
-      if (pasteBtn) {
-        pasteBtn.style.display = val.length === 0 ? 'flex' : 'none';
-      }
+      if (clearBtn) clearBtn.style.display = val.length > 0 ? 'flex' : 'none';
+      if (pasteBtn) pasteBtn.style.display = val.length === 0 ? 'flex' : 'none';
     }
 
     vInput.addEventListener('input', formatVoucherValue);
@@ -106,8 +100,8 @@
       var isPw = pwInput.type === 'password';
       pwInput.type = isPw ? 'text' : 'password';
       toggleBtn.innerHTML = isPw
-        ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
-        : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+        ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+        : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
     });
   }
 
@@ -126,14 +120,14 @@
         panelVoucher && panelVoucher.classList.remove('hide');
         panelAccount && panelAccount.classList.add('hide');
         var vIn = gid('voucher_input');
-        if (vIn) setTimeout(function () { vIn.focus(); }, 60);
+        if (vIn) setTimeout(function () { vIn.focus(); }, 50);
       } else {
         tabAccount && tabAccount.classList.add('active');
         tabVoucher && tabVoucher.classList.remove('active');
         panelAccount && panelAccount.classList.remove('hide');
         panelVoucher && panelVoucher.classList.add('hide');
         var uIn = gid('account_input');
-        if (uIn) setTimeout(function () { uIn.focus(); }, 60);
+        if (uIn) setTimeout(function () { uIn.focus(); }, 50);
       }
       if (errorEl && errorEl.textContent.indexOf('$(') !== -1) {
         errorEl.textContent = '';
@@ -154,7 +148,7 @@
 
     function showError(msg) {
       if (errorEl) {
-        errorEl.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> <span>' + msg + '</span>';
+        errorEl.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> <span>' + msg + '</span>';
         errorEl.classList.remove('hide');
       }
     }
@@ -169,14 +163,14 @@
         var code = (vInput ? vInput.value : '').trim().replace(/[\s]/g, '').toUpperCase();
         if (!code || code.length < 4) {
           e.preventDefault();
-          showError('ကျေးဇူးပြု၍ ဘောင်ချာကုဒ် (အနည်းဆုံး ၄ လုံး) ရိုက်ထည့်ပါ');
+          showError('ကုဒ်နံပါတ် (အနည်းဆုံး ၄ လုံး) ရိုက်ထည့်ပါ');
           if (vInput) vInput.focus();
           return;
         }
 
         saveVoucher(code);
         if (usernameField) usernameField.value = code;
-        if (passwordField) passwordField.value = code; // In MikroTik PAP mode for voucher, password = username
+        if (passwordField) passwordField.value = code;
       } else {
         var uInput = gid('account_input');
         var pInput = gid('account_password');
@@ -185,13 +179,13 @@
 
         if (!user) {
           e.preventDefault();
-          showError('ကျေးဇူးပြု၍ အသုံးပြုသူအမည် ထည့်သွင်းပါ');
+          showError('အသုံးပြုသူအမည် ထည့်သွင်းပါ');
           if (uInput) uInput.focus();
           return;
         }
         if (!pass) {
           e.preventDefault();
-          showError('ကျေးဇူးပြု၍ လျှို့ဝှက်နံပါတ် ထည့်သွင်းပါ');
+          showError('လျှို့ဝှက်နံပါတ် ထည့်သွင်းပါ');
           if (pInput) pInput.focus();
           return;
         }
@@ -201,7 +195,7 @@
       }
 
       btn.disabled = true;
-      btn.innerHTML = '<span style="display:inline-block;width:18px;height:18px;border:2.5px solid rgba(0,0,0,0.2);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle;"></span> အင်တာနက် ချိတ်ဆက်နေပါသည်...';
+      btn.innerHTML = '<span style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;margin-right:6px;vertical-align:middle;"></span> ချိတ်ဆက်နေပါသည်...';
     });
   }
 
@@ -263,7 +257,7 @@
     if (timeLeftEl) {
       var tl = timeLeftEl.textContent.trim();
       if (!tl || tl.indexOf('$(') !== -1 || tl === '0s' || tl === '0') {
-        timeLeftEl.textContent = 'အကန့်အသတ်မရှိ (Unlimited)';
+        timeLeftEl.textContent = 'အကန့်အသတ်မရှိ (Unlim)';
       }
     }
 
@@ -298,7 +292,7 @@
           var rem = Math.max(0, quotaBytes - totalBytes);
           dataRemainingEl.textContent = formatBytes(rem);
         } else {
-          dataRemainingEl.textContent = 'အကန့်အသတ်မရှိ (Unlimited)';
+          dataRemainingEl.textContent = 'အကန့်အသတ်မရှိ (Unlim)';
         }
       }
     }

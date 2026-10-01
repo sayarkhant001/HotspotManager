@@ -234,12 +234,13 @@ fun DashboardSettingsDialog(
                         // ============================================================
 
                         // Active Printer Status Card
+                        val isPrinterActive = savedPrinter != null && savedPrinter!!.address.isNotBlank()
                         Surface(
                             shape = RoundedCornerShape(14.dp),
-                            color = if (savedPrinter != null) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            color = if (isPrinterActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                             border = androidx.compose.foundation.BorderStroke(
                                 1.dp,
-                                if (savedPrinter != null) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
+                                if (isPrinterActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
                             ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -255,9 +256,9 @@ fun DashboardSettingsDialog(
                                     modifier = Modifier.weight(1f, fill = false)
                                 ) {
                                     Icon(
-                                        imageVector = if (savedPrinter != null) Icons.Default.CheckCircle else Icons.Default.WarningAmber,
+                                        imageVector = if (isPrinterActive) Icons.Default.CheckCircle else Icons.Default.WarningAmber,
                                         contentDescription = null,
-                                        tint = if (savedPrinter != null) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+                                        tint = if (savedPrinter?.isConnected == true) Color(0xFF2E7D32) else if (isPrinterActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                                         modifier = Modifier.size(24.dp)
                                     )
                                     Spacer(Modifier.width(10.dp))
@@ -268,23 +269,23 @@ fun DashboardSettingsDialog(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Text(
-                                            text = savedPrinter?.name ?: "No printer selected",
+                                            text = if (isPrinterActive) savedPrinter!!.name else "No printer connected",
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
-                                        if (savedPrinter != null) {
+                                        if (isPrinterActive) {
                                             Text(
-                                                text = savedPrinter!!.address,
+                                                text = if (savedPrinter!!.isConnected) "● Connected (${savedPrinter!!.address})" else savedPrinter!!.address,
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.primary
+                                                color = if (savedPrinter!!.isConnected) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
                                             )
                                         }
                                     }
                                 }
 
-                                if (savedPrinter != null) {
+                                if (isPrinterActive) {
                                     FilledTonalButton(
                                         onClick = {
                                             isPrintingTest = true
@@ -399,11 +400,16 @@ fun DashboardSettingsDialog(
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
+                                    val activePrinterDesc = when {
+                                        savedPrinter?.isConnected == true -> "Connected: ${savedPrinter?.name}"
+                                        savedPrinter != null && savedPrinter!!.address.isNotBlank() -> "Selected: ${savedPrinter?.name}"
+                                        else -> "No printer connected"
+                                    }
                                     Text(
-                                        text = "Active Default: ${savedPrinter?.name ?: "Micro (Default)"}",
+                                        text = activePrinterDesc,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
+                                        color = if (savedPrinter != null && savedPrinter!!.address.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
                                     )
                                 }
                                 TextButton(
@@ -437,11 +443,11 @@ fun DashboardSettingsDialog(
                                             fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                        Spacer(Modifier.height(4.dp))
                                         Text(
-                                            text = "Default selected printer: ${savedPrinter?.name ?: "Micro (Default)"}",
+                                            text = "Please pair your thermal printer in Android Bluetooth settings.",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold
+                                            color = MaterialTheme.colorScheme.outline
                                         )
                                         Spacer(Modifier.height(8.dp))
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -482,7 +488,6 @@ fun DashboardSettingsDialog(
                                 ) {
                                     pairedPrinters.forEach { device ->
                                         val isSelected = savedPrinter?.address == device.address
-                                        val isMicro = device.name.contains("micro", ignoreCase = true)
                                         Surface(
                                             shape = RoundedCornerShape(10.dp),
                                             color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
@@ -516,17 +521,17 @@ fun DashboardSettingsDialog(
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                                         Text(device.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                                        if (isMicro) {
+                                                        if (device.isConnected) {
                                                             Spacer(Modifier.width(6.dp))
                                                             Surface(
                                                                 shape = RoundedCornerShape(4.dp),
-                                                                color = MaterialTheme.colorScheme.tertiaryContainer
+                                                                color = Color(0xFF2E7D32).copy(alpha = 0.15f)
                                                             ) {
                                                                 Text(
-                                                                    text = "⭐ Default (Micro)",
+                                                                    text = "● Connected",
                                                                     fontSize = 9.sp,
                                                                     fontWeight = FontWeight.Bold,
-                                                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                                    color = Color(0xFF2E7D32),
                                                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                                                 )
                                                             }

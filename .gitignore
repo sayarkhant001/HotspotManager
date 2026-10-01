@@ -17,3 +17,7 @@ local.properties
 .env
 debug.keystore
 .vscode/
+scratch/
+*.apk
+*.zip
+hotspot1/

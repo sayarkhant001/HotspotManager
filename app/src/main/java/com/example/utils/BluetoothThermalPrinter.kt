@@ -30,7 +30,8 @@ import java.util.UUID
 
 data class BluetoothPrinterDevice(
     val name: String,
-    val address: String
+    val address: String,
+    val isConnected: Boolean = false
 )
 
 object BluetoothThermalPrinter {
@@ -67,6 +68,16 @@ object BluetoothThermalPrinter {
     }
 
     @SuppressLint("MissingPermission")
+    fun isDeviceConnected(device: BluetoothDevice): Boolean {
+        return try {
+            val method = device.javaClass.getMethod("isConnected")
+            (method.invoke(device) as? Boolean) ?: false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    @SuppressLint("MissingPermission")
     fun getPairedPrinters(context: Context): List<BluetoothPrinterDevice> {
         return try {
             if (!hasBluetoothPermission(context)) return emptyList()
@@ -77,13 +88,14 @@ object BluetoothThermalPrinter {
             val list = bonded.map { device ->
                 BluetoothPrinterDevice(
                     name = device.name ?: "Unknown Device",
-                    address = device.address
+                    address = device.address,
+                    isConnected = isDeviceConnected(device)
                 )
             }
-            // Prioritize printers with "micro" in the name to the top of the list!
+            // Put actively connected devices first, then sort alphabetically by name
             list.sortedWith(
-                compareByDescending<BluetoothPrinterDevice> { it.name.contains("micro", ignoreCase = true) }
-                    .thenBy { it.name }
+                compareByDescending<BluetoothPrinterDevice> { it.isConnected }
+                    .thenBy { it.name.lowercase(Locale.getDefault()) }
             )
         } catch (e: Exception) {
             e.printStackTrace()
@@ -91,38 +103,57 @@ object BluetoothThermalPrinter {
         }
     }
 
-    fun getSavedPrinter(context: Context): BluetoothPrinterDevice? {
+    /**
+     * Resolves the printer to use on this phone:
+     * 1. Actively connected Bluetooth printer takes top priority.
+     * 2. If no printer is actively connected, use the user's previously saved printer if paired.
+     * 3. If there is only 1 paired printer on this phone, use that printer automatically.
+     * 4. Otherwise returns null so the user is prompted to connect or select a printer.
+     */
+    fun getActivePrinter(context: Context): BluetoothPrinterDevice? {
+        val paired = getPairedPrinters(context)
+        if (paired.isEmpty()) return null
+
+        // 1. If any paired printer is currently connected via Bluetooth, use it
+        val connectedDevice = paired.firstOrNull { it.isConnected }
+        if (connectedDevice != null) {
+            savePrinter(context, connectedDevice)
+            return connectedDevice
+        }
+
+        // 2. Check saved printer from preferences if still paired
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val addr = prefs.getString(KEY_PRINTER_ADDR, null)
-        val name = prefs.getString(KEY_PRINTER_NAME, null)
-        val paired = getPairedPrinters(context)
-
-        // 1. If saved printer is valid and exists among paired devices, return it
-        if (addr != null && name != null) {
+        if (!addr.isNullOrBlank()) {
             val matching = paired.firstOrNull { it.address.equals(addr, ignoreCase = true) }
             if (matching != null) return matching
+        }
 
-            val microInPaired = paired.firstOrNull { it.name.contains("micro", ignoreCase = true) }
-            if (microInPaired != null && !name.contains("micro", ignoreCase = true)) {
-                savePrinter(context, microInPaired)
-                return microInPaired
+        // 3. If only one printer is paired on this phone, use it automatically
+        if (paired.size == 1) {
+            val single = paired.first()
+            savePrinter(context, single)
+            return single
+        }
+
+        return null
+    }
+
+    fun getSavedPrinter(context: Context): BluetoothPrinterDevice? {
+        return getActivePrinter(context) ?: run {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val addr = prefs.getString(KEY_PRINTER_ADDR, null)
+            val name = prefs.getString(KEY_PRINTER_NAME, null)
+            if (!addr.isNullOrBlank() && !name.isNullOrBlank()) {
+                BluetoothPrinterDevice(name = name, address = addr, isConnected = false)
+            } else {
+                null
             }
-            return BluetoothPrinterDevice(name, addr)
         }
-
-        // 2. If nothing saved yet, prioritize device with "micro" in its name as DEFAULT!
-        val microDevice = paired.firstOrNull { it.name.contains("micro", ignoreCase = true) }
-            ?: paired.firstOrNull()
-        if (microDevice != null) {
-            savePrinter(context, microDevice)
-            return microDevice
-        }
-
-        // 3. Fallback default entry so user always sees Micro as default even before Bluetooth is paired
-        return BluetoothPrinterDevice(name = "Micro (Default)", address = "")
     }
 
     fun savePrinter(context: Context, device: BluetoothPrinterDevice) {
+        if (device.address.isBlank()) return
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit()
             .putString(KEY_PRINTER_ADDR, device.address)
@@ -177,9 +208,9 @@ object BluetoothThermalPrinter {
     ): Result<Unit> = withContext(Dispatchers.IO) {
         if (vouchers.isEmpty()) return@withContext Result.failure(Exception("No vouchers to print"))
 
-        val targetAddr = deviceAddress ?: getSavedPrinter(context)?.address
+        val targetAddr = deviceAddress ?: getActivePrinter(context)?.address ?: getSavedPrinter(context)?.address
         if (targetAddr.isNullOrBlank()) {
-            return@withContext Result.failure(Exception("No Bluetooth printer selected. Please select a printer."))
+            return@withContext Result.failure(Exception("No connected or paired Bluetooth printer found. Please connect to your printer."))
         }
 
         var socket: BluetoothSocket? = null
@@ -233,9 +264,9 @@ object BluetoothThermalPrinter {
         deviceAddress: String? = null,
         paperWidth: PaperWidth = getSavedPaperWidth(context)
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        val targetAddr = deviceAddress ?: getSavedPrinter(context)?.address
+        val targetAddr = deviceAddress ?: getActivePrinter(context)?.address ?: getSavedPrinter(context)?.address
         if (targetAddr.isNullOrBlank()) {
-            return@withContext Result.failure(Exception("No Bluetooth printer selected."))
+            return@withContext Result.failure(Exception("No connected or paired Bluetooth printer found. Please connect to your printer."))
         }
 
         var socket: BluetoothSocket? = null

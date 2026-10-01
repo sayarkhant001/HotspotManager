@@ -468,19 +468,20 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                 onDismiss = { showPrintDialog = false },
                 onPrint = { style, format, autoCut, ssid, url ->
                     if (format == VoucherPrinter.PaperFormat.THERMAL_58MM || format == VoucherPrinter.PaperFormat.THERMAL_80MM) {
-                        val savedPrinter = BluetoothThermalPrinter.getSavedPrinter(context)
+                        val activePrinter = BluetoothThermalPrinter.getActivePrinter(context) ?: BluetoothThermalPrinter.getSavedPrinter(context)
                         val paperWidth = if (format == VoucherPrinter.PaperFormat.THERMAL_80MM)
                             BluetoothThermalPrinter.PaperWidth.WIDTH_80MM
                         else
                             BluetoothThermalPrinter.PaperWidth.WIDTH_58MM
 
-                        if (savedPrinter != null) {
+                        if (activePrinter != null && activePrinter.address.isNotBlank()) {
                             scope.launch {
-                                Toast.makeText(context, "Printing ${targetList.size} vouchers to ${savedPrinter.name}...", Toast.LENGTH_SHORT).show()
+                                val printTargetDesc = if (activePrinter.isConnected) "${activePrinter.name} (Connected)" else activePrinter.name
+                                Toast.makeText(context, "Printing ${targetList.size} vouchers to $printTargetDesc...", Toast.LENGTH_SHORT).show()
                                 val res = BluetoothThermalPrinter.printVouchersDirect(
                                     context = context,
                                     vouchers = targetList,
-                                    deviceAddress = savedPrinter.address,
+                                    deviceAddress = activePrinter.address,
                                     paperWidth = paperWidth,
                                     style = style,
                                     autoCutEachVoucher = autoCut,
@@ -489,14 +490,14 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                                 )
                                 if (res.isSuccess) {
                                     viewModel.markVouchersAsPrinted(targetList.map { it.code })
-                                    Toast.makeText(context, "✓ Printed to ${savedPrinter.name} successfully!", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "✓ Printed to ${activePrinter.name} successfully!", Toast.LENGTH_LONG).show()
                                 } else {
                                     Toast.makeText(context, "✗ Bluetooth Print Error: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
                                     showPrinterSetupDialog = true
                                 }
                             }
                         } else {
-                            Toast.makeText(context, "Please select your Bluetooth Thermal Printer", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Please connect or select your Bluetooth Thermal Printer", Toast.LENGTH_SHORT).show()
                             showPrinterSetupDialog = true
                         }
                     } else {
@@ -2293,11 +2294,16 @@ fun PrinterSetupAndTestDialog(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
+                        val activePrinterDesc = when {
+                            savedPrinter?.isConnected == true -> "Connected: ${savedPrinter?.name}"
+                            savedPrinter != null && savedPrinter!!.address.isNotBlank() -> "Selected: ${savedPrinter?.name}"
+                            else -> "No printer connected"
+                        }
                         Text(
-                            text = "Active Default: ${savedPrinter?.name ?: "Micro (Default)"}",
+                            text = activePrinterDesc,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
+                            color = if (savedPrinter != null && savedPrinter!!.address.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
                         )
                     }
                 }
@@ -2322,12 +2328,6 @@ fun PrinterSetupAndTestDialog(
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Text(
-                                "Default selected printer: ${savedPrinter?.name ?: "Micro (Default)"}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 "Please pair your thermal printer in Android Bluetooth settings.",
@@ -2345,7 +2345,6 @@ fun PrinterSetupAndTestDialog(
                     ) {
                         pairedPrinters.forEach { device ->
                             val isSelected = savedPrinter?.address == device.address
-                            val isMicro = device.name.contains("micro", ignoreCase = true)
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
@@ -2376,26 +2375,40 @@ fun PrinterSetupAndTestDialog(
                                         }
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(device.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                            if (isMicro) {
+                                            if (device.isConnected) {
                                                 Spacer(Modifier.width(6.dp))
                                                 Surface(
                                                     shape = RoundedCornerShape(4.dp),
-                                                    color = MaterialTheme.colorScheme.tertiaryContainer
+                                                    color = Color(0xFF2E7D32).copy(alpha = 0.15f)
                                                 ) {
                                                     Text(
-                                                        text = "⭐ Default (Micro)",
+                                                        text = "● Connected",
                                                         fontSize = 9.sp,
                                                         fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                        color = Color(0xFF2E7D32),
                                                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                                     )
                                                 }
                                             }
                                         }
                                         Text(device.address, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    if (isSelected) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = MaterialTheme.colorScheme.primary
+                                        ) {
+                                            Text(
+                                                text = "ACTIVE",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -2474,10 +2487,10 @@ fun PrinterSetupAndTestDialog(
                     Text("80 mm Desktop POS Thermal (48 cols)")
                 }
 
-                if (savedPrinter != null) {
+                if (savedPrinter != null && savedPrinter!!.address.isNotBlank()) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Active: ${savedPrinter!!.name} (${savedPrinter!!.address})",
+                        text = if (savedPrinter!!.isConnected) "Active Connected: ${savedPrinter!!.name} (${savedPrinter!!.address})" else "Active: ${savedPrinter!!.name} (${savedPrinter!!.address})",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
@@ -2488,8 +2501,8 @@ fun PrinterSetupAndTestDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    if (savedPrinter == null) {
-                        Toast.makeText(context, "Please select a paired Bluetooth printer above first", Toast.LENGTH_SHORT).show()
+                    if (savedPrinter == null || savedPrinter!!.address.isBlank()) {
+                        Toast.makeText(context, "Please select or connect a Bluetooth printer above first", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
                     isPrintingTest = true
@@ -2509,7 +2522,7 @@ fun PrinterSetupAndTestDialog(
                         }
                     }
                 },
-                enabled = !isPrintingTest && savedPrinter != null,
+                enabled = !isPrintingTest && (savedPrinter != null && savedPrinter!!.address.isNotBlank()),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(16.dp))

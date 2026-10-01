@@ -18,8 +18,8 @@
 #   - Non-destructive normalization: syncs password=username only if empty for PAP login
 #
 # Usage:
-#   Upload fullsetup.rsc to Files, then run in Terminal:
-#   /import fullsetup.rsc
+#   Upload setup.rsc to Files, then run in Terminal:
+#   /import setup.rsc
 # ==============================================================================
 
 :put "================================================="
@@ -35,7 +35,8 @@
 :global wifiSsid   "AyeikSitt_WiFi"
 :global dnsName    ""
 :global apiPass    "Khant1234@"
-:global adminMacs  {} # Add MACs here only if you want permanent bypass without voucher: {"XX:XX:XX:XX:XX:XX"}
+# To bypass admin devices permanently without voucher, enter MACs: {"XX:XX:XX:XX:XX:XX"; "YY:YY:YY:YY:YY:YY"}
+:global adminMacs  [:toarray ""]
 :global gwIp       "10.10.10.1"
 :global hsNetwork  "10.10.10.0/23"
 :global poolStart  "10.10.10.10"
@@ -101,7 +102,7 @@
 
 # 1. Try RouterOS v7 wifi / wifi-qcom interface (Open network for Hotspot)
 :do {
-  :local wCmd (":foreach w in=[/interface/wifi/find] do={ :do { /interface/wifi/set $w configuration.mode=ap configuration.ssid=\\"" . $wifiSsid . "\\" datapath.bridge=hotspot-bridge disabled=no } on-error={ /interface/wifi/set $w mode=ap ssid=\\"" . $wifiSsid . "\\" disabled=no }; :local wName [/interface/wifi/get $w name]; :do { /interface/bridge/port/add bridge=hotspot-bridge interface=$wName } on-error={ :do { /interface/bridge/port/set [find interface=$wName] bridge=hotspot-bridge } on-error={} }; };")
+  :local wCmd (":foreach w in=[/interface wifi find] do={ :do { /interface wifi set \$w configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" datapath.bridge=hotspot-bridge disabled=no } on-error={ /interface wifi set \$w mode=ap ssid=\"" . $wifiSsid . "\" disabled=no }; :local wName [/interface wifi get \$w name]; :do { /interface bridge port add bridge=hotspot-bridge interface=\$wName } on-error={ :do { /interface bridge port set [find interface=\$wName] bridge=hotspot-bridge } on-error={} } }")
   [ :parse $wCmd ]
   :set wifiConfigured true
   :put ("  Configured Wi-Fi interface (v7, Open Hotspot AP, SSID: " . $wifiSsid . ").")
@@ -222,6 +223,7 @@
 # Clear stale active sessions and remembered cookies so every device must authenticate fresh
 :do { /ip hotspot active remove [find] } on-error={}
 :do { /ip hotspot cookie remove [find] } on-error={}
+:do { /ip hotspot host remove [find] } on-error={}
 :put "  Hotspot Server Configured (active sessions & cookies reset)."
 # ── STEP 6: User Profile Setup (Continuous Validity Countdown & MAC Roaming) ──
 :put "=== Step 6: User Profile Setup ==="
@@ -387,7 +389,8 @@
 } on-error={};
 
 :if ($isFirstLogin) do={
-  :local vDur "1h"; # Default fallback
+  # Default fallback
+  :local vDur "1h";
 
   # 1. Check if user has specific limit-uptime set (e.g. 15m, 1h, 1d)
   :do {
@@ -672,7 +675,7 @@
 :do { /ip firewall filter add action=reject chain=forward in-interface=hotspot-bridge protocol=tcp dst-port=853 reject-with=tcp-reset comment="Reject DoT" } on-error={}
 # Accept ONLY authorized Hotspot clients (logged in via voucher or bypassed in ip-binding)
 :do { /ip firewall filter add action=accept chain=forward hotspot=auth in-interface=hotspot-bridge out-interface=ether1 comment="Accept authorized Hotspot clients" } on-error={}
-# Drop all unauthorized Hotspot forwarding to WAN
+# Drop all unauthorized Hotspot forwarding to WAN (forces captive portal login)
 :do { /ip firewall filter add action=drop chain=forward in-interface=hotspot-bridge out-interface=ether1 comment="Drop unauthorized Hotspot clients" } on-error={}
 # Drop all new unsolicited connections coming from WAN (ether1)
 :do { /ip firewall filter add action=drop chain=forward connection-state=new connection-nat-state=!dstnat in-interface=ether1 comment="Drop WAN unsolicited forward" } on-error={}
