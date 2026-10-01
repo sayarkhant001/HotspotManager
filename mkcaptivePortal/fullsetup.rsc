@@ -496,10 +496,22 @@
 # ── STEP 8: RouterOS API Service & App User Accounts ──────────
 :put "=== Step 8: API Service & User Accounts for HotspotManager ==="
 # Enable RouterOS API on standard port 8728 and 8729 without IP restriction
-:do { /ip service set api disabled=no port=8728 address="" } on-error={}
-:do { /ip service set api-ssl disabled=no port=8729 address="" } on-error={}
-:do { /ip service set winbox disabled=no port=8291 address="" } on-error={}
-:do { /ip service set www disabled=no port=80 address="" } on-error={}
+:do {
+  /ip service set [find name="api"] disabled=no port=8728 address=""
+  /ip service enable [find name="api"]
+} on-error={}
+:do {
+  /ip service set [find name="api-ssl"] disabled=no port=8729 address=""
+  /ip service enable [find name="api-ssl"]
+} on-error={}
+:do {
+  /ip service set [find name="winbox"] disabled=no port=8291 address=""
+  /ip service enable [find name="winbox"]
+} on-error={}
+:do {
+  /ip service set [find name="www"] disabled=no port=80 address=""
+  /ip service enable [find name="www"]
+} on-error={}
 :put "  RouterOS API service enabled on port 8728 (all IPs allowed)."
 
 # Set admin password to Khant1234@ (default in HotspotManager app)
@@ -531,13 +543,24 @@
 
 # ── STEP 9: Walled Garden for HotspotManager API & DNS ────────
 :put "=== Step 9: Hotspot Walled Garden for API & DNS ==="
-# Allow API connection over Wi-Fi without needing captive portal login first
+# 1. Allow full access to Router Gateway (10.10.10.1) so app can connect to API before login
 :do {
-  /ip hotspot walled-garden ip add dst-address=$gwIp dst-port=8728 action=accept comment="HotspotManager API"
-} on-error={}
+  /ip hotspot walled-garden ip add dst-address=$gwIp action=accept comment="Hotspot Gateway Full Access"
+} on-error={
+  :do { /ip hotspot walled-garden ip set [find comment="Hotspot Gateway Full Access"] dst-address=$gwIp action=accept } on-error={}
+}
+
+# 2. Explicitly allow API TCP ports 8728 and 8729
 :do {
-  /ip hotspot walled-garden ip add dst-address=$gwIp dst-port=8729 action=accept comment="HotspotManager API-SSL"
-} on-error={}
+  /ip hotspot walled-garden ip add dst-address=$gwIp dst-port=8728 protocol=tcp action=accept comment="HotspotManager API"
+} on-error={
+  :do { /ip hotspot walled-garden ip set [find comment="HotspotManager API"] dst-address=$gwIp dst-port=8728 protocol=tcp action=accept } on-error={}
+}
+:do {
+  /ip hotspot walled-garden ip add dst-address=$gwIp dst-port=8729 protocol=tcp action=accept comment="HotspotManager API-SSL"
+} on-error={
+  :do { /ip hotspot walled-garden ip set [find comment="HotspotManager API-SSL"] dst-address=$gwIp dst-port=8729 protocol=tcp action=accept } on-error={}
+}
 :if ([:len $dnsName] > 0) do={
   :do {
     /ip hotspot walled-garden add dst-host=$dnsName action=allow comment="Hotspot Portal DNS"
