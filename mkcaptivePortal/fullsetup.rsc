@@ -32,7 +32,7 @@
 :put ("Detected RouterOS : " . $rosVer)
 
 # ── GLOBAL VARIABLES ──────────────────────────────────────────
-:global wifiSsid   "AyeikSit_WiFi"
+:global wifiSsid   "AyeikSitt_WiFi"
 :global dnsName    ""
 :global apiPass    "Khant1234@"
 :global adminMacs  {"A0:29:19:39:34:61";"CC:15:31:83:26:BF"}
@@ -58,19 +58,30 @@
 } on-error={
   :do { /ip firewall nat set [find comment="WAN Masquerade"] out-interface=ether1 action=masquerade } on-error={}
 }
-
-:do {
-  /ip firewall filter add chain=input connection-state=established,related action=accept in-interface=ether1 place-before=0 comment="Accept established/related from WAN"
-} on-error={}
-
-:do {
-  /ip firewall filter add chain=input in-interface=ether1 action=drop comment="Drop all other input from WAN"
-} on-error={}
 :put "  WAN Configured."
 
-# ── STEP 2: LAN Bridge & Ports ────────────────────────────────
-:put "=== Step 2: LAN Bridge ==="
+# ── STEP 2: LAN Bridge & Interface Lists ──────────────────────
+:put "=== Step 2: LAN Bridge & Interface Lists ==="
 :do { /interface bridge add name=hotspot-bridge } on-error={}
+
+# Clean up factory default DHCP server and bridge artifacts to prevent IP/DHCP conflicts
+:do { /ip dhcp-server remove [find name="defconf"] } on-error={}
+:do { /ip address remove [find address~"192.168.88.1"] } on-error={}
+:do { /ip pool remove [find name="default-dhcp"] } on-error={}
+
+# Ensure interface lists LAN and WAN exist and contain our interfaces
+:do { /interface list add name=WAN } on-error={}
+:do { /interface list add name=LAN } on-error={}
+:do {
+  /interface list member add list=LAN interface=hotspot-bridge
+} on-error={
+  :do { /interface list member set [find interface=hotspot-bridge] list=LAN } on-error={}
+}
+:do {
+  /interface list member add list=WAN interface=ether1
+} on-error={
+  :do { /interface list member set [find interface=ether1] list=WAN } on-error={}
+}
 
 :local ports {"ether2";"ether3";"ether4";"ether5";"ether6";"ether7";"ether8"}
 :foreach p in=$ports do={
@@ -82,27 +93,27 @@
     }
   }
 }
-:put "  LAN Bridge Configured."
+:put "  LAN Bridge & Interface Lists Configured."
 
 # ── STEP 3: Wi-Fi Setup ───────────────────────────────────────
 :put "=== Step 3: Wi-Fi Setup ==="
 :local wifiConfigured false
 
-# 1. Try RouterOS v7 wifi / wifi-qcom interface
+# 1. Try RouterOS v7 wifi / wifi-qcom interface (Open network for Hotspot)
 :do {
-  :local wCmd ("/interface wifi set [find default-name=wifi1] configuration.ssid=\"" . $wifiSsid . "\" disabled=no; /interface bridge port add bridge=hotspot-bridge interface=wifi1")
+  :local wCmd ("/interface wifi set [find default-name=wifi1] configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" security.authentication-types=\"\" disabled=no; :do { /interface bridge port set [find interface=wifi1] bridge=hotspot-bridge } on-error={ /interface bridge port add bridge=hotspot-bridge interface=wifi1 }")
   [ :parse $wCmd ]
   :set wifiConfigured true
-  :put "  Configured wifi1 interface (v7)."
+  :put "  Configured wifi1 interface (v7, Open Hotspot AP, SSID: AyeikSitt_WiFi)."
 } on-error={}
 
-# 2. Fallback to legacy wireless interface
+# 2. Fallback to legacy wireless interface (Open network for Hotspot)
 :if (!$wifiConfigured) do={
   :do {
-    :local wlCmd ("/interface wireless set [find default-name=wlan1] ssid=\"" . $wifiSsid . "\" mode=ap-bridge disabled=no; /interface bridge port add bridge=hotspot-bridge interface=wlan1")
+    :local wlCmd ("/interface wireless set [find default-name=wlan1] ssid=\"" . $wifiSsid . "\" mode=ap-bridge security-profile=default disabled=no; :do { /interface wireless security-profile set [find default=yes] authentication-types=\"\" mode=none } on-error={}; :do { /interface bridge port set [find interface=wlan1] bridge=hotspot-bridge } on-error={ /interface bridge port add bridge=hotspot-bridge interface=wlan1 }")
     [ :parse $wlCmd ]
     :set wifiConfigured true
-    :put "  Configured wlan1 interface (legacy)."
+    :put "  Configured wlan1 interface (legacy, Open Hotspot AP)."
   } on-error={}
 }
 
@@ -484,12 +495,12 @@
 
 # ── STEP 8: RouterOS API Service & App User Accounts ──────────
 :put "=== Step 8: API Service & User Accounts for HotspotManager ==="
-# Enable RouterOS API on standard port 8728 and 8729
-:do { /ip service set api disabled=no port=8728 } on-error={}
-:do { /ip service set api-ssl disabled=no port=8729 } on-error={}
-:do { /ip service set winbox disabled=no port=8291 } on-error={}
-:do { /ip service set www disabled=no port=80 } on-error={}
-:put "  RouterOS API service enabled on port 8728."
+# Enable RouterOS API on standard port 8728 and 8729 without IP restriction
+:do { /ip service set api disabled=no port=8728 address="" } on-error={}
+:do { /ip service set api-ssl disabled=no port=8729 address="" } on-error={}
+:do { /ip service set winbox disabled=no port=8291 address="" } on-error={}
+:do { /ip service set www disabled=no port=80 address="" } on-error={}
+:put "  RouterOS API service enabled on port 8728 (all IPs allowed)."
 
 # Set admin password to Khant1234@ (default in HotspotManager app)
 :do {
@@ -562,43 +573,60 @@
 
 # ── STEP 12: Firewall & Security Rules ────────────────────────
 :put "=== Step 12: Firewall Rules (Allow API & Hotspot) ==="
-# Remove old faulty drop rules that blocked port 8728
+
+# 1. Remove FastTrack (MikroTik Hotspot is strictly incompatible with FastTrack)
+:foreach r in=[/ip firewall filter find where action="fasttrack-connection"] do={
+  :do { /ip firewall filter remove $r } on-error={}
+}
+
+# 2. Remove all old defconf drop rules that block non-LAN input or forward
 :foreach r in=[/ip firewall filter find] do={
   :do {
+    :local comm [/ip firewall filter get $r comment]
     :local act [/ip firewall filter get $r action]
     :local dp [/ip firewall filter get $r dst-port]
-    :local comm [/ip firewall filter get $r comment]
-    :if (($act = "drop" and $dp ~ "8728") or ($comm ~ "Allow HotspotManager API")) do={
+    :if (($comm ~ "defconf: drop") or ($comm ~ "Drop all other input from WAN") or ($act = "drop" and $dp ~ "8728") or ($comm ~ "Allow HotspotManager API")) do={
       /ip firewall filter remove $r
     }
   } on-error={}
 }
 
-# Explicitly ACCEPT API port 8728 & 8729 from hotspot-bridge
-:do {
-  /ip firewall filter add action=accept chain=input dst-port=8728,8729 protocol=tcp in-interface=hotspot-bridge place-before=0 comment="Allow HotspotManager API"
-} on-error={}
-
-# Accept DNS & DHCP on input from LAN
+# 3. Clean, deterministic INPUT chain rules:
+# Accept established, related, untracked
+:do { /ip firewall filter add action=accept chain=input connection-state=established,related,untracked comment="Accept established,related,untracked" } on-error={}
+# Drop invalid
+:do { /ip firewall filter add action=drop chain=input connection-state=invalid comment="Drop invalid" } on-error={}
+# Accept ICMP (Ping)
+:do { /ip firewall filter add action=accept chain=input protocol=icmp comment="Accept ICMP" } on-error={}
+# Explicitly ACCEPT API port 8728 & 8729 from hotspot-bridge (HotspotManager App)
+:do { /ip firewall filter add action=accept chain=input dst-port=8728,8729 protocol=tcp in-interface=hotspot-bridge comment="Allow HotspotManager API" } on-error={}
+# Accept DNS & DHCP on input from hotspot-bridge
 :do { /ip firewall filter add action=accept chain=input dst-port=53,67 protocol=udp in-interface=hotspot-bridge comment="Allow DNS/DHCP UDP" } on-error={}
 :do { /ip firewall filter add action=accept chain=input dst-port=53 protocol=tcp in-interface=hotspot-bridge comment="Allow DNS TCP" } on-error={}
-
 # Accept Hotspot HTTP
 :do { /ip firewall filter add action=accept chain=input dst-port=80 protocol=tcp in-interface=hotspot-bridge comment="Allow Hotspot Web" } on-error={}
-
 # Drop SSH and Telnet on LAN to prevent brute-force (keeping API 8728 OPEN)
 :do { /ip firewall filter add action=drop chain=input dst-port=22,23 protocol=tcp in-interface=hotspot-bridge comment="Block SSH/Telnet on LAN" } on-error={}
+# Drop all other unsolicited input from WAN (ether1)
+:do { /ip firewall filter add action=drop chain=input in-interface=ether1 comment="Drop all other input from WAN" } on-error={}
 
-# Forwarding filter rules
-:do { /ip firewall filter add action=accept chain=forward in-interface=hotspot-bridge out-interface=ether1 comment="LAN to WAN" } on-error={}
-:do { /ip firewall filter add action=accept chain=forward in-interface=ether1 out-interface=hotspot-bridge connection-state=established,related comment="WAN to LAN" } on-error={}
+# 4. Clean, deterministic FORWARD chain rules:
+# Accept established, related, untracked
+:do { /ip firewall filter add action=accept chain=forward connection-state=established,related,untracked comment="Accept forward established,related,untracked" } on-error={}
+# Drop invalid
+:do { /ip firewall filter add action=drop chain=forward connection-state=invalid comment="Drop forward invalid" } on-error={}
+# Allow Hotspot LAN clients to access the Internet (WAN)
+:do { /ip firewall filter add action=accept chain=forward in-interface=hotspot-bridge out-interface=ether1 comment="LAN to WAN (Hotspot Internet)" } on-error={}
+# Reject DoT (forces clients to use router DNS so captive portal pops up)
 :do { /ip firewall filter add action=reject chain=forward in-interface=hotspot-bridge protocol=tcp dst-port=853 reject-with=tcp-reset comment="Reject DoT" } on-error={}
+# Drop all new unsolicited connections coming from WAN (ether1)
+:do { /ip firewall filter add action=drop chain=forward connection-state=new connection-nat-state=!dstnat in-interface=ether1 comment="Drop WAN unsolicited forward" } on-error={}
 
-# DNS redirection (forces all clients through router DNS for captive portal)
+# 5. DNS redirection (forces all clients through router DNS for captive portal)
 :do { /ip firewall nat add action=redirect chain=dstnat dst-port=53 protocol=udp to-ports=53 in-interface=hotspot-bridge comment="Redirect DNS UDP" } on-error={}
 :do { /ip firewall nat add action=redirect chain=dstnat dst-port=53 protocol=tcp to-ports=53 in-interface=hotspot-bridge comment="Redirect DNS TCP" } on-error={}
 
-# Anti-tethering TTL Mangle (Prevents sharing WiFi through phone hotspot)
+# 6. Anti-tethering TTL Mangle (Prevents sharing WiFi through phone hotspot)
 :foreach r in=[/ip firewall mangle find comment~"Hotspot Tethering"] do={ /ip firewall mangle remove $r }
 :do { /ip firewall mangle add action=change-ttl chain=prerouting new-ttl=set:1 in-interface=hotspot-bridge ttl=equal:127 comment="Hotspot Tethering Prevention (127)" } on-error={}
 :do { /ip firewall mangle add action=change-ttl chain=prerouting new-ttl=set:1 in-interface=hotspot-bridge ttl=equal:63 comment="Hotspot Tethering Prevention (63)" } on-error={}
