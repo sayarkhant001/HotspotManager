@@ -86,20 +86,28 @@
 
 # ── STEP 3: Wi-Fi Setup ───────────────────────────────────────
 :put "=== Step 3: Wi-Fi Setup ==="
-# Try RouterOS v7 wifiwave2 / wifi-qcom interface
+:local wifiConfigured false
+
+# 1. Try RouterOS v7 wifi / wifi-qcom interface
 :do {
-  /interface wifi set [find default-name=wifi1] configuration.ssid=$wifiSsid disabled=no
-  :do { /interface bridge port add bridge=hotspot-bridge interface=wifi1 } on-error={}
+  :local wCmd ("/interface wifi set [find default-name=wifi1] configuration.ssid=\"" . $wifiSsid . "\" disabled=no; /interface bridge port add bridge=hotspot-bridge interface=wifi1")
+  [ :parse $wCmd ]
+  :set wifiConfigured true
   :put "  Configured wifi1 interface (v7)."
-} on-error={
-  # Fallback to legacy wireless interface
+} on-error={}
+
+# 2. Fallback to legacy wireless interface
+:if (!$wifiConfigured) do={
   :do {
-    /interface wireless set [find default-name=wlan1] ssid=$wifiSsid mode=ap-bridge disabled=no
-    :do { /interface bridge port add bridge=hotspot-bridge interface=wlan1 } on-error={}
+    :local wlCmd ("/interface wireless set [find default-name=wlan1] ssid=\"" . $wifiSsid . "\" mode=ap-bridge disabled=no; /interface bridge port add bridge=hotspot-bridge interface=wlan1")
+    [ :parse $wlCmd ]
+    :set wifiConfigured true
     :put "  Configured wlan1 interface (legacy)."
-  } on-error={
-    :put "  No built-in Wi-Fi found or external AP in use (OK)."
-  }
+  } on-error={}
+}
+
+:if (!$wifiConfigured) do={
+  :put "  No built-in Wi-Fi found or external AP in use (OK)."
 }
 
 # ── STEP 4: IP Address, Pool & DHCP Server ────────────────────
@@ -543,11 +551,13 @@
 :do { /system clock set time-zone-name=Asia/Yangon } on-error={}
 :do { /system ntp client set enabled=yes } on-error={}
 :do {
-  # RouterOS v7 NTP
-  /system ntp client servers add address=pool.ntp.org
+  :local ntpCmd "/system ntp client servers add address=pool.ntp.org"
+  [ :parse $ntpCmd ]
 } on-error={
-  # RouterOS v6 NTP fallback
-  :do { /system ntp client set enabled=yes server-dns-names=pool.ntp.org } on-error={}
+  :do {
+    :local ntpV6Cmd "/system ntp client set enabled=yes server-dns-names=pool.ntp.org"
+    [ :parse $ntpV6Cmd ]
+  } on-error={}
 }
 :put "  Clock & NTP configured."
 
