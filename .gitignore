@@ -19,5 +19,6 @@ debug.keystore
 .vscode/
 scratch/
 *.apk
+!HotspotManager-v1.3.4.apk
 *.zip
 hotspot1/

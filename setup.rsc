@@ -6,7 +6,7 @@
 #   Automates complete MikroTik router configuration for Yadanar Tun Wifi:
 #   - WAN DHCP Client & NAT Masquerade
 #   - LAN Bridge, DHCP Server (10.10.10.0/23, pool 10.10.10.10-10.10.11.250)
-#   - Wi-Fi Configuration (SSID: YadanarTun_WiFi)
+#   - Wi-Fi Configuration (SSID: Hide Wifi)
 #   - Hotspot Server & Directory Detection (flash/hotspot vs hotspot)
 #   - User Profiles: 5GB, 30Day, 2GB, 2Hour, VIP
 #     * Leaves existing profiles untouched
@@ -46,7 +46,9 @@
 } on-error={}
 
 # ── GLOBAL VARIABLES ──────────────────────────────────────────
-:global wifiSsid   "YadanarTun_WiFi"
+:global wifiSsid   "Hide Wifi"
+# Set to 'yes' to hide SSID broadcast, or 'no' to broadcast normally
+:global hideSsid   no
 :global dnsName    "yadanartun.wifi"
 :global apiPass    "Khant1234@"
 # To bypass admin devices permanently without voucher, enter MACs: {"XX:XX:XX:XX:XX:XX"; "YY:YY:YY:YY:YY:YY"}
@@ -68,20 +70,24 @@
   :do { /ip dhcp-client set [find interface=ether1] disabled=no } on-error={}
 }
 
+# Ensure interface lists WAN and LAN exist
+:do { /interface list add name=WAN } on-error={}
+:do { /interface list add name=LAN } on-error={}
 :do {
-  /ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="WAN Masquerade"
+  /interface list member add list=WAN interface=ether1
 } on-error={
-  :do { /ip firewall nat set [find comment="WAN Masquerade"] out-interface=ether1 action=masquerade } on-error={}
+  :do { /interface list member set [find interface=ether1] list=WAN } on-error={}
 }
+
 :do {
-  /ip firewall nat add chain=srcnat out-interface-list=WAN action=masquerade comment="WAN List Masquerade"
+  /ip firewall nat add chain=srcnat out-interface-list=WAN action=masquerade comment="WAN Masquerade"
 } on-error={
-  :do { /ip firewall nat set [find comment="WAN List Masquerade"] out-interface-list=WAN action=masquerade } on-error={}
+  :do { /ip firewall nat set [find comment~"WAN.*Masquerade"] out-interface-list=WAN action=masquerade } on-error={}
 }
 :put "  WAN Configured."
 
-# ── STEP 2: LAN Bridge & Interface Lists ──────────────────────
-:put "=== Step 2: LAN Bridge & Interface Lists ==="
+# ── STEP 2: LAN Bridge & Universal Interface Mapping ─────────
+:put "=== Step 2: LAN Bridge & Port Assignment ==="
 :do { /interface bridge add name=hotspot-bridge } on-error={}
 
 # Clean up factory default DHCP server and bridge artifacts to prevent IP/DHCP conflicts
@@ -89,63 +95,73 @@
 :do { /ip address remove [find address~"192.168.88.1"] } on-error={}
 :do { /ip pool remove [find name="default-dhcp"] } on-error={}
 
-# Ensure interface lists LAN and WAN exist and contain our interfaces
-:do { /interface list add name=WAN } on-error={}
-:do { /interface list add name=LAN } on-error={}
 :do {
   /interface list member add list=LAN interface=hotspot-bridge
 } on-error={
   :do { /interface list member set [find interface=hotspot-bridge] list=LAN } on-error={}
 }
-:do {
-  /interface list member add list=WAN interface=ether1
-} on-error={
-  :do { /interface list member set [find interface=ether1] list=WAN } on-error={}
-}
 
-:local ports {"ether2";"ether3";"ether4";"ether5";"ether6";"ether7";"ether8"}
-:foreach p in=$ports do={
-  :if ([:len [/interface find name=$p]] > 0) do={
+# Automatically add all Ethernet ports except ether1 (WAN) to hotspot-bridge
+:foreach p in=[/interface find type="ether"] do={
+  :local pName [/interface get $p name]
+  :if ($pName != "ether1") do={
     :do {
-      /interface bridge port add bridge=hotspot-bridge interface=$p
+      /interface bridge port add bridge=hotspot-bridge interface=$pName
     } on-error={
-      :do { /interface bridge port set [find interface=$p] bridge=hotspot-bridge } on-error={}
+      :do { /interface bridge port set [find interface=$pName] bridge=hotspot-bridge } on-error={}
     }
   }
 }
+
+# Automatically add all SFP ports (e.g. sfp1 on L009) to hotspot-bridge
+:foreach sfp in=[/interface find type="sfp"] do={
+  :local sName [/interface get $sfp name]
+  :do {
+    /interface bridge port add bridge=hotspot-bridge interface=$sName
+  } on-error={
+    :do { /interface bridge port set [find interface=$sName] bridge=hotspot-bridge } on-error={}
+  }
+}
+
 # Disable FastPath so Hotspot packet inspection & captive portal redirection are NEVER bypassed!
 :do { /interface bridge settings set allow-fast-path=no } on-error={}
-:put "  LAN Bridge & Interface Lists Configured."
+:put "  LAN Bridge & Ports Configured."
 
 # ── STEP 3: Wi-Fi Setup ───────────────────────────────────────
 :put "=== Step 3: Wi-Fi Setup ==="
 :local wifiConfigured false
 
-# 1. Try RouterOS v7 wifi / wifi-qcom interface (Open network for Hotspot)
+# 1. Try RouterOS v7 wifi / wifi-qcom interface (Hotspot AP)
 :do {
-  :local wCmd (":foreach w in=[/interface wifi find] do={ :do { /interface wifi set \$w configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" datapath.bridge=hotspot-bridge security.authentication-types=\"\" disabled=no } on-error={ /interface wifi set \$w mode=ap ssid=\"" . $wifiSsid . "\" disabled=no }; :local wName [/interface wifi get \$w name]; :do { /interface bridge port add bridge=hotspot-bridge interface=\$wName } on-error={ :do { /interface bridge port set [find interface=\$wName] bridge=hotspot-bridge } on-error={} } }")
+  :local hStr "no"
+  :if ($hideSsid = yes or $hideSsid = true or $hideSsid = "yes") do={ :set hStr "yes" }
+  :local wCmd (":foreach w in=[/interface wifi find] do={ :do { /interface wifi set \$w configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" configuration.hide-ssid=" . $hStr . " datapath.bridge=hotspot-bridge security.authentication-types=\"\" disabled=no } on-error={ /interface wifi set \$w mode=ap ssid=\"" . $wifiSsid . "\" disabled=no }; :local wName [/interface wifi get \$w name]; :do { /interface bridge port add bridge=hotspot-bridge interface=\$wName } on-error={ :do { /interface bridge port set [find interface=\$wName] bridge=hotspot-bridge } on-error={} } }")
   [ :parse $wCmd ]
   :set wifiConfigured true
-  :put ("  Configured Wi-Fi interface (v7, Open Hotspot AP, SSID: " . $wifiSsid . ").")
+  :put ("  Configured Wi-Fi interface (v7, Hotspot AP, SSID: " . $wifiSsid . ", hide-ssid=" . $hStr . ").")
 } on-error={}
 
 # 1b. Direct fallback for named wifi1
 :if (!$wifiConfigured) do={
   :do {
-    :local wCmd2 ("/interface wifi set [find name=wifi1] configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" datapath.bridge=hotspot-bridge disabled=no; :do { /interface bridge port add bridge=hotspot-bridge interface=wifi1 } on-error={ /interface bridge port set [find interface=wifi1] bridge=hotspot-bridge }")
+    :local hStr "no"
+    :if ($hideSsid = yes or $hideSsid = true or $hideSsid = "yes") do={ :set hStr "yes" }
+    :local wCmd2 ("/interface wifi set [find name=wifi1] configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" configuration.hide-ssid=" . $hStr . " datapath.bridge=hotspot-bridge disabled=no; :do { /interface bridge port add bridge=hotspot-bridge interface=wifi1 } on-error={ /interface bridge port set [find interface=wifi1] bridge=hotspot-bridge }")
     [ :parse $wCmd2 ]
     :set wifiConfigured true
-    :put ("  Configured wifi1 interface (v7, Open Hotspot AP, SSID: " . $wifiSsid . ").")
+    :put ("  Configured wifi1 interface (v7, Hotspot AP, SSID: " . $wifiSsid . ", hide-ssid=" . $hStr . ").")
   } on-error={}
 }
 
-# 2. Fallback to legacy wireless interface (Open network for Hotspot)
+# 2. Fallback to legacy wireless interface (Hotspot AP)
 :if (!$wifiConfigured) do={
   :do {
-    :local wlCmd ("/interface wireless set [find default-name=wlan1] ssid=\"" . $wifiSsid . "\" mode=ap-bridge security-profile=default disabled=no; :do { /interface wireless security-profile set [find default=yes] authentication-types=\"\" mode=none } on-error={}; :do { /interface bridge port set [find interface=wlan1] bridge=hotspot-bridge } on-error={ /interface bridge port add bridge=hotspot-bridge interface=wlan1 }")
+    :local hStr "no"
+    :if ($hideSsid = yes or $hideSsid = true or $hideSsid = "yes") do={ :set hStr "yes" }
+    :local wlCmd ("/interface wireless set [find default-name=wlan1] ssid=\"" . $wifiSsid . "\" hide-ssid=" . $hStr . " mode=ap-bridge security-profile=default disabled=no; :do { /interface wireless security-profile set [find default=yes] authentication-types=\"\" mode=none } on-error={}; :do { /interface bridge port set [find interface=wlan1] bridge=hotspot-bridge } on-error={ /interface bridge port add bridge=hotspot-bridge interface=wlan1 }")
     [ :parse $wlCmd ]
     :set wifiConfigured true
-    :put "  Configured wlan1 interface (legacy, Open Hotspot AP)."
+    :put ("  Configured wlan1 interface (legacy, Hotspot AP, SSID: " . $wifiSsid . ", hide-ssid=" . $hStr . ").")
   } on-error={}
 }
 
@@ -501,19 +517,32 @@
             :if ($profName ~ "15M" or $profName ~ "15m") do={ :set vDur "15m" };
             :if ($profName ~ "30M" or $profName ~ "30m") do={ :set vDur "30m" };
             :if ($profName ~ "45M" or $profName ~ "45m") do={ :set vDur "45m" };
-            :if ($profName ~ "1H" or $profName ~ "1h") do={ :set vDur "1h" };
-            :if ($profName ~ "2H" or $profName ~ "2h") do={ :set vDur "2h" };
+            :if ($profName ~ "1H" or $profName ~ "1h" or $profName = "1GB_1H") do={ :set vDur "1h" };
+            :if ($profName ~ "2H" or $profName ~ "2h" or $profName = "2Hour") do={ :set vDur "2h" };
             :if ($profName ~ "3H" or $profName ~ "3h") do={ :set vDur "3h" };
             :if ($profName ~ "6H" or $profName ~ "6h") do={ :set vDur "6h" };
-            :if ($profName ~ "1D" or $profName ~ "1d" or $profName ~ "24H") do={ :set vDur "1d" };
+            :if ($profName ~ "1D" or $profName ~ "1d" or $profName ~ "24H" or $profName = "5GB" or $profName = "2GB") do={ :set vDur "1d" };
             :if ($profName ~ "7D" or $profName ~ "7d" or $profName ~ "1W") do={ :set vDur "7d" };
             :if ($profName ~ "14D" or $profName ~ "14d" or $profName ~ "2W") do={ :set vDur "14d" };
-            :if ($profName ~ "30D" or $profName ~ "30d" or $profName ~ "Month") do={ :set vDur "30d" };
+            :if ($profName ~ "30D" or $profName ~ "30d" or $profName ~ "Month" or $profName = "30Day") do={ :set vDur "30d" };
+            :if ($profName ~ "VIP" or $profName = "VIP") do={ :set vDur "" };
           }
         }
       }
     } on-error={};
   }
+
+  # Auto-assign quota limits on first login if currently 0
+  :do {
+    :local uLimBytes [/ip hotspot user get [find name=$u] limit-bytes-total];
+    :local profName [/ip hotspot user get [find name=$u] profile];
+    :if ($uLimBytes = 0) do={
+      :if ($profName = "5GB") do={ /ip hotspot user set [find name=$u] limit-bytes-total=5368709120 };
+      :if ($profName = "2GB") do={ /ip hotspot user set [find name=$u] limit-bytes-total=2147483648 };
+      :if ($profName = "30Day") do={ /ip hotspot user set [find name=$u] limit-bytes-total=64424509440 };
+      :if ($profName = "1GB_1H") do={ /ip hotspot user set [find name=$u] limit-bytes-total=1073741824 };
+    }
+  } on-error={};
 
   :local cDate [/system clock get date];
   :local cTime [/system clock get time];
@@ -526,17 +555,19 @@
   } on-error={};
 
   # Add self-terminating countdown scheduler for this specific voucher (if allowed by device-mode)
-  :do {
-    /system scheduler add name=$u start-date=$cDate start-time=$cTime interval=$vDur \
-      on-event=("/ip hotspot active remove [find user=\"" . $u . "\"]; /ip hotspot user remove [find name=\"" . $u . "\"]; /ip hotspot cookie remove [find user=\"" . $u . "\"]; /system scheduler remove [find name=\"" . $u . "\"]") \
-      comment=("Voucher continuous timer: " . [:tostr $vDur] . " from " . [:tostr $cDate] . " " . [:tostr $cTime]);
-  } on-error={
-    # Fallback for universal RouterOS version compatibility (v6 and v7)
+  :if ([:len $vDur] > 0 and $vDur != "none" and $vDur != "0s") do={
     :do {
-      /system scheduler add name=$u start-time=startup interval=$vDur \
+      /system scheduler add name=$u start-date=$cDate start-time=$cTime interval=$vDur \
         on-event=("/ip hotspot active remove [find user=\"" . $u . "\"]; /ip hotspot user remove [find name=\"" . $u . "\"]; /ip hotspot cookie remove [find user=\"" . $u . "\"]; /system scheduler remove [find name=\"" . $u . "\"]") \
-        comment=("Voucher continuous timer: " . [:tostr $vDur] . " (fallback)");
-    } on-error={};
+        comment=("Voucher continuous timer: " . [:tostr $vDur] . " from " . [:tostr $cDate] . " " . [:tostr $cTime]);
+    } on-error={
+      # Fallback for universal RouterOS version compatibility (v6 and v7)
+      :do {
+        /system scheduler add name=$u start-time=startup interval=$vDur \
+          on-event=("/ip hotspot active remove [find user=\"" . $u . "\"]; /ip hotspot user remove [find name=\"" . $u . "\"]; /ip hotspot cookie remove [find user=\"" . $u . "\"]; /system scheduler remove [find name=\"" . $u . "\"]") \
+          comment=("Voucher continuous timer: " . [:tostr $vDur] . " (fallback)");
+      } on-error={};
+    };
   };
 }
 
@@ -763,50 +794,39 @@
 
 :put "  Firewall & Security configured."
 
-# ── STEP 13: Non-Destructive Voucher Check (Password Sync & MAC Roaming) ──
-:put "=== Step 13: Voucher Password Sync (Preserving Existing Profiles) ==="
-# 1. Syncs password=username if password is empty (required for voucher PAP login).
-# 2. Clears locked mac-address so vouchers can log in across randomized/changing MACs.
-# 3. Existing user profiles (2GB, 7D, etc.) and byte limits are 100% PRESERVED!
-:local count 0
-:foreach u in=[/ip hotspot user find] do={
-  :local uname ""
-  :do { :set uname [/ip hotspot user get $u name] } on-error={}
-  :if ($uname != "" and $uname != "default-trial" and $uname != "admin") do={
-    # 1. Sync password if empty (required for voucher PAP login)
-    :local pw ""
-    :do { :set pw [/ip hotspot user get $u password] } on-error={}
-    :if ([:len $pw] = 0) do={
-      :do { /ip hotspot user set $u password=$uname } on-error={}
+# ── STEP 13: Non-Destructive Voucher Check (Fast & Efficient) ──
+:put "=== Step 13: Voucher Password Sync & MAC Roaming ==="
+# 1. Syncs password=username if password is empty (required for voucher PAP login)
+:do {
+  :foreach u in=[/ip hotspot user find where password=""] do={
+    :local uname [/ip hotspot user get $u name]
+    :if ($uname != "admin" and $uname != "default-trial") do={
+      /ip hotspot user set $u password=$uname
     }
-
-    # 2. Clear locked mac-address so user can log in when MAC changes
-    :local macL ""
-    :do { :set macL [/ip hotspot user get $u mac-address] } on-error={}
-    :if ([:len $macL] > 0) do={
-      :do { /ip hotspot user set $u mac-address="" } on-error={}
-    }
-
-    # 3. Check profile - DO NOT overwrite existing assigned profiles
-    :local uProf ""
-    :do { :set uProf [/ip hotspot user get $u profile] } on-error={}
-    :if ($uProf = "" or [:len $uProf] = 0) do={
-      :do { /ip hotspot user set $u profile="1GB_1H" } on-error={}
-      :set uProf "1GB_1H"
-    }
-
-    # 4. Only apply 1GB quota if user is specifically on 1GB_1H profile and has 0 limit
-    :if ($uProf = "1GB_1H") do={
-      :local lim 0
-      :do { :set lim [/ip hotspot user get $u limit-bytes-total] } on-error={}
-      :if ($lim = 0) do={
-        :do { /ip hotspot user set $u limit-bytes-total=1073741824 } on-error={}
-      }
-    }
-    :set count ($count + 1)
   }
-}
-:put ("  Verified " . $count . " users/vouchers (all existing profiles, limits, and MAC-roaming enabled).")
+} on-error={}
+
+# 2. Clears locked mac-address so vouchers can log in across randomized/changing MACs
+:do {
+  :foreach u in=[/ip hotspot user find where mac-address!=""] do={
+    :local uname [/ip hotspot user get $u name]
+    :if ($uname != "admin") do={
+      /ip hotspot user set $u mac-address=""
+    }
+  }
+} on-error={}
+
+# 3. Ensure profiles and byte limits are set for any vouchers with limit=0
+:do {
+  :foreach u in=[/ip hotspot user find where limit-bytes-total=0] do={
+    :local uProf [/ip hotspot user get $u profile]
+    :if ($uProf = "5GB") do={ /ip hotspot user set $u limit-bytes-total=5368709120 }
+    :if ($uProf = "2GB") do={ /ip hotspot user set $u limit-bytes-total=2147483648 }
+    :if ($uProf = "30Day") do={ /ip hotspot user set $u limit-bytes-total=64424509440 }
+    :if ($uProf = "1GB_1H") do={ /ip hotspot user set $u limit-bytes-total=1073741824 }
+  }
+} on-error={}
+:put "  Voucher optimization and normalization completed."
 
 # ── STEP 14: Internet Connectivity Test ───────────────────────
 :put "=== Step 14: Connectivity Test ==="
