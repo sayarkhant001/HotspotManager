@@ -8,81 +8,99 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <meta http-equiv="refresh" content="60; url=$(link-status)" />
+  <meta http-equiv="refresh" content="5; url=$(link-status)" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-  <div class="compact-wrapper">
-    <div class="compact-card" style="text-align: center;">
+  <!-- Ambient Glowing Aurora Mesh -->
+  <div class="aurora-bg" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="grid-mesh"></div>
+  </div>
+
+  <div class="portal-wrapper">
+    <div class="portal-card" style="text-align: center;">
 
       <!-- Header -->
-      <div class="header-compact">
-        <div class="compact-logo">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5">
+      <div class="brand-header">
+        <div class="brand-badge" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); box-shadow: 0 8px 20px rgba(16, 185, 129, 0.25);">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#34D399" stroke-width="2.6">
             <polyline points="20 6 9 17 4 12"/>
           </svg>
         </div>
-        <div class="header-text" style="text-align:left;">
-          <h1 class="compact-title">အရိပ်စစ် Wifi</h1>
-          <p class="compact-sub" style="color:#34D399;">အင်တာနက် ချိတ်ဆက်ထားသည်</p>
+        <div class="brand-info" style="text-align: left;">
+          <div class="brand-title-wrap">
+            <h1 class="brand-title">အရိပ်စစ် Wifi</h1>
+            <span class="version-pill" style="color:var(--emerald); background:rgba(16,185,129,0.15); border-color:rgba(16,185,129,0.3);">Online</span>
+          </div>
+          <div class="brand-subtitle" style="color:#34D399;">
+            <span class="live-beacon"></span>
+            <span>အင်တာနက် ချိတ်ဆက်ထားသည်</span>
+          </div>
         </div>
       </div>
 
-      <!-- User Info Badge -->
-      <div style="background:var(--card-inner); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:10px 14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-size:12px; color:var(--text-muted);">ဘောင်ချာ / အကောင့်:</span>
-        <span style="font-size:14px; font-weight:700; color:#FFFFFF;" id="display_username">$(username)</span>
+      <!-- Active User Card -->
+      <div style="background: rgba(8, 13, 24, 0.85); border: 1px solid rgba(255, 255, 255, 0.10); border-radius: 14px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; text-align: left;">
+        <div>
+          <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">အသုံးပြုသူ / ဘောင်ချာကုဒ်</div>
+          <div style="font-family: var(--font-code); font-size: 16px; font-weight: 700; color: #FFFFFF;" id="display_username">$(username)</div>
+        </div>
+        <div style="padding: 4px 10px; border-radius: 100px; background: rgba(56, 189, 248, 0.12); color: var(--cyan); font-size: 11px; font-weight: 700;">
+          အသုံးပြုနေဆဲ
+        </div>
       </div>
 
-      <!-- Compact Status List -->
-      <div class="status-stats-list">
-        <div class="status-row-item">
-          <span class="status-row-label">လိုင်းအသုံးပြုချိန်</span>
-          <span class="status-row-value" style="color:#34D399;" id="stat_uptime">$(uptime)</span>
+      <!-- 2x2 Stats Dashboard Grid -->
+      <div class="stats-2x2-grid">
+        <div class="stat-box">
+          <div class="stat-label">လိုင်းအသုံးပြုချိန်</div>
+          <div class="stat-val emerald" id="stat_uptime">$(uptime)</div>
         </div>
 
-        <div class="status-row-item">
-          <span class="status-row-label">ကျန်ရှိသည့်အချိန်</span>
-          <span class="status-row-value" style="color:#FBBF24;" id="stat_timeleft">$(session-time-left)</span>
+        <div class="stat-box">
+          <div class="stat-label">ကျန်ရှိသည့်အချိန်</div>
+          <div class="stat-val amber" id="stat_timeleft">$(session-time-left)</div>
         </div>
 
-        <div class="status-row-item">
-          <span class="status-row-label">အသုံးပြုပြီးဒေတာ</span>
-          <span class="status-row-value" style="color:#38BDF8;" id="stat_data_used">$(bytes-in-nice) / $(bytes-out-nice)</span>
+        <div class="stat-box">
+          <div class="stat-label">အသုံးပြုပြီးဒေတာ</div>
+          <div class="stat-val cyan" id="stat_data_used">$(bytes-in-nice) / $(bytes-out-nice)</div>
           <span id="stat_bytes_in" style="display:none;">$(bytes-in)</span>
           <span id="stat_bytes_out" style="display:none;">$(bytes-out)</span>
         </div>
 
-        <div class="status-row-item">
-          <span class="status-row-label">လက်ကျန်ဒေတာ</span>
-          <span class="status-row-value" style="color:#A7F3D0;" id="stat_data_remaining">$(remain-bytes-total)</span>
+        <div class="stat-box">
+          <div class="stat-label">လက်ကျန်ဒေတာ</div>
+          <div class="stat-val violet" id="stat_data_remaining">$(remain-bytes-total)</div>
         </div>
       </div>
 
-      <div style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">
-        IP: $(ip) &bull; MAC: $(mac)
+      <!-- IP / MAC Address Badge -->
+      <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 14px; background: rgba(255,255,255,0.03); border-radius: 8px; padding: 6px 10px;">
+        IP: <span style="color:#FFFFFF; font-family:var(--font-code);">$(ip)</span> &bull; 
+        MAC: <span style="color:#FFFFFF; font-family:var(--font-code);">$(mac)</span>
       </div>
 
-      <!-- User Notice / Updates Card -->
-      <div style="background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.22); border-radius:12px; padding:10px 12px; margin-bottom:14px; text-align:left;">
-        <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-          <span style="font-size:14px;">📢</span>
-          <span style="font-size:12px; font-weight:700; color:#60A5FA;">အသုံးပြုသူများသို့ အသိပေးချက် (Updates)</span>
+      <!-- User Notice Card -->
+      <div class="notice-card" style="margin-bottom: 16px;">
+        <div class="notice-header">
+          <span>📢</span>
+          <span>အချိန်နှင့် ဒေတာ စစ်ဆေးရန်</span>
         </div>
-        <p style="font-size:11px; color:#E2E8F0; line-height:1.45; margin:0 0 4px 0;">
-          လက်ကျန်အချိန်နှင့် ဒေတာကို <strong style="color:#FBBF24;">$(link-status)</strong> တွင် အချိန်မရွေး စစ်ဆေးနိုင်ပါသည်။
-        </p>
-        <div style="font-size:10.5px; color:#94A3B8;">
-          🌐 လော့ဂ်အင်လိပ်စာ: <span style="color:#38BDF8; font-weight:600;">http://$(server-address)</span>
+        <div class="notice-text">
+          လက်ကျန်အချိန်နှင့် ဒေတာကို <strong style="color:var(--amber);">$(link-status)</strong> တွင် အချိန်မရွေး ပြန်လည်စစ်ဆေးနိုင်ပါသည်။
         </div>
       </div>
 
-      <!-- Logout Button -->
+      <!-- Logout Button Form -->
       <form action="$(link-logout)" name="logout" method="post">
         <input type="hidden" name="erase-cookie" value="on" />
-        <button class="btn-logout-compact" type="submit">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="btn-logout" type="submit">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
             <polyline points="16 17 21 12 16 7"/>
             <line x1="21" y1="12" x2="9" y2="12"/>
@@ -91,8 +109,8 @@
         </button>
       </form>
 
-      <p class="copy-compact">
-        အရိပ်စစ် Wifi &bull; မြန်ဆန်စိတ်ချ
+      <p class="footer-text">
+        အရိပ်စစ် Wifi &bull; Version 2.0 Next-Gen Edition
       </p>
 
     </div>

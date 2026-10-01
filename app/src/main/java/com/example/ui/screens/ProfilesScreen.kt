@@ -232,8 +232,8 @@ fun ProfileItemCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
-        Column(modifier = Modifier.padding(14.dp)) {
+    GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             // Header Row: Name & Vouchers Badge on left, Price & Action icons on right
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -245,20 +245,20 @@ fun ProfileItemCard(
                     modifier = Modifier.weight(1f, fill = false)
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(38.dp)
+                        modifier = Modifier.size(34.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Router,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
-                    Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(8.dp))
                     Column {
                         Text(
                             text = profile.name,
@@ -269,7 +269,7 @@ fun ProfileItemCard(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = RoundedCornerShape(4.dp),
                             color = if (voucherCount > 0) Color(0xFF2E7D32).copy(alpha = 0.15f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
                         ) {
                             Text(
@@ -277,7 +277,7 @@ fun ProfileItemCard(
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = if (voucherCount > 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                             )
                         }
                     }
@@ -285,42 +285,42 @@ fun ProfileItemCard(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(6.dp),
                         color = MaterialTheme.colorScheme.primary
                     ) {
                         Text(
                             text = if (profile.price > 0) "${"%,d".format(java.util.Locale.US, profile.price.toLong())} Ks" else "Free",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.ExtraBold,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
+                    Spacer(modifier = Modifier.width(2.dp))
+                    IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
                         Icon(
                             Icons.Default.Edit,
                             contentDescription = strings.edit,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                     if (voucherCount == 0 && !profile.name.equals("default", ignoreCase = true)) {
-                        IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                        IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                             Icon(
                                 Icons.Default.DeleteOutline,
                                 contentDescription = strings.delete,
                                 tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // 2x2 Specs Grid - Clean, modern, immune to text wrapping collisions!
             Row(

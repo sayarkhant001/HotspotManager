@@ -663,25 +663,25 @@ fun VoucherItemCard(
             Checkbox(
                 checked = isSelected,
                 onCheckedChange = { onToggleSelect() },
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(32.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
 
             Surface(
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(8.dp),
                 color = if (voucher.isAccount) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(34.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = if (voucher.isAccount) Icons.Default.Person else Icons.Default.ConfirmationNumber,
                         contentDescription = "Voucher",
                         tint = if (voucher.isAccount) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -696,7 +696,7 @@ fun VoucherItemCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
 
                     val badgeColor = when {
                         voucher.isUsed -> Color(0xFFE65100)
@@ -715,15 +715,15 @@ fun VoucherItemCard(
                         Text(
                             text = badgeText,
                             color = badgeColor,
-                            fontSize = 9.sp,
+                            fontSize = 8.5.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             softWrap = false,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                         )
                     }
                     if (voucher.isAccount) {
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "(P: ${voucher.password})",
                             style = MaterialTheme.typography.bodySmall,
@@ -752,7 +752,9 @@ fun VoucherItemCard(
                 Text(
                     text = "${voucher.profileName} • $quotaDisplay • $validityDisplay",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (voucher.comment.startsWith("EXP:", ignoreCase = true)) {
                     val expInfo = voucher.comment.removePrefix("EXP:").trim()
@@ -760,7 +762,9 @@ fun VoucherItemCard(
                         text = "Expires: $expInfo",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF1565C0),
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 if (voucher.price > 0) {
@@ -768,18 +772,20 @@ fun VoucherItemCard(
                         text = "Price: ${"%,d".format(java.util.Locale.US, voucher.price.toLong())} Ks",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
             if (voucher.isUsed && onRenew != null) {
-                IconButton(onClick = onRenew) {
+                IconButton(onClick = onRenew, modifier = Modifier.size(30.dp)) {
                     Icon(
                         imageVector = Icons.Default.Autorenew,
                         contentDescription = strings.renewAction,
                         tint = Color(0xFF2E7D32),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                 }
             }
@@ -787,21 +793,21 @@ fun VoucherItemCard(
             IconButton(onClick = {
                 clipboardManager.setText(AnnotatedString(voucher.code))
                 copied = true
-            }) {
+            }, modifier = Modifier.size(30.dp)) {
                 Icon(
                     imageVector = if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
                     contentDescription = "Copy Code",
                     tint = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(17.dp)
                 )
             }
 
-            IconButton(onClick = onDelete) {
+            IconButton(onClick = onDelete, modifier = Modifier.size(30.dp)) {
                 Icon(
                     imageVector = Icons.Default.DeleteOutline,
                     contentDescription = strings.deleteAction,
                     tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(17.dp)
                 )
             }
         }

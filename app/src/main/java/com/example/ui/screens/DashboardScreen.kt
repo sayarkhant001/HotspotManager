@@ -176,38 +176,42 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(bottom = 6.dp)
             )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Download Speed Card
                 GlassCard(
                     modifier = Modifier.weight(1f)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.ArrowDownward,
                                 contentDescription = "Download",
                                 tint = Color(0xFF2196F3),
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 strings.downloadRx,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = "$rxSpeed Mbps",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1976D2)
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF1976D2),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -216,33 +220,37 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 GlassCard(
                     modifier = Modifier.weight(1f)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.ArrowUpward,
                                 contentDescription = "Upload",
                                 tint = Color(0xFF4CAF50),
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 strings.uploadTx,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = "$txSpeed Mbps",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF388E3C)
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF388E3C),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Router Hardware Health Section
             Text(
@@ -250,7 +258,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(bottom = 6.dp)
             )
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -288,7 +296,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Date-Filtered Network Usage & Session Metrics
             var showResetDialog by remember { mutableStateOf(false) }
@@ -306,18 +314,18 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 )
                 TextButton(
                     onClick = { showResetDialog = true },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Icon(
                         Icons.Default.RestartAlt,
                         contentDescription = strings.resetStats,
                         tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         strings.resetStats,
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -350,7 +358,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                     }
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Date Filter Chips (with up to 30 days)
             val filterOptions = listOf(
@@ -378,7 +386,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Usage Summary Cards for selected date range
             // Calculate accurate router data usage
@@ -393,7 +401,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             }
 
             GlassCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -445,9 +453,9 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     val activeFilterLabel = filterOptions.firstOrNull { it.first == selectedFilter }?.second ?: selectedFilter
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -473,7 +481,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Management Navigation
             Text(
@@ -481,7 +489,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 12.dp)
+                modifier = Modifier.padding(bottom = 8.dp)
             )
 
             DashboardMenuCard(
@@ -671,9 +679,9 @@ fun StatCard(
     color: Color
 ) {
     GlassCard(modifier = modifier) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Icon(imageVector = icon, contentDescription = title, tint = color, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.height(8.dp))
+        Column(modifier = Modifier.padding(11.dp)) {
+            Icon(imageVector = icon, contentDescription = title, tint = color, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -690,30 +698,30 @@ fun CpuStatCard(
     history: List<Float>
 ) {
     GlassCard(modifier = modifier) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(11.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(imageVector = icon, contentDescription = title, tint = color, modifier = Modifier.size(24.dp))
+                Icon(imageVector = icon, contentDescription = title, tint = color, modifier = Modifier.size(20.dp))
                 Box(
                     modifier = Modifier
                         .size(7.dp)
                         .background(color, CircleShape)
                 )
             }
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(5.dp))
             Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Real-time sparkline graph decoration
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(24.dp)
+                    .height(20.dp)
             ) {
                 val strokeWidth = 2.dp.toPx()
                 val points = if (history.size < 2) listOf(10f, 10f) else history
@@ -764,7 +772,7 @@ fun CpuStatCard(
                 val lastY = h - (((points.lastOrNull() ?: 0f) - minVal) / range * (h - strokeWidth)) - strokeWidth / 2
                 drawCircle(
                     color = color,
-                    radius = 3.dp.toPx(),
+                    radius = 2.5.dp.toPx(),
                     center = androidx.compose.ui.geometry.Offset(lastX, lastY)
                 )
             }
@@ -785,41 +793,41 @@ fun DashboardMenuCard(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp)
+            .padding(vertical = 4.dp)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(10.dp),
                 color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(46.dp)
+                modifier = Modifier.size(38.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(imageVector = icon, contentDescription = title, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Icon(imageVector = icon, contentDescription = title, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
                 }
             }
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (badgeCount != null && badgeCount > 0) {
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(8.dp),
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(end = 8.dp)
+                    modifier = Modifier.padding(end = 6.dp)
                 ) {
                     Text(
                         text = "$badgeCount",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                     )
                 }
             }
-            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Open", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Open", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
         }
     }
 }

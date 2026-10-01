@@ -27,6 +27,9 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.utils.AppLanguage
 import com.example.utils.LanguageManager
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
@@ -69,16 +72,17 @@ fun LoginScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState()),
             contentAlignment = Alignment.Center
         ) {
             GlassCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Row(
@@ -88,8 +92,8 @@ fun LoginScreen(
                         FilledTonalButton(
                             onClick = { LanguageManager.toggleLanguage(context) },
                             shape = RoundedCornerShape(20.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp)
                         ) {
                             Text(
                                 text = if (currentLang == AppLanguage.MYANMAR) "🇲🇲 မြန်မာ" else "🇬🇧 English",
@@ -103,57 +107,61 @@ fun LoginScreen(
                         painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.app_logo),
                         contentDescription = "Hotspot Manager Logo",
                         modifier = Modifier
-                            .size(76.dp)
-                            .clip(RoundedCornerShape(18.dp))
+                            .size(62.dp)
+                            .clip(RoundedCornerShape(14.dp))
                     )
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         text = strings.appName,
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center
                     )
                     Text(
                         text = strings.connectToRouter,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
+                        modifier = Modifier.padding(top = 2.dp, bottom = 16.dp)
                     )
 
                     OutlinedTextField(
                         value = ip,
                         onValueChange = { ip = it },
-                        label = { Text(strings.routerIp) },
+                        label = { Text(strings.routerIp, style = MaterialTheme.typography.bodySmall) },
+                        textStyle = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         singleLine = true
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     OutlinedTextField(
                         value = user,
                         onValueChange = { user = it },
-                        label = { Text(strings.username) },
+                        label = { Text(strings.username, style = MaterialTheme.typography.bodySmall) },
+                        textStyle = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         singleLine = true
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     OutlinedTextField(
                         value = pass,
                         onValueChange = { pass = it },
-                        label = { Text(strings.password) },
+                        label = { Text(strings.password, style = MaterialTheme.typography.bodySmall) },
+                        textStyle = MaterialTheme.typography.bodyMedium,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,
                             autoCorrectEnabled = false
                         ),
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         singleLine = true
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -170,19 +178,19 @@ fun LoginScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     
                     if (authState is AuthState.Error) {
                         Surface(
                             color = MaterialTheme.colorScheme.errorContainer,
                             shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                         ) {
                             Text(
                                 text = (authState as AuthState.Error).message,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(12.dp),
+                                modifier = Modifier.padding(10.dp),
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -191,18 +199,19 @@ fun LoginScreen(
                     Button(
                         onClick = { viewModel.connectToRouter(ip, user, pass) },
                         enabled = authState !is AuthState.Loading,
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        shape = RoundedCornerShape(12.dp)
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
                         if (authState is AuthState.Loading) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
                                 color = MaterialTheme.colorScheme.onPrimary
                             )
                         } else {
-                            Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(strings.secureConnect)
+                            Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(strings.secureConnect, style = MaterialTheme.typography.labelLarge)
                         }
                     }
                 }
