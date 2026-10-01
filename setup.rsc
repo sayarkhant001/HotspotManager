@@ -1,6 +1,6 @@
 # ==============================================================================
-#                     YADANAR_TUN_WIFI - FULL SETUP SCRIPT
-#                   Combined Setup, Finalize & API Automation
+#                     YADANAR_TUN_WIFI - SETUP SCRIPT
+#                Absolute Master Formula & Automation Suite
 # ==============================================================================
 # Description:
 #   Automates complete MikroTik router configuration for Yadanar Tun Wifi:
@@ -864,7 +864,7 @@
 
 :put ""
 :put "================================================="
-:put "     YADANAR TUN WIFI - FULL SETUP COMPLETED     "
+:put "       YADANAR TUN WIFI - SETUP COMPLETED        "
 :put "================================================="
 :put ("Router Model    : " . $boardName)
 :put ("RouterOS Version: " . $rosVer)
@@ -880,5 +880,5 @@
 :put "API Port        : 8728 (ENABLED & ALLOWED)"
 :put "Admin User      : admin / Khant1234@"
 :put "App API User    : flutter_app / Khant1234@"
-:put "App Path        : C:\\Users\\localhost\\Downloads\\serverless\\HotspotManager"
+:put "App Client      : HotspotManager Android App"
 :put "================================================="
