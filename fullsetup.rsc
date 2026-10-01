@@ -390,18 +390,17 @@
           :if ($sStr != "" and $sStr != "00:00:00" and $sStr != "0s" and $sStr != "0") do={
             :set vDur $sTime;
           } else={
-            :if ($profName ~ "15M" or $profName ~ "15m") do={ :set vDur 15m } else={
-            :if ($profName ~ "30M" or $profName ~ "30m") do={ :set vDur 30m } else={
-            :if ($profName ~ "45M" or $profName ~ "45m") do={ :set vDur 45m } else={
-            :if ($profName ~ "30D" or $profName ~ "30d" or $profName ~ "Month") do={ :set vDur 30d } else={
-            :if ($profName ~ "14D" or $profName ~ "14d" or $profName ~ "2W") do={ :set vDur 14d } else={
-            :if ($profName ~ "7D" or $profName ~ "7d" or $profName ~ "1W") do={ :set vDur 7d } else={
-            :if ($profName ~ "6H" or $profName ~ "6h") do={ :set vDur 6h } else={
-            :if ($profName ~ "3H" or $profName ~ "3h") do={ :set vDur 3h } else={
-            :if ($profName ~ "2H" or $profName ~ "2h") do={ :set vDur 2h } else={
-            :if ($profName ~ "1H" or $profName ~ "1h") do={ :set vDur 1h } else={
-            :if ($profName ~ "1D" or $profName ~ "1d" or $profName ~ "24H") do={ :set vDur 1d };
-            }}}}}}}}}}}
+            :if ($profName ~ "15M" or $profName ~ "15m") do={ :set vDur "15m" };
+            :if ($profName ~ "30M" or $profName ~ "30m") do={ :set vDur "30m" };
+            :if ($profName ~ "45M" or $profName ~ "45m") do={ :set vDur "45m" };
+            :if ($profName ~ "1H" or $profName ~ "1h") do={ :set vDur "1h" };
+            :if ($profName ~ "2H" or $profName ~ "2h") do={ :set vDur "2h" };
+            :if ($profName ~ "3H" or $profName ~ "3h") do={ :set vDur "3h" };
+            :if ($profName ~ "6H" or $profName ~ "6h") do={ :set vDur "6h" };
+            :if ($profName ~ "1D" or $profName ~ "1d" or $profName ~ "24H") do={ :set vDur "1d" };
+            :if ($profName ~ "7D" or $profName ~ "7d" or $profName ~ "1W") do={ :set vDur "7d" };
+            :if ($profName ~ "14D" or $profName ~ "14d" or $profName ~ "2W") do={ :set vDur "14d" };
+            :if ($profName ~ "30D" or $profName ~ "30d" or $profName ~ "Month") do={ :set vDur "30d" };
           }
         }
       }
@@ -564,11 +563,15 @@
 # ── STEP 12: Firewall & Security Rules ────────────────────────
 :put "=== Step 12: Firewall Rules (Allow API & Hotspot) ==="
 # Remove old faulty drop rules that blocked port 8728
-:foreach r in=[/ip firewall filter find where action="drop" and dst-port~"8728"] do={
-  /ip firewall filter remove $r
-}
-:foreach r in=[/ip firewall filter find comment~"Allow HotspotManager API"] do={
-  /ip firewall filter remove $r
+:foreach r in=[/ip firewall filter find] do={
+  :do {
+    :local act [/ip firewall filter get $r action]
+    :local dp [/ip firewall filter get $r dst-port]
+    :local comm [/ip firewall filter get $r comment]
+    :if (($act = "drop" and $dp ~ "8728") or ($comm ~ "Allow HotspotManager API")) do={
+      /ip firewall filter remove $r
+    }
+  } on-error={}
 }
 
 # Explicitly ACCEPT API port 8728 & 8729 from hotspot-bridge
@@ -682,8 +685,14 @@
 :do { /tool bandwidth-server set enabled=no } on-error={}
 
 # 6. Clean stale unauthorized hotspot hosts & orphaned cookies to reclaim memory immediately
-:foreach h in=[/ip hotspot host find where authorized=no and bypassed=no] do={
-  :do { /ip hotspot host remove $h } on-error={}
+:foreach h in=[/ip hotspot host find] do={
+  :do {
+    :local isAuth [/ip hotspot host get $h authorized]
+    :local isByp [/ip hotspot host get $h bypassed]
+    :if (!$isAuth and !$isByp) do={
+      /ip hotspot host remove $h
+    }
+  } on-error={}
 }
 :foreach c in=[/ip hotspot cookie find] do={
   :local cUser ""
