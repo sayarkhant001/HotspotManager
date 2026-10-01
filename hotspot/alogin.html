@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta http-equiv="refresh" content="2; url=$(link-status)" />
+  <link rel="icon" type="image/jpeg" href="img/ayeiksitt.jpg" />
   <link rel="stylesheet" href="css/style.css" />
   <script>
     function startRedirect() {
@@ -15,29 +16,34 @@
 </head>
 <body onload="startRedirect()">
 
-  <!-- Ambient Glowing Aurora Mesh -->
-  <div class="aurora-bg" aria-hidden="true">
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
-    <div class="grid-mesh"></div>
+  <!-- Sweet Pastel Ambient Background -->
+  <div class="warm-bg" aria-hidden="true">
+    <div class="sun-bubble bubble-1"></div>
+    <div class="sun-bubble bubble-2"></div>
   </div>
 
   <div class="portal-wrapper">
     <div class="portal-card" style="text-align: center;">
 
-      <!-- Success Beacon -->
-      <div style="width: 58px; height: 58px; border-radius: 18px; background: rgba(16, 185, 129, 0.15); border: 1.5px solid rgba(16, 185, 129, 0.40); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; color: #34D399; box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25);">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
+      <!-- Baby Hero Section -->
+      <div class="hero-kid-section">
+        <div class="avatar-outer-ring" style="width: 104px; height: 104px; background: linear-gradient(135deg, #10B981, #34D399, #FBBF24);">
+          <div class="avatar-inner-frame">
+            <img src="img/ayeiksitt.jpg" alt="အရိပ်စစ်လေး" class="kid-photo" />
+          </div>
+          <div class="kid-badge-tag" style="background:#ECFDF5; border-color:#34D399; color:#065F46;">
+            <span>🎉</span>
+            <span>အောင်မြင်ပါသည်</span>
+          </div>
+        </div>
+
+        <h1 class="brand-title" style="font-size: 21px;">ချိတ်ဆက်မှု အောင်မြင်ပါသည်</h1>
+        <p class="brand-greeting" style="color:#059669; font-weight:600;">အင်တာနက် အသုံးပြုနိုင်ပါပြီ...</p>
       </div>
 
-      <h1 class="brand-title" style="font-size: 19px; margin-bottom: 4px;">ချိတ်ဆက်မှု အောင်မြင်ပါသည်</h1>
-      <p style="font-size: 12px; color: #A7F3D0; margin-bottom: 18px;">အင်တာနက် အသုံးပြုနိုင်ပါပြီ...</p>
-
-      <!-- Animated Progress Glow Bar -->
-      <div style="background: rgba(255,255,255,0.06); border-radius: 100px; height: 5px; overflow: hidden; margin: 18px 0;">
-        <div style="height: 100%; width: 100%; background: var(--grad-primary); border-radius: 100px; animation: progressSlide 1.5s ease-in-out infinite;"></div>
+      <!-- Animated Progress Bar -->
+      <div style="background: #FFF0E0; border-radius: 100px; height: 6px; overflow: hidden; margin: 18px 0;">
+        <div style="height: 100%; width: 100%; background: linear-gradient(90deg, #FF6B4A, #FFA834); border-radius: 100px; animation: progressSlide 1.5s ease-in-out infinite;"></div>
       </div>
 
       <style>
@@ -48,11 +54,12 @@
       </style>
 
       <a href="$(link-status)" class="btn-connect" style="text-decoration:none;">
-        ဆက်လက် အသုံးပြုမည်
+        <span>ဆက်လက် အသုံးပြုမည်</span>
       </a>
 
+      <!-- Footer Copy -->
       <p class="footer-text">
-        အရိပ်စစ် Wifi &bull; Version 2.0 Next-Gen Edition
+        ❤️ မေတ္တာဖြင့် ဝန်ဆောင်မှုပေးပါသည် • အရိပ်စစ် Wifi
       </p>
 
     </div>

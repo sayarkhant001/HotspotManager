@@ -2,13 +2,8 @@
 <html lang="my">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <title>အရိပ်စစ် Wifi – အင်တာနက် အသုံးပြုရန်</title>
+  <title>အရိပ်စစ် Wifi – အင်တာနက် အသုံးပြုရန် (Preview)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <meta name="description" content="အရိပ်စစ် Wifi – Warm & Sweet Edition" />
   <link rel="icon" type="image/jpeg" href="img/ayeiksitt.jpg" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
@@ -46,36 +41,27 @@
         </div>
       </div>
 
-      <!--
-        MikroTik Hotspot Login Form
-        action = $(link-login-only)
-        dst    = $(link-status)
-      -->
-      <form id="login_form" name="sendin" method="post" action="$(link-login-only)">
-        <input type="hidden" name="dst" value="$(link-status)" />
-        <input type="hidden" name="popup" value="false" />
+      <!-- Segmented Tab Toggle -->
+      <div class="tab-container" id="login_tabs" role="tablist">
+        <button type="button" class="tab-btn active" id="tab_voucher" role="tab" aria-selected="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+            <rect x="2" y="6" width="20" height="12" rx="3"/>
+            <path d="M12 6v12M2 12h2M20 12h2"/>
+          </svg>
+          ဘောင်ချာကုဒ်
+        </button>
+        <button type="button" class="tab-btn" id="tab_account" role="tab" aria-selected="false">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          အကောင့်ဖြင့်ဝင်ရန်
+        </button>
+      </div>
 
-        <!-- RouterOS Credentials Target -->
+      <form id="login_form" name="sendin" method="post" action="preview_status.html">
         <input type="hidden" name="username" id="username_field" />
         <input type="hidden" name="password" id="password_field" value="" />
-
-        <!-- Segmented Tab Toggle -->
-        <div class="tab-container" id="login_tabs" role="tablist">
-          <button type="button" class="tab-btn active" id="tab_voucher" role="tab" aria-selected="true">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
-              <rect x="2" y="6" width="20" height="12" rx="3"/>
-              <path d="M12 6v12M2 12h2M20 12h2"/>
-            </svg>
-            ဘောင်ချာကုဒ်
-          </button>
-          <button type="button" class="tab-btn" id="tab_account" role="tab" aria-selected="false">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
-            </svg>
-            အကောင့်ဖြင့်ဝင်ရန်
-          </button>
-        </div>
 
         <!-- ── Voucher Panel ── -->
         <div class="form-panel" id="panel_voucher">
@@ -91,6 +77,7 @@
               type="text"
               maxlength="16"
               placeholder="ကုဒ်နံပါတ် (ဥပမာ 3799, 4930)"
+              value="49304727"
               autocomplete="off"
               autocorrect="off"
               autocapitalize="characters"
@@ -99,16 +86,14 @@
             />
 
             <div class="input-actions">
-              <!-- Clear Action -->
-              <button type="button" class="btn-input-action" id="clear_voucher_btn" title="ဖျက်မည်" style="display:none;">
+              <button type="button" class="btn-input-action" id="clear_voucher_btn" title="ဖျက်မည်">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
                   <line x1="18" y1="6" x2="6" y2="18"/>
                   <line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </button>
 
-              <!-- Paste Action -->
-              <button type="button" class="btn-input-action" id="paste_voucher_btn" title="ကူးထည့်မည်">
+              <button type="button" class="btn-input-action" id="paste_voucher_btn" title="ကူးထည့်မည်" style="display:none;">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                   <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
                   <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
@@ -153,18 +138,6 @@
             </div>
           </div>
         </div>
-
-        <!-- RouterOS Error Banner -->
-        $(if error)
-        <div class="alert-box" id="login_msg">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0;">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <span>$(error)</span>
-        </div>
-        $(endif)
 
         <!-- Primary Connect Button -->
         <button class="btn-connect" type="submit" id="login_btn">

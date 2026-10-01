@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta http-equiv="refresh" content="2; url=$(link-redirect)" />
+  <link rel="icon" type="image/jpeg" href="img/ayeiksitt.jpg" />
   <link rel="stylesheet" href="css/style.css" />
   <script>
     function startRedirect() {
@@ -15,31 +16,38 @@
 </head>
 <body onload="startRedirect()">
 
-  <!-- Ambient Glowing Aurora Mesh -->
-  <div class="aurora-bg" aria-hidden="true">
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
-    <div class="grid-mesh"></div>
+  <!-- Sweet Pastel Ambient Background -->
+  <div class="warm-bg" aria-hidden="true">
+    <div class="sun-bubble bubble-1"></div>
+    <div class="sun-bubble bubble-2"></div>
   </div>
 
   <div class="portal-wrapper">
     <div class="portal-card" style="text-align: center;">
 
-      <div style="width: 58px; height: 58px; border-radius: 18px; background: rgba(0, 242, 254, 0.15); border: 1.5px solid rgba(0, 242, 254, 0.40); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; color: var(--cyan); box-shadow: 0 8px 24px rgba(0, 242, 254, 0.25);">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
+      <!-- Baby Hero Section -->
+      <div class="hero-kid-section">
+        <div class="avatar-outer-ring" style="width: 104px; height: 104px;">
+          <div class="avatar-inner-frame">
+            <img src="img/ayeiksitt.jpg" alt="အရိပ်စစ်လေး" class="kid-photo" />
+          </div>
+          <div class="kid-badge-tag">
+            <span>✨</span>
+            <span>ခေတ္တစောင့်ပါ</span>
+          </div>
+        </div>
+
+        <h1 class="brand-title" style="font-size: 21px;">ခေတ္တစောင့်ဆိုင်းပါ</h1>
+        <p class="brand-greeting">အင်တာနက် စာမျက်နှာသို့ သွားနေပါသည်...</p>
       </div>
 
-      <h1 class="brand-title" style="font-size: 19px; margin-bottom: 4px;">ခေတ္တစောင့်ဆိုင်းပါ</h1>
-      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 18px;">အင်တာနက် စာမျက်နှာသို့ သွားနေပါသည်...</p>
-
       <a href="$(link-redirect)" class="btn-connect" style="text-decoration:none;">
-        ချက်ချင်း သွားမည်
+        <span>ချက်ချင်း သွားမည်</span>
       </a>
 
+      <!-- Footer Copy -->
       <p class="footer-text">
-        အရိပ်စစ် Wifi &bull; Version 2.0 Next-Gen Edition
+        ❤️ မေတ္တာဖြင့် ဝန်ဆောင်မှုပေးပါသည် • အရိပ်စစ် Wifi
       </p>
 
     </div>
