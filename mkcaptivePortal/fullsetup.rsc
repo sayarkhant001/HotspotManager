@@ -1,12 +1,12 @@
 # ==============================================================================
-#                      ALL GOOD WIFI - FULL SETUP SCRIPT
+#                     AYEIKSITT_WIFI - FULL SETUP SCRIPT
 #                   Combined Setup, Finalize & API Automation
 # ==============================================================================
 # Description:
-#   Automates complete MikroTik router configuration for All Good WiFi:
+#   Automates complete MikroTik router configuration for AyeikSitt_WiFi:
 #   - WAN DHCP Client & NAT Masquerade
 #   - LAN Bridge, DHCP Server (10.10.10.0/23, pool 10.10.10.10-10.10.11.250)
-#   - Wi-Fi Configuration (SSID: AllGoodWifi)
+#   - Wi-Fi Configuration (SSID: AyeikSitt_WiFi)
 #   - Hotspot Server & Directory Detection (flash/hotspot vs hotspot)
 #   - User Profile: Creates 1GB_1H profile (10M/10M, 1 Hour session, 1GB data quota)
 #     * On configured routers, leaves existing profiles untouched (e.g. 2GB, 7D, VIP)
@@ -23,7 +23,7 @@
 # ==============================================================================
 
 :put "================================================="
-:put "       ALL GOOD WIFI - STARTING FULL SETUP       "
+:put "      AYEIKSITT_WIFI - STARTING FULL SETUP       "
 :put "================================================="
 
 :local rosVer [/system resource get version]
@@ -43,7 +43,7 @@
 
 # ── SYSTEM IDENTITY ───────────────────────────────────────────
 :put "--- Setting Router Identity ---"
-:do { /system identity set name="AllGoodWiFi-Router" } on-error={}
+:do { /system identity set name="AyeikSitt_WiFi-Router" } on-error={}
 
 # ── STEP 1: WAN Interface & NAT ───────────────────────────────
 :put "=== Step 1: WAN Interface & NAT ==="
@@ -745,7 +745,7 @@
 
 :put ""
 :put "================================================="
-:put "      ALL GOOD WIFI - FULL SETUP COMPLETED       "
+:put "     AYEIKSITT_WIFI - FULL SETUP COMPLETED       "
 :put "================================================="
 :put ("Router Model    : " . $boardName)
 :put ("RouterOS Version: " . $rosVer)
