@@ -1,104 +1,328 @@
 <!DOCTYPE html>
-<html lang="my">
+<html lang="en">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <title>အရိပ်စစ် Wifi – အင်တာနက် ချိတ်ဆက်ပြီး</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Yadanar Tun Wifi – Connected</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <meta http-equiv="refresh" content="10; url=$(link-status)" />
-  <link rel="icon" type="image/jpeg" href="img/ayeiksitt.jpg" />
+  <meta name="description" content="Yadanar Tun Wifi – You are connected. View your session details." />
+  <!--
+    status.html – Active session dashboard.
+  -->
+  <meta http-equiv="refresh" content="$(refresh-timeout-secs); url=$(link-status)" />
+  <link rel="icon" href="img/favicon.ico" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-  <!-- Sweet Pastel Ambient Background -->
-  <div class="warm-bg" aria-hidden="true">
-    <div class="sun-bubble bubble-1"></div>
-    <div class="sun-bubble bubble-2"></div>
+  <!-- Loading Overlay -->
+  <div class="body-loading" id="body_loading">
+    <div class="loading-inner">
+      <div class="loading-ring"></div>
+      <p class="loading-text">Loading…</p>
+    </div>
   </div>
 
-  <div class="portal-wrapper">
-    <div class="portal-card" style="text-align: center;">
+  <div class="body-wrapper">
 
-      <!-- Baby Hero Section (Connected Mode) -->
-      <div class="hero-kid-section">
-        <div class="avatar-outer-ring" style="width: 96px; height: 96px; background: linear-gradient(135deg, #10B981, #34D399, #FBBF24);">
-          <div class="avatar-inner-frame">
-            <img src="img/ayeiksitt.jpg" alt="အရိပ်စစ်လေး" class="kid-photo" />
+    <div class="body-background">
+      <div class="body-background-mask"></div>
+    </div>
+
+    <div class="particles" aria-hidden="true">
+      <span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span>
+    </div>
+
+    <div class="body-content-wrapper">
+      <div class="login-card">
+
+        <!-- Logo Badge -->
+        <div class="logo-badge-wrapper">
+          <div class="logo-badge">
+            <svg class="logo-svg" viewBox="0 0 72 72" fill="none"
+                 xmlns="http://www.w3.org/2000/svg" aria-label="Yadanar Tun Wifi">
+              <defs>
+                <linearGradient id="ytGoldGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#FDE68A"/>
+                  <stop offset="50%" stop-color="#F59E0B"/>
+                  <stop offset="100%" stop-color="#B45309"/>
+                </linearGradient>
+              </defs>
+              <!-- Radiant WiFi Arcs -->
+              <path d="M14 26 Q36 6 58 26" stroke="url(#ytGoldGlow)" stroke-width="4.2" stroke-linecap="round" fill="none"/>
+              <path d="M22 34 Q36 20 50 34" stroke="url(#ytGoldGlow)" stroke-width="4" stroke-linecap="round" fill="none"/>
+              <path d="M29 42 Q36 34 43 42" stroke="url(#ytGoldGlow)" stroke-width="3.6" stroke-linecap="round" fill="none"/>
+              <!-- Faceted Yadanar Gem -->
+              <polygon points="30,49 42,49 47,54 36,65 25,54" fill="#F59E0B" stroke="#FDE68A" stroke-width="1.5" stroke-linejoin="round"/>
+              <polygon points="30,49 42,49 36,54" fill="#FFFBEB" opacity="0.9"/>
+              <polygon points="25,54 30,49 36,54" fill="#FDE68A" opacity="0.95"/>
+              <polygon points="47,54 42,49 36,54" fill="#D97706" opacity="0.95"/>
+              <polygon points="25,54 36,54 36,65" fill="#F59E0B"/>
+              <polygon points="47,54 36,54 36,65" fill="#B45309"/>
+            </svg>
           </div>
-          <div class="kid-badge-tag" style="background:#ECFDF5; border-color:#34D399; color:#065F46;">
-            <span>🟢</span>
-            <span>ချိတ်ဆက်ပြီး</span>
+        </div>
+
+        <!-- Brand Name & Subtitle -->
+        <h1 class="brand-name">Yadanar Tun Wifi</h1>
+        <p class="brand-sub">ရတနာထွန်း • <span>Connected Session</span></p>
+
+        <!-- Connected indicator -->
+        <div class="status-connected-badge">
+          <span class="status-dot"></span>
+          <span class="status-connected-text">CONNECTED</span>
+        </div>
+
+        <!-- Voucher / Username display -->
+        <div class="voucher-display">
+          <span class="voucher-display-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.8">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+              <line x1="7" y1="7" x2="7.01" y2="7"/>
+            </svg>
+          </span>
+          <div class="voucher-display-body">
+            <p class="voucher-display-label">Voucher / Username</p>
+            <p class="voucher-display-value" id="display_username">$(username)</p>
           </div>
         </div>
 
-        <h1 class="brand-title" style="font-size: 21px;">အရိပ်စစ် Wifi</h1>
-        <p class="brand-greeting" style="color:#059669; font-weight:600;">အင်တာနက် ချိတ်ဆက်အသုံးပြုနေပါသည်</p>
-      </div>
+        <!-- Session stats grid -->
+        <div class="profile-grid">
 
-      <!-- Active Voucher Display -->
-      <div style="background: #FFF9F2; border: 1.5px solid var(--peach-border); border-radius: 16px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; text-align: left;">
-        <div>
-          <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">ဘောင်ချာကုဒ် / အကောင့်</div>
-          <div style="font-family: var(--font-code); font-size: 16px; font-weight: 700; color: var(--text-title);" id="display_username">$(username)</div>
+          <div class="profile-stat">
+            <p class="profile-stat-label">Session Time</p>
+            <p class="profile-stat-value green" id="stat_uptime">$(uptime)</p>
+          </div>
+
+          <div class="profile-stat">
+            <p class="profile-stat-label">Time Remaining</p>
+            <p class="profile-stat-value gold" id="stat_timeleft">$(session-time-left)</p>
+          </div>
+
+          <!-- Data Used: sum of bytes-in + bytes-out, formatted by JS -->
+          <div class="profile-stat" style="border-color:rgba(74,222,128,.20);background:rgba(74,222,128,.05);">
+            <p class="profile-stat-label" style="color:rgba(74,222,128,.75);">&#8595; Data Used</p>
+            <p class="profile-stat-value" id="stat_data_used" style="color:#4ade80;">...</p>
+            <!-- Raw values read by JS -->
+            <span id="stat_bytes_in" style="display:none;">$(bytes-in)</span>
+            <span id="stat_bytes_out" style="display:none;">$(bytes-out)</span>
+          </div>
+
+          <!-- Data Remaining: calculated by JS from username prefix / byte counters -->
+          <div class="profile-stat" style="border-color:rgba(99,179,237,.20);background:rgba(99,179,237,.05);">
+            <p class="profile-stat-label" style="color:rgba(99,179,237,.75);" id="stat_data_remaining_label">&#8593; Data Left</p>
+            <p class="profile-stat-value" id="stat_data_remaining" style="color:#63b3ed;">...</p>
+          </div>
+
+          <div class="profile-stat">
+            <p class="profile-stat-label">IP Address</p>
+            <p class="profile-stat-value" id="stat_ip">$(ip)</p>
+          </div>
+
+          <div class="profile-stat">
+            <p class="profile-stat-label">MAC Address</p>
+            <p class="profile-stat-value" id="stat_mac" style="font-size:11px;letter-spacing:.04em;">$(mac)</p>
+          </div>
+
         </div>
-        <div style="padding: 4px 10px; border-radius: 100px; background: #ECFDF5; color: #047857; font-size: 11.5px; font-weight: 700;">
-          အသုံးပြုနေဆဲ
-        </div>
-      </div>
 
-      <!-- 2x2 Stats Dashboard Grid -->
-      <div class="stats-2x2-grid">
-        <div class="stat-box">
-          <div class="stat-label">လိုင်းအသုံးပြုချိန်</div>
-          <div class="stat-val emerald" id="stat_uptime">$(uptime)</div>
-        </div>
+        <div class="divider"></div>
 
-        <div class="stat-box">
-          <div class="stat-label">ကျန်ရှိသည့်အချိန်</div>
-          <div class="stat-val amber" id="stat_timeleft">$(session-time-left)</div>
-        </div>
+        <!-- Browse button — lands directly on Google -->
+        <a class="connect-btn" href="https://www.google.com" id="browse_btn"
+           style="display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;margin-bottom:12px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          BROWSE INTERNET
+        </a>
 
-        <div class="stat-box">
-          <div class="stat-label">အသုံးပြုပြီးဒေတာ</div>
-          <div class="stat-val coral" id="stat_data_used">$(bytes-in-nice) / $(bytes-out-nice)</div>
-        </div>
-
-        <div class="stat-box">
-          <div class="stat-label">လက်ကျန်ဒေတာ</div>
-          <div class="stat-val purple" id="stat_data_remaining">$(remain-bytes-total)</div>
-        </div>
-      </div>
-
-      <!-- IP / MAC Address Info -->
-      <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 16px; background: #FFF9F2; border-radius: 10px; padding: 7px 12px; border: 1px solid rgba(255, 138, 91, 0.15);">
-        IP: <span style="font-family:var(--font-code); color:var(--text-title); font-weight:600;">$(ip)</span> &bull; 
-        MAC: <span style="font-family:var(--font-code); color:var(--text-title); font-weight:600;">$(mac)</span>
-      </div>
-
-      <!-- Logout Button Form -->
-      <form action="$(link-logout)" name="logout" method="post">
-        <button class="btn-connect" type="submit" style="background: linear-gradient(135deg, #EF4444 0%, #F97316 100%); box-shadow: 0 8px 20px -3px rgba(239, 68, 68, 0.35);">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <!-- Logout Button — clears cookie and logs out -->
+        <a class="logout-btn" href="$(link-logout)?erase-cookie=on" id="logout_btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2"
+               style="margin-right:8px; flex-shrink:0;">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
             <polyline points="16 17 21 12 16 7"/>
             <line x1="21" y1="12" x2="9" y2="12"/>
           </svg>
-          <span>အင်တာနက် ရပ်နားမည် (Logout)</span>
-        </button>
-      </form>
+          LOG OUT
+        </a>
 
-      <!-- Footer Copy -->
-      <p class="footer-text">
-        ❤️ မေတ္တာဖြင့် ဝန်ဆောင်မှုပေးပါသည် • အရိပ်စစ် Wifi
-      </p>
+        <!-- Feature tags -->
+        <div class="feature-row">
+          <span class="feature-tag">&#10022; HIGH SPEED</span>
+          <span class="feature-tag">&#10022; STABLE LINK</span>
+          <span class="feature-tag">&#10022; 24/7 UP TIME</span>
+        </div>
 
+        <p class="card-footer">
+          Yadanar Tun Wifi &nbsp;&bull;&nbsp; Powered by MikroTik
+        </p>
+
+      </div><!-- /.login-card -->
     </div>
-  </div>
 
-  <script src="js/main.js"></script>
+  </div><!-- /.body-wrapper -->
+
+  <script>
+    (function () {
+      setTimeout(function () {
+        var overlay = document.getElementById('body_loading');
+        if (overlay) overlay.classList.add('hide');
+      }, 600);
+
+      function fmtBytes(n) {
+        if (isNaN(n) || n < 0) return '0 B';
+        var units = ['B','KB','MB','GB','TB'];
+        var i = 0;
+        while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+        return n.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        /* ── Read raw byte counters ── */
+        var inEl   = document.getElementById('stat_bytes_in');
+        var outEl  = document.getElementById('stat_bytes_out');
+        var usedEl = document.getElementById('stat_data_used');
+        var leftEl = document.getElementById('stat_data_remaining');
+        var leftLabel = leftEl ? leftEl.previousElementSibling : null;
+
+        var rawIn  = inEl  ? parseInt(inEl.textContent.trim(),  10) : NaN;
+        var rawOut = outEl ? parseInt(outEl.textContent.trim(), 10) : NaN;
+        var totalUsed = (!isNaN(rawIn) && !isNaN(rawOut)) ? rawIn + rawOut : NaN;
+
+        /* ── Show Data Used ── */
+        if (usedEl) {
+          usedEl.textContent = !isNaN(totalUsed) ? fmtBytes(totalUsed) : '--';
+        }
+
+        /* ── Detect plan from username ──────────────────────────────────────
+             NEW alphanumeric vouchers:
+               AG3H…  →  3 GB  /  6-hour session
+               AG7D…  →  7 GB  /  7-day  session
+               AGU7D… →  Unlimited / 7-day (Unlim_7D)
+             OLD numeric vouchers:
+               first digit 1–4  →  1 GB
+               first digit 5–7  →  2 GB
+               first digit 8–9  → 50 GB
+        ──────────────────────────────────────────────────────────────────── */
+        var unameEl = document.getElementById('display_username');
+        var uname   = unameEl ? unameEl.textContent.trim() : '';
+        var up      = uname.toUpperCase();
+        var limitBytes = 0;
+        var planLabel  = '';
+        var isUnlimited = false;
+
+        if (up.indexOf('AG3H') === 0) {
+          limitBytes = 3221225472;   /* 3 GB */
+          planLabel  = '3GB Plan';
+        } else if (up.indexOf('AG7D') === 0) {
+          limitBytes = 7516192768;   /* 7 GB */
+          planLabel  = '7GB Plan';
+        } else if (up.indexOf('AG30') === 0 || up.indexOf('30GB') !== -1 || up.indexOf('30D') !== -1) {
+          limitBytes = 32212254720;  /* 30 GB */
+          planLabel  = '30GB Plan';
+        } else if (up.indexOf('AGU') === 0 || up.indexOf('UNLIM') === 0) {
+          isUnlimited = true;
+          planLabel   = 'Unlimited';
+        } else {
+          /* Legacy numeric codes — detect by first digit */
+          var firstD = parseInt(uname.charAt(0), 10);
+          if (firstD >= 1 && firstD <= 4) {
+            limitBytes = 1073741824;  /* 1 GB */
+            planLabel  = '1GB Plan';
+          } else if (firstD >= 5 && firstD <= 7) {
+            limitBytes = 2147483648;  /* 2 GB */
+            planLabel  = '2GB Plan';
+          } else if (firstD >= 8 && firstD <= 9) {
+            limitBytes = 53687091200; /* 50 GB */
+            planLabel  = '50GB Plan';
+          }
+        }
+
+        /* ── Show Data Remaining ── */
+        var leftLabel = document.getElementById('stat_data_remaining_label');
+        if (leftEl) {
+          if (isUnlimited) {
+            leftEl.textContent = 'Unlimited';
+            if (leftLabel) leftLabel.textContent = '\u2191 ' + planLabel;
+          } else if (limitBytes > 0 && !isNaN(totalUsed)) {
+            var remaining = limitBytes - totalUsed;
+            if (remaining < 0) remaining = 0;
+            leftEl.textContent = fmtBytes(remaining);
+
+            /* Warn when under 100 MB left */
+            if (remaining < 104857600) {
+              leftEl.style.color = '#fb7171';
+              leftEl.title = 'Less than 100 MB remaining!';
+            }
+
+            /* Update label to show plan name */
+            if (leftLabel) leftLabel.textContent = '\u2191 ' + planLabel + ' Left';
+          } else {
+            leftEl.textContent = '--';
+          }
+        }
+
+        /* Browse button — always lands to Google */
+        var browseBtn = document.getElementById('browse_btn');
+        if (browseBtn) {
+          browseBtn.setAttribute('href', 'https://www.google.com');
+          browseBtn.addEventListener('click', function () {
+            browseBtn.setAttribute('href', 'https://www.google.com');
+          });
+        }
+
+        function getPlanHours(u) {
+          if (!u) return 1;
+          var up = u.toUpperCase();
+          if (up.indexOf('30D') !== -1 || up.indexOf('50GB') !== -1) return 30 * 24;
+          if (up.indexOf('14D') !== -1 || up.indexOf('2GB') !== -1)  return 14 * 24;
+          if (up.indexOf('7D') !== -1  || up.indexOf('7GB') !== -1)  return 7 * 24;
+          if (up.indexOf('6H') !== -1  || up.indexOf('3GB') !== -1)  return 6;
+          return 1;
+        }
+
+        function persistVoucher(u) {
+          if (!u || u.indexOf('$(') !== -1 || u === 'admin' || u === 'default-trial') return;
+          try {
+            var h = getPlanHours(u);
+            var exp = Date.now() + (h * 3600 * 1000);
+            localStorage.setItem('yadanartun_voucher', u);
+            localStorage.setItem('allgood_voucher', u);
+            localStorage.setItem('yadanartun_voucher_expiry', exp.toString());
+          } catch (e) {}
+        }
+
+        /* Save active voucher with exact validity duration */
+        persistVoucher(uname);
+
+        /* Logout button fallback & voucher retention */
+        var logoutBtn = document.getElementById('logout_btn');
+        if (logoutBtn) {
+          var lHref = logoutBtn.getAttribute('href') || '';
+          if (!lHref || lHref.indexOf('$(') !== -1) {
+            var origin = (window.location.origin && window.location.origin.startsWith('http'))
+              ? window.location.origin
+              : 'http://10.10.10.1';
+            logoutBtn.setAttribute('href', origin + '/logout?erase-cookie=on');
+          }
+          logoutBtn.addEventListener('click', function () {
+            persistVoucher(uname);
+          });
+        }
+      });
+    })();
+  </script>
+
 </body>
 </html>

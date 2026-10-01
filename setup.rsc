@@ -1,15 +1,15 @@
 # ==============================================================================
-#                     AYEIKSITT_WIFI - FULL SETUP SCRIPT
+#                     YADANAR_TUN_WIFI - FULL SETUP SCRIPT
 #                   Combined Setup, Finalize & API Automation
 # ==============================================================================
 # Description:
-#   Automates complete MikroTik router configuration for AyeikSitt_WiFi:
+#   Automates complete MikroTik router configuration for Yadanar Tun Wifi:
 #   - WAN DHCP Client & NAT Masquerade
 #   - LAN Bridge, DHCP Server (10.10.10.0/23, pool 10.10.10.10-10.10.11.250)
-#   - Wi-Fi Configuration (SSID: AyeikSitt_WiFi)
+#   - Wi-Fi Configuration (SSID: YadanarTun_WiFi)
 #   - Hotspot Server & Directory Detection (flash/hotspot vs hotspot)
-#   - User Profile: Creates 1GB_1H profile (10M/10M, 1 Hour session, 1GB data quota)
-#     * On configured routers, leaves existing profiles untouched (e.g. 2GB, 7D, VIP)
+#   - User Profiles: 5GB, 30Day, 2GB, 2Hour, VIP
+#     * Leaves existing profiles untouched
 #     * Preserves existing vouchers and their assigned users & limits
 #     * Enables MAC-roaming: users can log back in if MAC changes or after logout before limits reached
 #   - RouterOS API Service (Port 8728) & User Credentials for HotspotManager
@@ -23,7 +23,7 @@
 # ==============================================================================
 
 :put "================================================="
-:put "      AYEIKSITT_WIFI - STARTING FULL SETUP       "
+:put "    YADANAR TUN WIFI - STARTING FULL SETUP       "
 :put "================================================="
 
 :local rosVer [/system resource get version]
@@ -46,8 +46,8 @@
 } on-error={}
 
 # ── GLOBAL VARIABLES ──────────────────────────────────────────
-:global wifiSsid   "AyeikSitt_WiFi"
-:global dnsName    "ayeiksitt.wifi"
+:global wifiSsid   "YadanarTun_WiFi"
+:global dnsName    "yadanartun.wifi"
 :global apiPass    "Khant1234@"
 # To bypass admin devices permanently without voucher, enter MACs: {"XX:XX:XX:XX:XX:XX"; "YY:YY:YY:YY:YY:YY"}
 :global adminMacs  [:toarray ""]
@@ -58,7 +58,7 @@
 
 # ── SYSTEM IDENTITY ───────────────────────────────────────────
 :put "--- Setting Router Identity ---"
-:do { /system identity set name="AyeikSitt_WiFi-Router" } on-error={}
+:do { /system identity set name="YadanarTun_WiFi-Router" } on-error={}
 
 # ── STEP 1: WAN Interface & NAT ───────────────────────────────
 :put "=== Step 1: WAN Interface & NAT ==="
@@ -197,14 +197,18 @@
 # ── STEP 5: Hotspot Server & Directory Detection ───────────────
 :put "=== Step 5: Hotspot Server & Directory ==="
 :local hsDir "hotspot"
-:if ([:len [/file find name="flash/mkcaptivePortal"]] > 0) do={
-  :set hsDir "flash/mkcaptivePortal"
+:if ([:len [/file find name="flash/hotspot"]] > 0) do={
+  :set hsDir "flash/hotspot"
 } else={
-  :if ([:len [/file find name="mkcaptivePortal"]] > 0) do={
-    :set hsDir "mkcaptivePortal"
+  :if ([:len [/file find name="hotspot"]] > 0) do={
+    :set hsDir "hotspot"
   } else={
-    :if ([:len [/file find name="flash/hotspot"]] > 0) do={
-      :set hsDir "flash/hotspot"
+    :if ([:len [/file find name="flash/mkcaptivePortal"]] > 0) do={
+      :set hsDir "flash/mkcaptivePortal"
+    } else={
+      :if ([:len [/file find name="mkcaptivePortal"]] > 0) do={
+        :set hsDir "mkcaptivePortal"
+      }
     }
   }
 }
@@ -254,34 +258,80 @@
 # 2. Trigger 'voucher-activate' to initiate continuous expiration countdown from time of first login.
 :local macFixScript ":local u \$user; :local m \$\"mac-address\"; :do { /ip hotspot active remove [find user=\$u and mac-address!=\$m]; /ip hotspot cookie remove [find user=\$u and mac-address!=\$m] } on-error={}; :global hsUser \$user; :do { /system script run voucher-activate } on-error={}"
 
-# 1. Create or update 1GB_1H profile:
-# - shared-users=2 allows reconnecting from randomized MAC before old keepalive expires
-# - on-login purges old MAC session and activates continuous validity countdown
-# - keepalive-timeout=none prevents dropping sleeping mobile devices
+# 1. Profile 5GB (20M/20M, 1 Day, 5GB Quota):
 :do {
-  /ip hotspot user profile add name="1GB_1H" rate-limit="10M/10M" session-timeout=1h \
+  /ip hotspot user profile add name="5GB" rate-limit="20M/20M" session-timeout=1d \
     keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-  :put "  Profile 1GB_1H created (session-timeout=1h, rate-limit=10M/10M, MAC-roaming & continuous countdown enabled)."
+  :put "  Profile 5GB created (session-timeout=1d, rate-limit=20M/20M)."
 } on-error={
   :do {
-    /ip hotspot user profile set [find name="1GB_1H"] rate-limit="10M/10M" session-timeout=1h \
+    /ip hotspot user profile set [find name="5GB"] rate-limit="20M/20M" session-timeout=1d \
       keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-    :put "  Profile 1GB_1H updated (MAC-roaming & continuous countdown enabled)."
+    :put "  Profile 5GB updated."
   } on-error={}
 }
 
-# 2. Create or update 15M profile (15 Minutes validity):
+# 2. Profile 30Day (10M/10M, 30 Days, 60GB Quota):
+:do {
+  /ip hotspot user profile add name="30Day" rate-limit="10M/10M" session-timeout=30d \
+    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
+  :put "  Profile 30Day created (session-timeout=30d, rate-limit=10M/10M)."
+} on-error={
+  :do {
+    /ip hotspot user profile set [find name="30Day"] rate-limit="10M/10M" session-timeout=30d \
+      keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
+    :put "  Profile 30Day updated."
+  } on-error={}
+}
+
+# 3. Profile 2GB (20M/20M, 1 Day, 2GB Quota):
+:do {
+  /ip hotspot user profile add name="2GB" rate-limit="20M/20M" session-timeout=1d \
+    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
+  :put "  Profile 2GB created (session-timeout=1d, rate-limit=20M/20M)."
+} on-error={
+  :do {
+    /ip hotspot user profile set [find name="2GB"] rate-limit="20M/20M" session-timeout=1d \
+      keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
+    :put "  Profile 2GB updated."
+  } on-error={}
+}
+
+# 4. Profile 2Hour (5M/5M, 2 Hours, Unlimited Quota):
+:do {
+  /ip hotspot user profile add name="2Hour" rate-limit="5M/5M" session-timeout=2h \
+    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
+  :put "  Profile 2Hour created (session-timeout=2h, rate-limit=5M/5M)."
+} on-error={
+  :do {
+    /ip hotspot user profile set [find name="2Hour"] rate-limit="5M/5M" session-timeout=2h \
+      keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
+    :put "  Profile 2Hour updated."
+  } on-error={}
+}
+
+# 5. Profile VIP (5M/5M, Unlimited):
+:do {
+  /ip hotspot user profile add name="VIP" rate-limit="5M/5M" session-timeout=none \
+    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
+  :put "  Profile VIP created (unlimited, rate-limit=5M/5M)."
+} on-error={
+  :do {
+    /ip hotspot user profile set [find name="VIP"] rate-limit="5M/5M" session-timeout=none \
+      keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
+    :put "  Profile VIP updated."
+  } on-error={}
+}
+
+# Legacy profile aliases for backward compatibility
+:do {
+  /ip hotspot user profile add name="1GB_1H" rate-limit="10M/10M" session-timeout=1h \
+    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
+} on-error={}
 :do {
   /ip hotspot user profile add name="15M" rate-limit="10M/10M" session-timeout=15m \
     keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-  :put "  Profile 15M created (session-timeout=15m, rate-limit=10M/10M, MAC-roaming & continuous countdown enabled)."
-} on-error={
-  :do {
-    /ip hotspot user profile set [find name="15M"] rate-limit="10M/10M" session-timeout=15m \
-      keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-    :put "  Profile 15M updated (MAC-roaming & continuous countdown enabled)."
-  } on-error={}
-}
+} on-error={}
 
 # 3. Update default profile with safe matching values and MAC roaming & continuous countdown
 :do {
@@ -814,7 +864,7 @@
 
 :put ""
 :put "================================================="
-:put "     AYEIKSITT_WIFI - FULL SETUP COMPLETED       "
+:put "     YADANAR TUN WIFI - FULL SETUP COMPLETED     "
 :put "================================================="
 :put ("Router Model    : " . $boardName)
 :put ("RouterOS Version: " . $rosVer)

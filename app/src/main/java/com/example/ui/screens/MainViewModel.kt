@@ -374,12 +374,13 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     }
 
     fun updateProfile(oldName: String, profile: UserProfile) {
-        viewModelScope.launch {
+        viewModelScope.launch(exceptionHandler) {
             val res = repository.updateProfile(oldName, profile)
             if (res.isSuccess) {
-                userMessage.value = "✓ Profile '${profile.name}' updated on router!"
+                userMessage.value = "✓ Profile '${profile.name}' updated! All remaining & active users aligned."
                 repository.syncProfilesFromRouter()
                 repository.syncVouchersFromRouter()
+                fetchRouterData()
             } else {
                 userMessage.value = "✗ Router Error: ${res.exceptionOrNull()?.message ?: "Failed to update profile"}"
             }

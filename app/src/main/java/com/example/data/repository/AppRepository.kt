@@ -145,20 +145,33 @@ class AppRepository(
             return Result.failure(Exception("Router is not connected. Cannot update profile."))
         }
         val sessionTimeout = MikrotikClient.formatMikrotikUptime(profile.durationMinutes, profile.validityDays)
+        val limitBytesTotal = if (profile.dataLimitMb > 0) profile.dataLimitMb.toLong() * 1024L * 1024L else 0L
+        val limitUptime = sessionTimeout
+
         val ok = mikrotikClient.updateRouterProfile(
             oldName = oldName,
             newName = profile.name,
             rateLimit = profile.rateLimit,
             sharedUsers = profile.sharedUsers,
-            sessionTimeout = sessionTimeout
+            sessionTimeout = sessionTimeout,
+            limitBytesTotal = limitBytesTotal,
+            limitUptime = limitUptime
         )
         if (!ok) {
             return Result.failure(Exception("Router rejected updating profile '$oldName'."))
         }
         dao.updateProfile(profile)
-        if (oldName != profile.name) {
-            dao.updateVoucherProfileName(oldName, profile.name)
-        }
+        // Align all existing local vouchers in Room DB with the new profile adjustments
+        dao.updateVouchersForProfile(
+            oldName = oldName,
+            newName = profile.name,
+            downloadLimitMbps = profile.downloadLimitMbps,
+            uploadLimitMbps = profile.uploadLimitMbps,
+            dataLimitMb = profile.dataLimitMb,
+            durationMinutes = profile.durationMinutes,
+            validityDays = profile.validityDays,
+            price = profile.price
+        )
         return Result.success(Unit)
     }
 

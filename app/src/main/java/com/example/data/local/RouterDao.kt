@@ -146,6 +146,28 @@ interface RouterDao {
     @Query("UPDATE vouchers SET profileName = :newName WHERE profileName = :oldName")
     suspend fun updateVoucherProfileName(oldName: String, newName: String)
 
+    @Query("""
+        UPDATE vouchers 
+        SET profileName = :newName,
+            downloadLimitMbps = :downloadLimitMbps,
+            uploadLimitMbps = :uploadLimitMbps,
+            dataLimitMb = :dataLimitMb,
+            durationMinutes = :durationMinutes,
+            validityDays = :validityDays,
+            price = :price
+        WHERE profileName = :oldName
+    """)
+    suspend fun updateVouchersForProfile(
+        oldName: String,
+        newName: String,
+        downloadLimitMbps: Int,
+        uploadLimitMbps: Int,
+        dataLimitMb: Int,
+        durationMinutes: Int,
+        validityDays: Int,
+        price: Double
+    )
+
     @Query("UPDATE vouchers SET isUsed = 0, isPrinted = 0 WHERE code = :code")
     suspend fun renewVoucher(code: String)
 

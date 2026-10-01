@@ -1,68 +1,229 @@
 <!DOCTYPE html>
-<html lang="my">
+<html lang="en">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <title>အရိပ်စစ် Wifi – အမှားအယွင်း ဖြစ်ပေါ်ပါသည်</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Yadanar Tun Wifi – Error</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <link rel="icon" type="image/jpeg" href="img/ayeiksitt.jpg" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta name="description" content="Yadanar Tun Wifi – An error occurred." />
+  <!--
+    error.html – Fallback error page.
+  -->
+  <link rel="icon" href="img/favicon.ico" />
   <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* ── Error Page Extras ── */
+    .error-icon-wrap {
+      display: flex; justify-content: center; margin-bottom: 20px;
+    }
+    .error-circle {
+      width: 80px; height: 80px; border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #3a1600, #1a0800);
+      border: 2px solid rgba(251,146,60,.45);
+      box-shadow: 0 0 0 6px rgba(251,146,60,.08), 0 0 28px rgba(251,146,60,.22);
+      display: flex; align-items: center; justify-content: center;
+      animation: pop-in .5s cubic-bezier(.22,1,.36,1) both;
+    }
+    @keyframes pop-in {
+      from { transform: scale(.6); opacity: 0; }
+      to   { transform: scale(1);  opacity: 1; }
+    }
+    .error-page-title {
+      text-align: center;
+      font-size: 24px; font-weight: 800; letter-spacing: .05em;
+      color: #fff; margin-bottom: 4px;
+    }
+    .error-page-sub {
+      text-align: center;
+      font-size: 13px; color: rgba(255,255,255,.45);
+      margin-bottom: 22px;
+    }
+    .error-msg-box {
+      background: rgba(251,146,60,.07);
+      border: 1.5px solid rgba(251,146,60,.30);
+      border-radius: 12px;
+      padding: 14px 18px; margin-bottom: 24px;
+      display: flex; align-items: flex-start; gap: 12px;
+    }
+    .error-msg-icon {
+      color: #fb923c; flex-shrink: 0; margin-top: 2px;
+    }
+    .error-msg-text {
+      font-size: 14px; color: #fcd34d; font-weight: 500;
+      line-height: 1.5; word-break: break-word;
+    }
+    .error-generic {
+      color: rgba(255,255,255,.50);
+      font-size: 13px; text-align: center; margin-bottom: 22px;
+      line-height: 1.6;
+    }
+    /* Try again button */
+    .try-again-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 100%; height: 50px;
+      border: none; border-radius: var(--radius-input);
+      background: linear-gradient(135deg, var(--gold-deep) 0%, var(--gold-mid) 50%, var(--gold-bright) 100%);
+      color: #1a0800; font-family: 'Outfit', sans-serif;
+      font-size: 14px; font-weight: 800; letter-spacing: .10em;
+      cursor: pointer; text-decoration: none;
+      box-shadow: 0 4px 24px rgba(212,148,10,.40);
+      transition: transform .2s, box-shadow .2s;
+      position: relative; overflow: hidden;
+      gap: 8px;
+    }
+    .try-again-btn::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,.15) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .try-again-btn:hover  { transform: translateY(-2px); box-shadow: 0 7px 32px rgba(212,148,10,.55); }
+    .try-again-btn:active { transform: translateY(0);    box-shadow: 0 2px 12px rgba(212,148,10,.30); }
+    .error-code-label {
+      text-align: center;
+      font-size: 10px; color: rgba(255,255,255,.22); margin-top: 12px;
+      font-family: monospace; letter-spacing: .08em;
+    }
+  </style>
 </head>
 <body>
 
-  <!-- Sweet Pastel Ambient Background -->
-  <div class="warm-bg" aria-hidden="true">
-    <div class="sun-bubble bubble-1"></div>
-    <div class="sun-bubble bubble-2"></div>
+  <!-- Loading Overlay -->
+  <div class="body-loading" id="body_loading">
+    <div class="loading-inner">
+      <div class="loading-ring"></div>
+      <p class="loading-text">Loading…</p>
+    </div>
   </div>
 
-  <div class="portal-wrapper">
-    <div class="portal-card" style="text-align: center;">
+  <div class="body-wrapper">
 
-      <!-- Baby Hero Section -->
-      <div class="hero-kid-section">
-        <div class="avatar-outer-ring" style="width: 104px; height: 104px; background: linear-gradient(135deg, #F87171, #FBBF24);">
-          <div class="avatar-inner-frame">
-            <img src="img/ayeiksitt.jpg" alt="အရိပ်စစ်လေး" class="kid-photo" />
-          </div>
-          <div class="kid-badge-tag" style="background:#FEF2F2; border-color:#FCA5A5; color:#991B1B;">
-            <span>⚠️</span>
-            <span>သတိပြုရန်</span>
+    <div class="body-background">
+      <div class="body-background-mask"></div>
+    </div>
+
+    <div class="particles" aria-hidden="true">
+      <span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span>
+    </div>
+
+    <div class="body-content-wrapper">
+      <div class="login-card">
+
+        <!-- Error Icon -->
+        <div class="error-icon-wrap">
+          <div class="error-circle">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+                 xmlns="http://www.w3.org/2000/svg">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                    stroke="#fb923c" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    fill="rgba(251,146,60,.10)"/>
+              <line x1="12" y1="9"  x2="12" y2="13"
+                    stroke="#fb923c" stroke-width="2.2" stroke-linecap="round"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"
+                    stroke="#fb923c" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
           </div>
         </div>
 
-        <h1 class="brand-title" style="font-size: 21px;">ခေတ္တ စစ်ဆေးပါ</h1>
-        <p class="brand-greeting">ဘောင်ချာကုဒ် သို့မဟုတ် အကောင့် အဆင်မပြေပါ</p>
-      </div>
+        <!-- Title -->
+        <h1 class="error-page-title">Something Went Wrong</h1>
+        <p class="error-page-sub">ကျေးဇူးပြု၍ ပြန်လည်စစ်ဆေးပါ • Please check your voucher code.</p>
 
-      <!-- Error Message Card -->
-      <div class="alert-box" style="margin-bottom: 20px; justify-content: center; text-align: left;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0;">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        <span>$(error)</span>
-      </div>
+        <!-- Error message injected by MikroTik $(error) -->
+        <div class="error-msg-box" id="error_box">
+          <span class="error-msg-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8"  x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </span>
+          <p class="error-msg-text" id="error_message_text">$(error)</p>
+        </div>
 
-      <form action="$(link-login)" method="get">
-        <button class="btn-connect" type="submit">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+        <p class="error-generic">
+          Please check your voucher code or credentials and try again.<br/>
+          Contact support if the problem persists.
+        </p>
+
+        <!-- Try Again Button -->
+        <a class="try-again-btn" href="$(link-login)" id="try_again_btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.2">
             <polyline points="1 4 1 10 7 10"/>
-            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            <path d="M3.51 15a9 9 0 1 0 .49-4.03"/>
           </svg>
-          <span>ပြန်လည် ကြိုးစားမည် (Try Again)</span>
-        </button>
-      </form>
+          TRY AGAIN
+        </a>
 
-      <!-- Footer Copy -->
-      <p class="footer-text">
-        ❤️ မေတ္တာဖြင့် ဝန်ဆောင်မှုပေးပါသည် • အရိပ်စစ် Wifi
-      </p>
+        <!-- Feature tags -->
+        <div class="feature-row">
+          <span class="feature-tag">&#10022; HIGH SPEED</span>
+          <span class="feature-tag">&#10022; STABLE LINK</span>
+          <span class="feature-tag">&#10022; 24/7 UP TIME</span>
+        </div>
 
+        <p class="card-footer">
+          Yadanar Tun Wifi &nbsp;&bull;&nbsp; Powered by MikroTik
+        </p>
+
+      </div><!-- /.login-card -->
     </div>
-  </div>
+
+  </div><!-- /.body-wrapper -->
+
+  <script>
+    (function () {
+      setTimeout(function () {
+        var overlay = document.getElementById('body_loading');
+        if (overlay) overlay.classList.add('hide');
+      }, 500);
+
+      document.addEventListener('DOMContentLoaded', function () {
+        var msgEl = document.getElementById('error_message_text');
+        if (msgEl) {
+          var txt = msgEl.textContent.trim();
+          if (!txt || txt === '$(error)') {
+            var box = document.getElementById('error_box');
+            if (box) box.style.display = 'none';
+          } else {
+            var lower = txt.toLowerCase();
+            var hintEl = document.querySelector('.error-generic');
+            if (hintEl) {
+              if (lower.indexOf('invalid username') !== -1 || lower.indexOf('not found') !== -1) {
+                hintEl.innerHTML = 'The voucher code or account username/password is incorrect.<br/>Please double-check your code and try again.';
+              } else if (lower.indexOf('unknown user profile') !== -1) {
+                hintEl.innerHTML = 'This voucher has an invalid profile or was removed.<br/>Please enter a valid voucher or contact admin.';
+              } else if (lower.indexOf('limit reached') !== -1 || lower.indexOf('uptime') !== -1 || lower.indexOf('traffic') !== -1) {
+                hintEl.innerHTML = 'This voucher has reached its allotted time or data limit.<br/>Please purchase a new voucher to continue.';
+                try {
+                  localStorage.removeItem('yadanartun_voucher');
+                  localStorage.removeItem('allgood_voucher');
+                  localStorage.removeItem('yadanartun_voucher_expiry');
+                  localStorage.removeItem('allgood_voucher_expiry');
+                } catch (e) {}
+              } else if (lower.indexOf('already logged in') !== -1) {
+                hintEl.innerHTML = 'This account/voucher is already active on another device.<br/>Please log out from the other device first.';
+              }
+            }
+          }
+        }
+
+        var btn = document.getElementById('try_again_btn');
+        if (btn) {
+          var origin = (window.location.origin && window.location.origin.startsWith('http'))
+            ? window.location.origin
+            : 'http://10.10.10.1';
+          btn.setAttribute('href', origin + '/login');
+        }
+      });
+    })();
+  </script>
 
 </body>
 </html>

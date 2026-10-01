@@ -797,13 +797,14 @@ class MikrotikClient {
             }
         }
     }
-
     suspend fun updateRouterProfile(
         oldName: String,
         newName: String,
         rateLimit: String,
         sharedUsers: Int = 1,
-        sessionTimeout: String = ""
+        sessionTimeout: String = "",
+        limitBytesTotal: Long = 0L,
+        limitUptime: String = ""
     ): Boolean = withContext(Dispatchers.IO) {
         apiMutex.withLock {
             try {
@@ -812,24 +813,105 @@ class MikrotikClient {
                 val profId = profs.firstOrNull { it["name"] == oldName }?.get(".id")
                 if (profId.isNullOrBlank()) return@withContext false
 
-                val onLoginScript = ":global hsUser \$user; /system script run voucher-activate;"
+                val onLoginScript = ":local u \$user; :local m \$\"mac-address\"; :do { /ip hotspot active remove [find user=\$u and mac-address!=\$m]; /ip hotspot cookie remove [find user=\$u and mac-address!=\$m] } on-error={}; :global hsUser \$user; :do { /system script run voucher-activate } on-error={}"
                 val targetName = if (newName.isNotBlank()) newName else oldName
+                val cleanRate = if (rateLimit.isNotBlank()) {
+                    if (!rateLimit.contains("/")) "$rateLimit/$rateLimit" else rateLimit
+                } else ""
+
                 val params = mutableListOf(
                     ".id=$profId",
                     "name=$targetName",
                     "shared-users=$sharedUsers",
-                    "keepalive-timeout=00:02:00",
+                    "keepalive-timeout=none",
+                    "idle-timeout=none",
                     "status-autorefresh=00:01:00",
                     "on-login=$onLoginScript"
                 )
                 if (sessionTimeout.isNotBlank()) {
                     params.add("session-timeout=$sessionTimeout")
                 }
-                if (rateLimit.isNotBlank()) {
-                    val cleanRate = if (!rateLimit.contains("/")) "$rateLimit/$rateLimit" else rateLimit
+                if (cleanRate.isNotBlank()) {
                     params.add("rate-limit=$cleanRate")
                 }
                 conn.execute("/ip/hotspot/user/profile/set", *params.toTypedArray())
+
+                // 2. Query all users belonging to this profile (oldName) to align them
+                val allUsers = conn.execute("/ip/hotspot/user/print", "=.proplist=.id,name,profile")
+                val matchingUsers = allUsers.filter { it["profile"] == oldName }
+                val matchingUserNames = matchingUsers.mapNotNull { it["name"] }.toSet()
+
+                // 3. Align remaining users in RouterOS
+                val userUpdates = mutableListOf<String>()
+                if (targetName != oldName) {
+                    userUpdates.add("profile=$targetName")
+                }
+                if (limitBytesTotal > 0L) {
+                    userUpdates.add("limit-bytes-total=$limitBytesTotal")
+                }
+                if (limitUptime.isNotBlank()) {
+                    userUpdates.add("limit-uptime=$limitUptime")
+                }
+
+                if (userUpdates.isNotEmpty() && matchingUsers.isNotEmpty()) {
+                    for (u in matchingUsers) {
+                        val uid = u[".id"]
+                        if (!uid.isNullOrBlank()) {
+                            try {
+                                conn.execute("/ip/hotspot/user/set", ".id=$uid", *userUpdates.toTypedArray())
+                            } catch (_: Exception) {}
+                        }
+                    }
+                }
+
+                // 4. Align ACTIVE using users currently connected
+                try {
+                    val activeRes = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,user,address")
+                    val activeMatching = activeRes.filter { it["user"] in matchingUserNames }
+
+                    // If rateLimit changed, update simple queues for active users immediately
+                    if (cleanRate.isNotBlank()) {
+                        try {
+                            val queues = conn.execute("/queue/simple/print", "=.proplist=.id,name,target")
+                            activeMatching.forEach { active ->
+                                val u = active["user"] ?: ""
+                                val ip = active["address"] ?: ""
+                                val q = queues.firstOrNull { 
+                                    (u.isNotBlank() && it["name"]?.contains(u) == true) || 
+                                    (ip.isNotBlank() && it["target"]?.contains(ip) == true) 
+                                }
+                                q?.get(".id")?.let { qId ->
+                                    try {
+                                        conn.execute("/queue/simple/set", ".id=$qId", "max-limit=$cleanRate")
+                                    } catch (_: Exception) {}
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
+
+                    // Refresh active sessions so client devices immediately pick up new profile, limits & queue
+                    val activeIds = activeMatching.mapNotNull { it[".id"] }
+                    for (chunk in activeIds.chunked(50)) {
+                        try {
+                            conn.execute("/ip/hotspot/active/remove", ".id=" + chunk.joinToString(","))
+                        } catch (_: Exception) {
+                            for (id in chunk) {
+                                try { conn.execute("/ip/hotspot/active/remove", ".id=$id") } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // Update cached users in memory
+                cachedHotspotUsers = cachedHotspotUsers.map { u ->
+                    if (u.profile == oldName) {
+                        u.copy(
+                            profile = targetName,
+                            limitBytesTotal = if (limitBytesTotal > 0L) limitBytesTotal else u.limitBytesTotal
+                        )
+                    } else u
+                }
+
                 true
             } catch (e: Exception) {
                 handleApiError(e)
