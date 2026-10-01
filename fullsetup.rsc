@@ -543,24 +543,24 @@
 
 # ── STEP 9: Walled Garden for HotspotManager API & DNS ────────
 :put "=== Step 9: Hotspot Walled Garden for API & DNS ==="
+# Remove any conflicting walled-garden IP rules
+:foreach w in=[/ip hotspot walled-garden ip find] do={
+  :do { /ip hotspot walled-garden ip remove $w } on-error={}
+}
+
 # 1. Allow full access to Router Gateway (10.10.10.1) so app can connect to API before login
 :do {
   /ip hotspot walled-garden ip add dst-address=$gwIp action=accept comment="Hotspot Gateway Full Access"
-} on-error={
-  :do { /ip hotspot walled-garden ip set [find comment="Hotspot Gateway Full Access"] dst-address=$gwIp action=accept } on-error={}
-}
+} on-error={}
 
 # 2. Explicitly allow API TCP ports 8728 and 8729
 :do {
   /ip hotspot walled-garden ip add dst-address=$gwIp dst-port=8728 protocol=tcp action=accept comment="HotspotManager API"
-} on-error={
-  :do { /ip hotspot walled-garden ip set [find comment="HotspotManager API"] dst-address=$gwIp dst-port=8728 protocol=tcp action=accept } on-error={}
-}
+} on-error={}
 :do {
   /ip hotspot walled-garden ip add dst-address=$gwIp dst-port=8729 protocol=tcp action=accept comment="HotspotManager API-SSL"
-} on-error={
-  :do { /ip hotspot walled-garden ip set [find comment="HotspotManager API-SSL"] dst-address=$gwIp dst-port=8729 protocol=tcp action=accept } on-error={}
-}
+} on-error={}
+
 :if ([:len $dnsName] > 0) do={
   :do {
     /ip hotspot walled-garden add dst-host=$dnsName action=allow comment="Hotspot Portal DNS"
@@ -597,32 +597,20 @@
 # ── STEP 12: Firewall & Security Rules ────────────────────────
 :put "=== Step 12: Firewall Rules (Allow API & Hotspot) ==="
 
-# 1. Remove FastTrack (MikroTik Hotspot is strictly incompatible with FastTrack)
-:foreach r in=[/ip firewall filter find where action="fasttrack-connection"] do={
+# 1. Clean all existing firewall filter rules to ensure exact, clean ordering without defconf blocks
+:foreach r in=[/ip firewall filter find] do={
   :do { /ip firewall filter remove $r } on-error={}
 }
 
-# 2. Remove all old defconf drop rules that block non-LAN input or forward
-:foreach r in=[/ip firewall filter find] do={
-  :do {
-    :local comm [/ip firewall filter get $r comment]
-    :local act [/ip firewall filter get $r action]
-    :local dp [/ip firewall filter get $r dst-port]
-    :if (($comm ~ "defconf: drop") or ($comm ~ "Drop all other input from WAN") or ($act = "drop" and $dp ~ "8728") or ($comm ~ "Allow HotspotManager API")) do={
-      /ip firewall filter remove $r
-    }
-  } on-error={}
-}
-
-# 3. Clean, deterministic INPUT chain rules:
+# 2. Clean, deterministic INPUT chain rules:
 # Accept established, related, untracked
 :do { /ip firewall filter add action=accept chain=input connection-state=established,related,untracked comment="Accept established,related,untracked" } on-error={}
 # Drop invalid
 :do { /ip firewall filter add action=drop chain=input connection-state=invalid comment="Drop invalid" } on-error={}
 # Accept ICMP (Ping)
 :do { /ip firewall filter add action=accept chain=input protocol=icmp comment="Accept ICMP" } on-error={}
-# Explicitly ACCEPT API port 8728 & 8729 from hotspot-bridge (HotspotManager App)
-:do { /ip firewall filter add action=accept chain=input dst-port=8728,8729 protocol=tcp in-interface=hotspot-bridge comment="Allow HotspotManager API" } on-error={}
+# Explicitly ACCEPT API port 8728 & 8729 (HotspotManager App)
+:do { /ip firewall filter add action=accept chain=input dst-port=8728,8729 protocol=tcp comment="Allow HotspotManager API" } on-error={}
 # Accept DNS & DHCP on input from hotspot-bridge
 :do { /ip firewall filter add action=accept chain=input dst-port=53,67 protocol=udp in-interface=hotspot-bridge comment="Allow DNS/DHCP UDP" } on-error={}
 :do { /ip firewall filter add action=accept chain=input dst-port=53 protocol=tcp in-interface=hotspot-bridge comment="Allow DNS TCP" } on-error={}
@@ -633,7 +621,7 @@
 # Drop all other unsolicited input from WAN (ether1)
 :do { /ip firewall filter add action=drop chain=input in-interface=ether1 comment="Drop all other input from WAN" } on-error={}
 
-# 4. Clean, deterministic FORWARD chain rules:
+# 3. Clean, deterministic FORWARD chain rules:
 # Accept established, related, untracked
 :do { /ip firewall filter add action=accept chain=forward connection-state=established,related,untracked comment="Accept forward established,related,untracked" } on-error={}
 # Drop invalid
