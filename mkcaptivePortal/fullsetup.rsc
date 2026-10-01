@@ -32,7 +32,7 @@
 :put ("Detected RouterOS : " . $rosVer)
 
 # ── GLOBAL VARIABLES ──────────────────────────────────────────
-:global wifiSsid   "AyeikSIt_WiFi"
+:global wifiSsid   "AyeikSit_WiFi"
 :global dnsName    ""
 :global apiPass    "Khant1234@"
 :global adminMacs  {"A0:29:19:39:34:61";"CC:15:31:83:26:BF"}
@@ -669,7 +669,8 @@
 
 # 3. Connection tracking dead-state optimization (cleans stale TCP sessions in 10s instead of 2m)
 :do {
-  /ip firewall connection tracking set tcp-close-wait-timeout=10s tcp-time-wait-timeout=10s tcp-fin-wait-timeout=10s tcp-syn-sent-timeout=10s
+  :local ctCmd "/ip firewall connection tracking set tcp-close-wait-timeout=10s tcp-time-wait-timeout=10s tcp-fin-wait-timeout=10s tcp-syn-sent-timeout=10s"
+  [ :parse $ctCmd ]
 } on-error={}
 
 # 4. Optimized DHCP lease time (2 hours instead of 24h prevents stale phone lease bloat)
@@ -678,11 +679,11 @@
 } on-error={}
 
 # 5. Disable unused resource-heavy background services
-:do { /ip smb set enabled=no } on-error={}
-:do { /ip socks set enabled=no } on-error={}
-:do { /ip upnp set enabled=no } on-error={}
-:do { /ip cloud set ddns-enabled=no update-time=no } on-error={}
-:do { /tool bandwidth-server set enabled=no } on-error={}
+:do { [ :parse "/ip smb set enabled=no" ] } on-error={}
+:do { [ :parse "/ip socks set enabled=no" ] } on-error={}
+:do { [ :parse "/ip upnp set enabled=no" ] } on-error={}
+:do { [ :parse "/ip cloud set ddns-enabled=no" ] } on-error={}
+:do { [ :parse "/tool bandwidth-server set enabled=no" ] } on-error={}
 
 # 6. Clean stale unauthorized hotspot hosts & orphaned cookies to reclaim memory immediately
 :foreach h in=[/ip hotspot host find] do={
@@ -712,7 +713,7 @@
 :put "Gateway IP      : 10.10.10.1"
 :put "Hotspot DNS     : (Blank - Gateway IP 10.10.10.1)"
 :put "Network Range   : 10.10.10.0/23"
-:put "SSID            : AyeikSIt_WiFi"
+:put ("SSID            : " . $wifiSsid)
 :put "Portal Directory: flash/hotspot (or hotspot)"
 :put "API Port        : 8728 (ENABLED & ALLOWED)"
 :put "Admin User      : admin / Khant1234@"
