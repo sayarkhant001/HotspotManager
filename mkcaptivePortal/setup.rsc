@@ -31,16 +31,18 @@
 :put ("Detected Hardware : " . $boardName)
 :put ("Detected RouterOS : " . $rosVer)
 
-# Check RouterOS Device-Mode (Hotspot & Scheduler restrictions)
+# Check RouterOS Device-Mode (Switch Home Mode -> Advance Mode)
 :do {
   :local dmHotspot [/system device-mode get hotspot]
   :if ($dmHotspot = false or $dmHotspot = "no") do={
     :put "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-    :put "  CRITICAL: HOTSPOT IS DISABLED IN ROUTEROS DEVICE-MODE!"
-    :put "  Router is currently in 'mode: home' (hotspot: no)."
-    :put "  To activate Hotspot, run in Terminal:"
-    :put "    /system/device-mode/update hotspot=yes scheduler=yes"
-    :put "  Then power-cycle router (unplug & replug power) to confirm."
+    :put "  SWITCHING ROUTER FROM HOME MODE TO ADVANCE/ENTERPRISE MODE..."
+    :do { /system/device-mode/update mode=enterprise } on-error={
+      :do { /system/device-mode/update mode=advanced } on-error={
+        :do { /system/device-mode/update hotspot=yes scheduler=yes fetch=yes romon=yes traffic-flow=yes bandwidth-test=yes } on-error={}
+      }
+    }
+    :put "  ACTION REQUIRED: Unplug & replug router power cord within 3 mins to confirm!"
     :put "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
   }
 } on-error={}

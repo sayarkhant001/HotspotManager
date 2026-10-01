@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -32,6 +33,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     val stats by viewModel.routerStats.collectAsStateWithLifecycle()
     val activeUsers by viewModel.activeUsers.collectAsStateWithLifecycle()
     val vouchers by viewModel.vouchers.collectAsStateWithLifecycle()
+    val topology by viewModel.networkTopology.collectAsStateWithLifecycle()
     val rxSpeed by viewModel.rxSpeedMbps.collectAsStateWithLifecycle()
     val txSpeed by viewModel.txSpeedMbps.collectAsStateWithLifecycle()
     val selectedFilter by viewModel.selectedDateFilter.collectAsStateWithLifecycle()
@@ -270,12 +272,12 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                     color = MaterialTheme.colorScheme.primary,
                     history = cpuHistory
                 )
-                StatCard(
+                TopologyStatCard(
                     modifier = Modifier.weight(1f),
-                    title = strings.uptime,
-                    value = stats?.uptime ?: "00:00",
-                    icon = Icons.Default.Schedule,
-                    color = MaterialTheme.colorScheme.tertiary
+                    title = strings.networkTopology,
+                    apCount = topology.accessPoints.size,
+                    uptime = stats?.uptime ?: "00:00",
+                    onClick = { navController.navigate("network_topology") }
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -512,6 +514,13 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 icon = Icons.Default.GroupWork,
                 onClick = { navController.navigate("profiles") }
             )
+            DashboardMenuCard(
+                title = strings.networkTopology,
+                subtitle = "${topology.accessPoints.size} APs Connected (Ruijie / Reyee)",
+                icon = Icons.Default.Hub,
+                badgeCount = topology.accessPoints.size,
+                onClick = { navController.navigate("network_topology") }
+            )
         }
 
         // GitHub App Update Dialog
@@ -684,6 +693,49 @@ fun StatCard(
             Spacer(modifier = Modifier.height(6.dp))
             Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+fun TopologyStatCard(
+    modifier: Modifier = Modifier,
+    title: String,
+    apCount: Int,
+    uptime: String,
+    onClick: () -> Unit
+) {
+    GlassCard(
+        modifier = modifier.clickable { onClick() }
+    ) {
+        Column(modifier = Modifier.padding(11.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Hub,
+                    contentDescription = title,
+                    tint = Color(0xFF10B981),
+                    modifier = Modifier.size(20.dp)
+                )
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = Color(0xFF10B981).copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = "$apCount APs",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF10B981),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(uptime, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

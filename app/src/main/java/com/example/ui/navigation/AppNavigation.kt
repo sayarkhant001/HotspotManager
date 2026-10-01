@@ -39,5 +39,8 @@ fun AppNavigation(repository: AppRepository) {
         composable("active_sessions") {
             ActiveSessionsScreen(viewModel = viewModel, navController = navController)
         }
+        composable("network_topology") {
+            NetworkTopologyScreen(viewModel = viewModel, navController = navController)
+        }
     }
 }

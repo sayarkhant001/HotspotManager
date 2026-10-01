@@ -21,5 +21,6 @@ scratch/
 *.apk
 !HotspotManager-v1.3.4.apk
 !HotspotManager-v1.3.5.apk
+!HotspotManager-v1.3.6.apk
 *.zip
 hotspot1/

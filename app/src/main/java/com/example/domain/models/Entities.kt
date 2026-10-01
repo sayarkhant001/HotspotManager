@@ -82,4 +82,30 @@ data class ActiveUser(
     val comment: String = ""
 )
 
+data class IpBinding(
+    val id: String,
+    val macAddress: String,
+    val address: String = "",
+    val toAddress: String = "",
+    val type: String = "bypassed", // "bypassed", "blocked", "regular"
+    val comment: String = "",
+    val disabled: Boolean = false
+)
 
+data class AccessPointDevice(
+    val name: String,
+    val model: String,
+    val ipAddress: String,
+    val macAddress: String,
+    val isWhitelisted: Boolean,
+    val isOnline: Boolean,
+    val bindingId: String? = null,
+    val vendor: String = "Ruijie / Reyee"
+)
+
+data class NetworkTopologyData(
+    val routerModel: String = "RB4011iGS+",
+    val manageIp: String = "192.168.88.1",
+    val hotspotIp: String = "192.168.100.1",
+    val accessPoints: List<AccessPointDevice> = emptyList()
+)

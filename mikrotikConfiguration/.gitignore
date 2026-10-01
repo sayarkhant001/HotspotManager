@@ -1,0 +1,11 @@
+# Operating System Files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Temporary & Working Files
+*.tmp
+*.bak
+temp/
+scratch/
+mikrotik_deploy_*/

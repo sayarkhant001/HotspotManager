@@ -1,6 +1,9 @@
 package com.example.data.remote
 
 import com.example.domain.models.ActiveUser
+import com.example.domain.models.AccessPointDevice
+import com.example.domain.models.IpBinding
+import com.example.domain.models.NetworkTopologyData
 import com.example.domain.models.Voucher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -720,6 +723,322 @@ class MikrotikClient {
                         }
                     }
                 }
+                true
+            } catch (e: Exception) {
+                handleApiError(e)
+                false
+            }
+        }
+    }
+
+    suspend fun getIpBindings(): List<IpBinding> = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withContext emptyList()
+                val res = conn.execute("/ip/hotspot/ip-binding/print")
+                res.map {
+                    IpBinding(
+                        id = it[".id"] ?: "",
+                        macAddress = (it["mac-address"] ?: "").uppercase(),
+                        address = it["address"] ?: "",
+                        toAddress = it["to-address"] ?: "",
+                        type = it["type"] ?: "regular",
+                        comment = it["comment"] ?: "",
+                        disabled = it["disabled"] == "true"
+                    )
+                }
+            } catch (e: Exception) {
+                handleApiError(e)
+                emptyList()
+            }
+        }
+    }
+
+    suspend fun whitelistDevice(mac: String, ip: String = "", comment: String = "Whitelisted Device"): Boolean = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withContext false
+                val cleanMac = mac.trim().uppercase()
+                if (cleanMac.isBlank()) return@withContext false
+
+                val bindings = conn.execute("/ip/hotspot/ip-binding/print", "=.proplist=.id,mac-address")
+                val matched = bindings.firstOrNull { it["mac-address"].equals(cleanMac, ignoreCase = true) }
+
+                val params = mutableListOf<String>()
+                if (matched != null) {
+                    val bId = matched[".id"]
+                    params.add(".id=$bId")
+                    params.add("type=bypassed")
+                    params.add("comment=$comment")
+                    if (ip.isNotBlank()) params.add("address=$ip")
+                    params.add("disabled=no")
+                    conn.execute("/ip/hotspot/ip-binding/set", *params.toTypedArray())
+                } else {
+                    params.add("mac-address=$cleanMac")
+                    params.add("type=bypassed")
+                    params.add("comment=$comment")
+                    if (ip.isNotBlank()) params.add("address=$ip")
+                    conn.execute("/ip/hotspot/ip-binding/add", *params.toTypedArray())
+                }
+
+                // Drop hotspot host entry so the client or AP immediately gains bypassed state without Wi-Fi toggle
+                try {
+                    val hosts = conn.execute("/ip/hotspot/host/print", "=.proplist=.id,mac-address")
+                    hosts.filter { it["mac-address"].equals(cleanMac, ignoreCase = true) }.forEach {
+                        val hId = it[".id"]
+                        if (!hId.isNullOrBlank()) {
+                            try { conn.execute("/ip/hotspot/host/remove", ".id=$hId") } catch (_: Exception) {}
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                true
+            } catch (e: Exception) {
+                handleApiError(e)
+                false
+            }
+        }
+    }
+
+    suspend fun removeIpBinding(id: String, mac: String = ""): Boolean = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withContext false
+                if (id.isNotBlank()) {
+                    conn.execute("/ip/hotspot/ip-binding/remove", ".id=$id")
+                } else if (mac.isNotBlank()) {
+                    val cleanMac = mac.trim().uppercase()
+                    val bindings = conn.execute("/ip/hotspot/ip-binding/print", "=.proplist=.id,mac-address")
+                    bindings.filter { it["mac-address"].equals(cleanMac, ignoreCase = true) }.forEach {
+                        val bId = it[".id"]
+                        if (!bId.isNullOrBlank()) {
+                            try { conn.execute("/ip/hotspot/ip-binding/remove", ".id=$bId") } catch (_: Exception) {}
+                        }
+                    }
+                }
+                true
+            } catch (e: Exception) {
+                handleApiError(e)
+                false
+            }
+        }
+    }
+
+    suspend fun getNetworkTopology(): NetworkTopologyData = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            val defaultRouter = "RB4011iGS+"
+            val defaultManageIp = if (lastIp.isNotBlank()) lastIp else "192.168.88.1"
+            var hotspotIp = "192.168.100.1"
+
+            val conn = ensureConnectedInternal() ?: return@withContext NetworkTopologyData(
+                routerModel = defaultRouter,
+                manageIp = defaultManageIp,
+                hotspotIp = hotspotIp,
+                accessPoints = emptyList()
+            )
+
+            try {
+                var detectedBoardName = defaultRouter
+                try {
+                    val res = conn.execute("/system/resource/print")
+                    if (res.isNotEmpty()) {
+                        detectedBoardName = res[0]["board-name"] ?: res[0]["platform"] ?: defaultRouter
+                    }
+                } catch (_: Exception) {}
+
+                var detectedManageIp = defaultManageIp
+                try {
+                    val addresses = conn.execute("/ip/address/print")
+                    for (a in addresses) {
+                        val iface = a["interface"] ?: ""
+                        val addr = (a["address"] ?: "").substringBefore("/")
+                        if (addr.isNotBlank()) {
+                            if (iface.contains("hotspot", ignoreCase = true) || iface.contains("bridge", ignoreCase = true)) {
+                                hotspotIp = addr
+                            } else if (iface.contains("ether", ignoreCase = true) && detectedManageIp == defaultManageIp) {
+                                detectedManageIp = addr
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // Known Ruijie / Reyee OUI MAC address prefixes
+                val ruijieOuis = listOf(
+                    "C0:A4:76", "10:5F:02", "00:D0:F8", "70:70:8B", "74:05:A5",
+                    "BC:B2:D6", "24:72:60", "94:07:9A", "F4:CB:52", "80:05:88",
+                    "B8:F8:83", "14:75:90", "00:1A:A9", "54:FA:3E", "48:57:02", "38:4F:F0"
+                )
+
+                // Get IP Bindings (to check whitelisted status)
+                val bindingsMap = mutableMapOf<String, IpBinding>()
+                try {
+                    val bList = conn.execute("/ip/hotspot/ip-binding/print")
+                    bList.forEach {
+                        val mac = (it["mac-address"] ?: "").uppercase()
+                        if (mac.isNotBlank()) {
+                            bindingsMap[mac] = IpBinding(
+                                id = it[".id"] ?: "",
+                                macAddress = mac,
+                                address = it["address"] ?: "",
+                                toAddress = it["to-address"] ?: "",
+                                type = it["type"] ?: "regular",
+                                comment = it["comment"] ?: "",
+                                disabled = it["disabled"] == "true"
+                            )
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                val apMap = mutableMapOf<String, AccessPointDevice>()
+
+                // 1. Check DHCP leases for Ruijie / Reyee APs
+                try {
+                    val leases = conn.execute("/ip/dhcp-server/lease/print")
+                    leases.forEach { l ->
+                        val host = l["host-name"] ?: ""
+                        val mac = (l["mac-address"] ?: "").uppercase()
+                        val ip = l["address"] ?: ""
+                        val status = l["status"] ?: ""
+                        val comment = l["comment"] ?: ""
+
+                        val isRuijieMac = ruijieOuis.any { mac.startsWith(it) }
+                        val isApHost = host.startsWith("EST", ignoreCase = true) ||
+                                host.contains("EST310", ignoreCase = true) ||
+                                host.contains("EST350", ignoreCase = true) ||
+                                host.contains("Reyee", ignoreCase = true) ||
+                                host.contains("Ruijie", ignoreCase = true) ||
+                                host.contains("RG-", ignoreCase = true) ||
+                                host.contains("RAP", ignoreCase = true) ||
+                                host.contains("EW", ignoreCase = true) ||
+                                host.contains("EAP", ignoreCase = true) ||
+                                host.contains("AP-", ignoreCase = true) ||
+                                comment.contains("AP", ignoreCase = true) ||
+                                comment.contains("Ruijie", ignoreCase = true)
+
+                        if ((isRuijieMac || isApHost) && mac.isNotBlank()) {
+                            val binding = bindingsMap[mac]
+                            val isWhitelisted = binding?.type == "bypassed" && !binding.disabled
+                            val isOnline = status == "bound" || status == "active" || status.isNotBlank()
+
+                            val displayName = when {
+                                host.isNotBlank() -> host
+                                comment.isNotBlank() -> comment
+                                else -> "Ruijie-AP-${mac.takeLast(5).replace(":", "")}"
+                            }
+
+                            val model = when {
+                                displayName.contains("EST310", ignoreCase = true) -> "RG-EST310"
+                                displayName.contains("EST350", ignoreCase = true) -> "RG-EST350"
+                                displayName.contains("EW", ignoreCase = true) -> "Reyee Router AP"
+                                else -> "Ruijie Access Point"
+                            }
+
+                            apMap[mac] = AccessPointDevice(
+                                name = displayName,
+                                model = model,
+                                ipAddress = ip,
+                                macAddress = mac,
+                                isWhitelisted = isWhitelisted,
+                                isOnline = isOnline,
+                                bindingId = binding?.id,
+                                vendor = "Ruijie / Reyee"
+                            )
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // 2. Check CDP/LLDP / MNDP neighbors
+                try {
+                    val neighbors = conn.execute("/ip/neighbor/print")
+                    neighbors.forEach { n ->
+                        val identity = n["identity"] ?: ""
+                        val platform = n["platform"] ?: ""
+                        val mac = (n["mac-address"] ?: "").uppercase()
+                        val ip = n["address"] ?: ""
+
+                        val isRuijie = identity.contains("Ruijie", ignoreCase = true) ||
+                                identity.contains("Reyee", ignoreCase = true) ||
+                                identity.startsWith("EST", ignoreCase = true) ||
+                                platform.contains("Ruijie", ignoreCase = true) ||
+                                ruijieOuis.any { mac.startsWith(it) }
+
+                        if (isRuijie && mac.isNotBlank()) {
+                            val binding = bindingsMap[mac]
+                            val isWhitelisted = binding?.type == "bypassed" && !binding.disabled
+                            val displayName = identity.ifBlank { "Ruijie-AP-${mac.takeLast(5)}" }
+                            val model = if (displayName.contains("EST", ignoreCase = true)) "Ruijie Bridge" else "Ruijie Access Point"
+
+                            apMap[mac] = AccessPointDevice(
+                                name = displayName,
+                                model = model,
+                                ipAddress = ip.ifBlank { apMap[mac]?.ipAddress ?: "" },
+                                macAddress = mac,
+                                isWhitelisted = isWhitelisted,
+                                isOnline = true,
+                                bindingId = binding?.id,
+                                vendor = "Ruijie / Reyee"
+                            )
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // 3. Check existing IP bindings marked as AP
+                bindingsMap.values.forEach { b ->
+                    val c = b.comment.lowercase()
+                    if ((c.contains("ap") || c.contains("ruijie") || c.contains("reyee") || c.contains("est")) && !apMap.containsKey(b.macAddress)) {
+                        apMap[b.macAddress] = AccessPointDevice(
+                            name = b.comment.ifBlank { "AP-${b.macAddress.takeLast(5)}" },
+                            model = "Ruijie Access Point",
+                            ipAddress = b.address,
+                            macAddress = b.macAddress,
+                            isWhitelisted = b.type == "bypassed" && !b.disabled,
+                            isOnline = true,
+                            bindingId = b.id,
+                            vendor = "Ruijie / Reyee"
+                        )
+                    }
+                }
+
+                NetworkTopologyData(
+                    routerModel = detectedBoardName,
+                    manageIp = detectedManageIp,
+                    hotspotIp = hotspotIp,
+                    accessPoints = apMap.values.toList()
+                )
+            } catch (e: Exception) {
+                handleApiError(e)
+                NetworkTopologyData(
+                    routerModel = defaultRouter,
+                    manageIp = defaultManageIp,
+                    hotspotIp = hotspotIp,
+                    accessPoints = emptyList()
+                )
+            }
+        }
+    }
+
+    suspend fun setRouterAdvanceMode(): Boolean = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withContext false
+                try {
+                    conn.execute("/system/device-mode/update", "mode=enterprise")
+                } catch (_: Exception) {
+                    try {
+                        conn.execute("/system/device-mode/update", "mode=advanced")
+                    } catch (_: Exception) {}
+                }
+                try {
+                    conn.execute(
+                        "/system/device-mode/update",
+                        "hotspot=yes",
+                        "scheduler=yes",
+                        "fetch=yes",
+                        "romon=yes",
+                        "traffic-flow=yes",
+                        "bandwidth-test=yes"
+                    )
+                } catch (_: Exception) {}
                 true
             } catch (e: Exception) {
                 handleApiError(e)

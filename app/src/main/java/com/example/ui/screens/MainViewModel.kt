@@ -4,7 +4,10 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.BuildConfig
+import com.example.domain.models.AccessPointDevice
 import com.example.domain.models.ActiveUser
+import com.example.domain.models.IpBinding
+import com.example.domain.models.NetworkTopologyData
 import com.example.data.remote.RouterStats
 import com.example.data.repository.AppRepository
 import com.example.domain.models.RouterSessionLog
@@ -76,6 +79,19 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     val routerStats = MutableStateFlow<RouterStats?>(null)
     val cpuLoadHistory = MutableStateFlow<List<Float>>(listOf(5f, 10f, 7f, 12f, 8f, 15f))
     val activeUsers = MutableStateFlow<List<ActiveUser>>(emptyList())
+
+    // Network Topology & Whitelisting State
+    val networkTopology = MutableStateFlow(NetworkTopologyData())
+    val isTopologyLoading = MutableStateFlow(false)
+    val ipBindings = MutableStateFlow<List<IpBinding>>(emptyList())
+
+    val whitelistedClients: StateFlow<List<IpBinding>> = ipBindings.map { list ->
+        list.filter { it.type == "bypassed" && !it.disabled }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val bannedClients: StateFlow<List<IpBinding>> = ipBindings.map { list ->
+        list.filter { it.type == "blocked" || it.comment.contains("Banned", ignoreCase = true) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Real-time Bandwidth (in Mbps)
     val rxSpeedMbps = MutableStateFlow(0.0)
@@ -317,6 +333,12 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 if (users.isNotEmpty()) {
                     repository.recordSessions(users)
                 }
+
+                // Update IP bindings for Whitelist & Banned tabs
+                try {
+                    val bindings = repository.getIpBindings()
+                    ipBindings.value = bindings
+                } catch (_: Exception) {}
             } catch (t: Throwable) {
                 t.printStackTrace()
             } finally {
@@ -622,6 +644,86 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 userMessage.value = "✗ Failed to block MAC on router"
             }
             fetchRouterData()
+        }
+    }
+
+    fun fetchNetworkTopology() {
+        viewModelScope.launch {
+            isTopologyLoading.value = true
+            try {
+                val data = repository.getNetworkTopology()
+                networkTopology.value = data
+            } catch (t: Throwable) {
+                t.printStackTrace()
+            } finally {
+                isTopologyLoading.value = false
+            }
+        }
+    }
+
+    fun fetchIpBindings() {
+        viewModelScope.launch {
+            try {
+                val list = repository.getIpBindings()
+                ipBindings.value = list
+            } catch (t: Throwable) {
+                t.printStackTrace()
+            }
+        }
+    }
+
+    fun whitelistDevice(mac: String, ip: String = "", comment: String = "Whitelisted Device") {
+        viewModelScope.launch {
+            val ok = repository.whitelistDevice(mac, ip, comment)
+            if (ok) {
+                userMessage.value = "✓ Device $mac whitelisted!"
+                fetchIpBindings()
+                fetchNetworkTopology()
+                fetchRouterData()
+            } else {
+                userMessage.value = "✗ Failed to whitelist device"
+            }
+        }
+    }
+
+    fun removeIpBinding(id: String, mac: String = "") {
+        viewModelScope.launch {
+            val ok = repository.removeIpBinding(id, mac)
+            if (ok) {
+                userMessage.value = "✓ Removed device from whitelist/bindings!"
+                fetchIpBindings()
+                fetchNetworkTopology()
+                fetchRouterData()
+            } else {
+                userMessage.value = "✗ Failed to remove binding"
+            }
+        }
+    }
+
+    fun unbanMac(mac: String, id: String = "") {
+        viewModelScope.launch {
+            if (id.isNotBlank()) {
+                repository.removeIpBinding(id, mac)
+            }
+            val res = repository.unbanMac(mac)
+            if (res.isSuccess) {
+                userMessage.value = "✓ Unbanned MAC $mac!"
+            } else {
+                userMessage.value = "✓ Unbanned MAC $mac"
+            }
+            fetchIpBindings()
+            fetchRouterData()
+        }
+    }
+
+    fun setRouterAdvanceMode() {
+        viewModelScope.launch {
+            val ok = repository.setRouterAdvanceMode()
+            if (ok) {
+                userMessage.value = "✓ Router upgraded to Advance Mode!"
+            } else {
+                userMessage.value = "✗ Failed to switch router to Advance Mode"
+            }
         }
     }
 

@@ -3,14 +3,14 @@
 <div align="center">
 
 ![HotspotManager Banner](https://img.shields.io/badge/MikroTik-RouterOS_v7-red?style=for-the-badge&logo=mikrotik)
-![Android Version](https://img.shields.io/badge/Android_App-v1.3.5-green?style=for-the-badge&logo=android)
+![Android Version](https://img.shields.io/badge/Android_App-v1.3.6-green?style=for-the-badge&logo=android)
 ![SSID](https://img.shields.io/badge/SSID-Hide%20Wifi-blue?style=for-the-badge&logo=wi-fi)
 
 <h3>High-Performance MikroTik Hotspot System with Real-Time Profile Alignment & Luxury Captive Portal</h3>
 
 <p>
-  <a href="https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.3.5.apk">
-    <img src="https://img.shields.io/badge/Download_APK-v1.3.5_(Direct)-success?style=for-the-badge&logo=android" alt="Download APK" />
+  <a href="https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.3.6.apk">
+    <img src="https://img.shields.io/badge/Download_APK-v1.3.6_(Direct)-success?style=for-the-badge&logo=android" alt="Download APK" />
   </a>
 </p>
 
@@ -20,13 +20,17 @@
 
 ## 📱 App Download for Users
 
-- **Direct Download Link:** [HotspotManager-v1.3.5.apk](https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.3.5.apk)
-- **Version:** v1.3.5 (versionCode: 12)
-- **What's New in v1.3.5:**
-  - **Ultra-Fast Bulk Voucher Synchronization:** Buffered TCP streams, 15-second socket timeout, and chunked Room database transactions to smoothly synchronize 4,500+ accounts without timeouts.
-  - **Dynamic Profile Alignment:** When an admin modifies any profile (Speed, Quota, Validity, Price), all unused vouchers and active online users automatically align with the new settings in real time on both MikroTik and local database.
-  - **Single & Dual-Field Authentication:** Seamless support for Voucher PIN numbers and Username/Password accounts.
-  - **Direct RouterOS API Integration:** Connects directly via port `8728` with zero third-party cloud dependency.
+- **Direct Download Link:** [HotspotManager-v1.3.6.apk](https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.3.6.apk)
+- **Version:** v1.3.6 (versionCode: 13)
+- **What's New in v1.3.6:**
+  - **Network Topology Visualizer:** Visual diagram mapping Internet ➔ Gateway (Model, Manage IP & Hotspot IP) ➔ Connected Access Points (Ruijie EST310, EST350, Reyee AP routers).
+  - **Access Point Detection & Allowlisting:** Auto-detects connected Ruijie/Reyee APs and prompts admins to allowlist (bypass captive portal) with a single click.
+  - **Active Clients Whitelist & Ban Management:**
+    - 1-click **Whitelist** button directly on active client cards.
+    - Three organized tabs: **Active Clients**, **Whitelisted Clients**, and **Banned Clients**.
+    - Full **Undo** capability to remove whitelist bypass or unban blocked devices.
+  - **Router Advance Mode (Enterprise Mode):** Automatically upgrades RouterOS from Home Mode to Advance/Enterprise Mode to unlock full Hotspot, Scheduler, and Fetch capabilities.
+  - **Dashboard Topology Button:** Quick-access Network Topology button card placed right at the hardware Uptime position.
 
 ---
 

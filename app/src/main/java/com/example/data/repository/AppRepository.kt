@@ -324,6 +324,20 @@ class AppRepository(
         return Result.success(Unit)
     }
 
+    suspend fun unbanMac(macAddress: String): Result<Unit> {
+        if (!mikrotikClient.isConnected()) {
+            mikrotikClient.ensureConnected()
+        }
+        if (mikrotikClient.isConnected()) {
+            val ok = mikrotikClient.unbanMacAddress(macAddress)
+            if (!ok) {
+                return Result.failure(Exception("Router rejected unbanning MAC $macAddress."))
+            }
+        }
+        dao.banSessionMac(macAddress, false)
+        return Result.success(Unit)
+    }
+
     suspend fun kickSession(sessionId: String): Result<Unit> {
         if (!mikrotikClient.isConnected()) {
             mikrotikClient.ensureConnected()
@@ -521,5 +535,11 @@ class AppRepository(
             )
         }
     }
+
+    suspend fun getIpBindings(): List<com.example.domain.models.IpBinding> = mikrotikClient.getIpBindings()
+    suspend fun whitelistDevice(mac: String, ip: String = "", comment: String = "Whitelisted Device"): Boolean = mikrotikClient.whitelistDevice(mac, ip, comment)
+    suspend fun removeIpBinding(id: String, mac: String = ""): Boolean = mikrotikClient.removeIpBinding(id, mac)
+    suspend fun getNetworkTopology(): com.example.domain.models.NetworkTopologyData = mikrotikClient.getNetworkTopology()
+    suspend fun setRouterAdvanceMode(): Boolean = mikrotikClient.setRouterAdvanceMode()
 }
 

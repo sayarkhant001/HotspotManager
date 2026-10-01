@@ -176,7 +176,25 @@ data class AppStrings(
     val logoutRouter: String,
     val activePrinter: String,
     val paperWidthTitle: String,
-    val autoCutOption: String
+    val autoCutOption: String,
+
+    // Network Topology & Whitelisting
+    val networkTopology: String,
+    val allowlistAp: String,
+    val allowlistApConfirm: String,
+    val whitelistedClients: String,
+    val bannedClients: String,
+    val activeClientsTab: String,
+    val whitelistAction: String,
+    val undoAction: String,
+    val addDevice: String,
+    val gateway: String,
+    val accessPoint: String,
+    val switchRouterAdvanceMode: String,
+    val advanceModeSuccess: String,
+    val deviceWhitelistedSuccess: String,
+    val deviceRemovedFromWhitelist: String,
+    val unbanSuccess: String
 )
 
 val MyanmarStrings = AppStrings(
@@ -344,7 +362,25 @@ val MyanmarStrings = AppStrings(
     logoutRouter = "ချိတ်ဆက်မှု ဖြုတ်မည်",
     activePrinter = "အသုံးပြုနေသော ပရင်တာ",
     paperWidthTitle = "စက္ကူအရွယ်အစား ရွေးချယ်မှု",
-    autoCutOption = "ဘောင်ချာတစ်ခုချင်းစီ အလိုအလျောက် ဖြတ်မည်"
+    autoCutOption = "ဘောင်ချာတစ်ခုချင်းစီ အလိုအလျောက် ဖြတ်မည်",
+
+    // Network Topology & Whitelisting
+    networkTopology = "Network Topology",
+    allowlistAp = "AP အား Allowlist လုပ်မည်",
+    allowlistApConfirm = "ဤ Access Point အား Captive Portal စစ်ဆေးမှုမလိုဘဲ အင်တာနက် အသုံးပြုခွင့် (Allowlist/Bypass) ပေးရန် သေချာပါသလား?",
+    whitelistedClients = "ခွင့်ပြုထားသော စက်များ",
+    bannedClients = "ပိတ်ပင်ထားသော စက်များ",
+    activeClientsTab = "လက်ရှိ သုံးစွဲသူများ",
+    whitelistAction = "Whitelist ပေးမည်",
+    undoAction = "ပြန်လည်ဖယ်ရှားမည်",
+    addDevice = "Add Device",
+    gateway = "Gateway",
+    accessPoint = "Access Point",
+    switchRouterAdvanceMode = "Advance Mode သို့ ပြောင်းမည်",
+    advanceModeSuccess = "Router အား Advance Mode သို့ အောင်မြင်စွာ ပြောင်းလဲပြီးပါပြီ!",
+    deviceWhitelistedSuccess = "စက်အား အောင်မြင်စွာ Whitelist ပေးပြီးပါပြီ!",
+    deviceRemovedFromWhitelist = "Whitelist မှ အောင်မြင်စွာ ပြန်လည် ဖယ်ရှားပြီးပါပြီ!",
+    unbanSuccess = "ပိတ်ပင်ထားခြင်းမှ အောင်မြင်စွာ ပြန်လည် ဖွင့်ပေးပြီးပါပြီ!"
 )
 
 val EnglishStrings = AppStrings(
@@ -512,7 +548,25 @@ val EnglishStrings = AppStrings(
     logoutRouter = "Disconnect / Logout",
     activePrinter = "Active Printer",
     paperWidthTitle = "Thermal Paper Width",
-    autoCutOption = "Auto-Cut Each Voucher"
+    autoCutOption = "Auto-Cut Each Voucher",
+
+    // Network Topology & Whitelisting
+    networkTopology = "Network Topology",
+    allowlistAp = "Allowlist AP",
+    allowlistApConfirm = "Are you sure you want to allowlist (bypass) this Access Point so it can access the network without voucher authentication?",
+    whitelistedClients = "Whitelisted Clients",
+    bannedClients = "Banned Clients",
+    activeClientsTab = "Active Clients",
+    whitelistAction = "Whitelist",
+    undoAction = "Undo / Remove",
+    addDevice = "Add Device",
+    gateway = "Gateway",
+    accessPoint = "Access Point",
+    switchRouterAdvanceMode = "Switch to Advance Mode",
+    advanceModeSuccess = "Router successfully switched to Advance Mode!",
+    deviceWhitelistedSuccess = "Device successfully added to Whitelist!",
+    deviceRemovedFromWhitelist = "Device removed from Whitelist!",
+    unbanSuccess = "Device successfully unbanned!"
 )
 
 object LanguageManager {
