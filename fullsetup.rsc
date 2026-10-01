@@ -101,7 +101,7 @@
 
 # 1. Try RouterOS v7 wifi / wifi-qcom interface (Open network for Hotspot)
 :do {
-  :local wCmd ("/interface wifi set [find default-name=wifi1] configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" security.authentication-types=\"\" disabled=no; :do { /interface bridge port set [find interface=wifi1] bridge=hotspot-bridge } on-error={ /interface bridge port add bridge=hotspot-bridge interface=wifi1 }")
+  :local wCmd ("/interface wifi set [find default-name=wifi1] configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" security.authentication-types=\"\" datapath.bridge=hotspot-bridge disabled=no; :do { /interface bridge port set [find interface=wifi1] bridge=hotspot-bridge } on-error={ /interface bridge port add bridge=hotspot-bridge interface=wifi1 }")
   [ :parse $wCmd ]
   :set wifiConfigured true
   :put "  Configured wifi1 interface (v7, Open Hotspot AP, SSID: AyeikSitt_WiFi)."
@@ -136,15 +136,15 @@
 }
 
 :do {
-  /ip dhcp-server add name=hs-dhcp interface=hotspot-bridge address-pool=hs-pool lease-time=2h disabled=no
+  /ip dhcp-server add name=hs-dhcp interface=hotspot-bridge address-pool=hs-pool lease-time=2h authoritative=yes disabled=no
 } on-error={
-  :do { /ip dhcp-server set [find name=hs-dhcp] interface=hotspot-bridge address-pool=hs-pool lease-time=2h disabled=no } on-error={}
+  :do { /ip dhcp-server set [find name=hs-dhcp] interface=hotspot-bridge address-pool=hs-pool lease-time=2h authoritative=yes disabled=no } on-error={}
 }
 
 :do {
-  /ip dhcp-server network add address=$hsNetwork gateway=$gwIp dns-server=$gwIp comment="Hotspot Network"
+  /ip dhcp-server network add address=$hsNetwork gateway=$gwIp netmask=23 dns-server=$gwIp comment="Hotspot Network"
 } on-error={
-  :do { /ip dhcp-server network set [find address=$hsNetwork] gateway=$gwIp dns-server=$gwIp } on-error={}
+  :do { /ip dhcp-server network set [find address=$hsNetwork] gateway=$gwIp netmask=23 dns-server=$gwIp } on-error={}
 }
 
 :do {
@@ -196,10 +196,10 @@
 }
 
 :do {
-  /ip hotspot add name=hs-server interface=hotspot-bridge address-pool=hs-pool profile=hs-profile disabled=no
+  /ip hotspot add name=hs-server interface=hotspot-bridge address-pool=none profile=hs-profile disabled=no
 } on-error={
   :do {
-    /ip hotspot set [find name=hs-server] interface=hotspot-bridge address-pool=hs-pool profile=hs-profile disabled=no
+    /ip hotspot set [find name=hs-server] interface=hotspot-bridge address-pool=none profile=hs-profile disabled=no
   } on-error={}
 }
 :put "  Hotspot Server Configured."
@@ -603,6 +603,8 @@
 }
 
 # 2. Clean, deterministic INPUT chain rules:
+# Unconditionally accept DHCP (UDP 67, 68) first before anything else!
+:do { /ip firewall filter add action=accept chain=input dst-port=67,68 protocol=udp comment="Allow DHCP" } on-error={}
 # Accept established, related, untracked
 :do { /ip firewall filter add action=accept chain=input connection-state=established,related,untracked comment="Accept established,related,untracked" } on-error={}
 # Drop invalid
@@ -611,8 +613,8 @@
 :do { /ip firewall filter add action=accept chain=input protocol=icmp comment="Accept ICMP" } on-error={}
 # Explicitly ACCEPT API port 8728 & 8729 (HotspotManager App)
 :do { /ip firewall filter add action=accept chain=input dst-port=8728,8729 protocol=tcp comment="Allow HotspotManager API" } on-error={}
-# Accept DNS & DHCP on input from hotspot-bridge
-:do { /ip firewall filter add action=accept chain=input dst-port=53,67 protocol=udp in-interface=hotspot-bridge comment="Allow DNS/DHCP UDP" } on-error={}
+# Accept DNS on input from hotspot-bridge
+:do { /ip firewall filter add action=accept chain=input dst-port=53 protocol=udp in-interface=hotspot-bridge comment="Allow DNS UDP" } on-error={}
 :do { /ip firewall filter add action=accept chain=input dst-port=53 protocol=tcp in-interface=hotspot-bridge comment="Allow DNS TCP" } on-error={}
 # Accept Hotspot HTTP
 :do { /ip firewall filter add action=accept chain=input dst-port=80 protocol=tcp in-interface=hotspot-bridge comment="Allow Hotspot Web" } on-error={}
