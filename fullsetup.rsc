@@ -35,7 +35,7 @@
 :global wifiSsid   "AyeikSitt_WiFi"
 :global dnsName    ""
 :global apiPass    "Khant1234@"
-:global adminMacs  {"A0:29:19:39:34:61";"CC:15:31:83:26:BF"}
+:global adminMacs  {} # Add MACs here only if you want permanent bypass without voucher: {"XX:XX:XX:XX:XX:XX"}
 :global gwIp       "10.10.10.1"
 :global hsNetwork  "10.10.10.0/23"
 :global poolStart  "10.10.10.10"
@@ -205,6 +205,13 @@
   } on-error={}
 }
 
+# Remove any conflicting/orphaned hotspot servers on other names to prevent interface conflicts
+:foreach hs in=[/ip hotspot find] do={
+  :local hName [/ip hotspot get $hs name]
+  :if ($hName != "hs-server") do={
+    :do { /ip hotspot remove $hs } on-error={}
+  }
+}
 :do {
   /ip hotspot add name=hs-server interface=hotspot-bridge address-pool=none profile=hs-profile disabled=no
 } on-error={
@@ -212,7 +219,10 @@
     /ip hotspot set [find name=hs-server] interface=hotspot-bridge address-pool=none profile=hs-profile disabled=no
   } on-error={}
 }
-:put "  Hotspot Server Configured."
+# Clear stale active sessions and remembered cookies so every device must authenticate fresh
+:do { /ip hotspot active remove [find] } on-error={}
+:do { /ip hotspot cookie remove [find] } on-error={}
+:put "  Hotspot Server Configured (active sessions & cookies reset)."
 # ── STEP 6: User Profile Setup (Continuous Validity Countdown & MAC Roaming) ──
 :put "=== Step 6: User Profile Setup ==="
 
@@ -590,14 +600,24 @@
 
 # ── STEP 10: MAC Bypass for Admin Devices ─────────────────────
 :put "=== Step 10: Admin MAC Bypass ==="
-:foreach mac in=$adminMacs do={
-  :do {
-    /ip hotspot ip-binding add mac-address=$mac type=bypassed comment="Admin Phone Bypass"
-  } on-error={
-    :do { /ip hotspot ip-binding set [find mac-address=$mac] type=bypassed } on-error={}
+# Remove previous admin phone bypass entries if adminMacs is empty
+:if ([:len $adminMacs] = 0) do={
+  :foreach b in=[/ip hotspot ip-binding find comment~"Admin Phone Bypass"] do={
+    :do { /ip hotspot ip-binding remove $b } on-error={}
   }
+  :put "  No admin MAC bypass active (all devices must authenticate)."
+} else={
+  :foreach mac in=$adminMacs do={
+    :if ([:len $mac] > 0) do={
+      :do {
+        /ip hotspot ip-binding add mac-address=$mac type=bypassed comment="Admin Phone Bypass"
+      } on-error={
+        :do { /ip hotspot ip-binding set [find mac-address=$mac] type=bypassed } on-error={}
+      }
+    }
+  }
+  :put "  Admin MACs bypassed."
 }
-:put "  Admin MACs bypassed."
 
 # ── STEP 11: Clock & NTP ──────────────────────────────────────
 :put "=== Step 11: Clock & NTP ==="
@@ -648,10 +668,12 @@
 :do { /ip firewall filter add action=accept chain=forward connection-state=established,related,untracked comment="Accept forward established,related,untracked" } on-error={}
 # Drop invalid
 :do { /ip firewall filter add action=drop chain=forward connection-state=invalid comment="Drop forward invalid" } on-error={}
-# Allow Hotspot LAN clients to access the Internet (WAN)
-:do { /ip firewall filter add action=accept chain=forward in-interface=hotspot-bridge out-interface=ether1 comment="LAN to WAN (Hotspot Internet)" } on-error={}
 # Reject DoT (forces clients to use router DNS so captive portal pops up)
 :do { /ip firewall filter add action=reject chain=forward in-interface=hotspot-bridge protocol=tcp dst-port=853 reject-with=tcp-reset comment="Reject DoT" } on-error={}
+# Accept ONLY authorized Hotspot clients (logged in via voucher or bypassed in ip-binding)
+:do { /ip firewall filter add action=accept chain=forward hotspot=auth in-interface=hotspot-bridge out-interface=ether1 comment="Accept authorized Hotspot clients" } on-error={}
+# Drop all unauthorized Hotspot forwarding to WAN
+:do { /ip firewall filter add action=drop chain=forward in-interface=hotspot-bridge out-interface=ether1 comment="Drop unauthorized Hotspot clients" } on-error={}
 # Drop all new unsolicited connections coming from WAN (ether1)
 :do { /ip firewall filter add action=drop chain=forward connection-state=new connection-nat-state=!dstnat in-interface=ether1 comment="Drop WAN unsolicited forward" } on-error={}
 
