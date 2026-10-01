@@ -358,8 +358,15 @@
 :local u $hsUser;
 :if ([:len $u] = 0 or $u = "admin" or $u = "default-trial") do={ :return "" };
 
-# Only schedule on FIRST login (when no scheduler exists for this user)
-:if ([:len [/system scheduler find name=$u]] = 0) do={
+# Only schedule on FIRST login (when voucher has not been activated yet)
+:local curComm [/ip hotspot user get [find name=$u] comment];
+:local isFirstLogin true;
+:if ([:find $curComm "[ACT:"] >= 0) do={ :set isFirstLogin false };
+:do {
+  :if ([:len [/system scheduler find name=$u]] > 0) do={ :set isFirstLogin false };
+} on-error={};
+
+:if ($isFirstLogin) do={
   :local vDur "1h"; # Default fallback
 
   # 1. Check if user has specific limit-uptime set (e.g. 15m, 1h, 1d)
@@ -417,30 +424,32 @@
   :local cDate [/system clock get date];
   :local cTime [/system clock get time];
 
-  # Add self-terminating countdown scheduler for this specific voucher
+  # Stamp activation timestamp on the user's comment first so validity is always tracked
+  :do {
+    :local actComm [/ip hotspot user get [find name=$u] comment];
+    /ip hotspot user set [find name=$u] comment=($actComm . " [ACT:" . [:tostr $cDate] . " " . [:tostr $cTime] . "]");
+    :log info ("Hotspot: Voucher " . $u . " activated! Validity duration: " . [:tostr $vDur]);
+  } on-error={};
+
+  # Add self-terminating countdown scheduler for this specific voucher (if allowed by device-mode)
   :do {
     /system scheduler add name=$u start-date=$cDate start-time=$cTime interval=$vDur \
       on-event=("/ip hotspot active remove [find user=\"" . $u . "\"]; /ip hotspot user remove [find name=\"" . $u . "\"]; /ip hotspot cookie remove [find user=\"" . $u . "\"]; /system scheduler remove [find name=\"" . $u . "\"]") \
       comment=("Voucher continuous timer: " . [:tostr $vDur] . " from " . [:tostr $cDate] . " " . [:tostr $cTime]);
-
-    # Stamp activation timestamp on the user's comment
-    :local curComm [/ip hotspot user get [find name=$u] comment];
-    /ip hotspot user set [find name=$u] comment=($curComm . " [ACT:" . [:tostr $cDate] . " " . [:tostr $cTime] . "]");
-    :log info ("Hotspot: Voucher " . $u . " activated! Continuous timer set for " . [:tostr $vDur] . " from " . [:tostr $cDate] . " " . [:tostr $cTime]);
   } on-error={
     # Fallback for universal RouterOS version compatibility (v6 and v7)
     :do {
       /system scheduler add name=$u start-time=startup interval=$vDur \
         on-event=("/ip hotspot active remove [find user=\"" . $u . "\"]; /ip hotspot user remove [find name=\"" . $u . "\"]; /ip hotspot cookie remove [find user=\"" . $u . "\"]; /system scheduler remove [find name=\"" . $u . "\"]") \
         comment=("Voucher continuous timer: " . [:tostr $vDur] . " (fallback)");
-      :local curComm [/ip hotspot user get [find name=$u] comment];
-      /ip hotspot user set [find name=$u] comment=($curComm . " [ACT:" . [:tostr $cDate] . " " . [:tostr $cTime] . "]");
-      :log info ("Hotspot: Voucher " . $u . " activated (fallback timer set for " . [:tostr $vDur] . ")!");
-    } on-error={
-      :log warning ("Hotspot: Could not set continuous countdown scheduler for " . $u);
-    };
+    } on-error={};
   };
 }
+
+# Run expiration check on login to clean up any expired sessions
+:do {
+  /system script run voucher-expire-check
+} on-error={};
 }
 :put "  Script 'voucher-activate' registered."
 
@@ -485,9 +494,14 @@
   /system scheduler remove [find name="hs-continuous-expire-monitor"]
 } on-error={}
 
-/system scheduler add name="hs-continuous-expire-monitor" interval=1m start-time=startup \
-  on-event="/system script run voucher-expire-check" comment="Hotspot continuous expiration monitor (every 1m)"
-:put "  Scheduler 'hs-continuous-expire-monitor' enabled (1m interval)."
+:do {
+  /system scheduler add name="hs-continuous-expire-monitor" interval=1m start-time=startup \
+    on-event="/system script run voucher-expire-check" comment="Hotspot continuous expiration monitor (every 1m)"
+  :put "  Scheduler 'hs-continuous-expire-monitor' enabled (1m interval)."
+} on-error={
+  :put "  Notice: Scheduler restricted by RouterOS device-mode (skipping background scheduler)."
+  :put "          (To enable: run '/system/device-mode/update scheduler=yes' and confirm on router)."
+}
 
 # ── STEP 8: RouterOS API Service & App User Accounts ──────────
 :put "=== Step 8: API Service & User Accounts for HotspotManager ==="
