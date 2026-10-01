@@ -101,11 +101,21 @@
 
 # 1. Try RouterOS v7 wifi / wifi-qcom interface (Open network for Hotspot)
 :do {
-  :local wCmd ("/interface wifi set [find default-name=wifi1] configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" security.authentication-types=\"\" datapath.bridge=hotspot-bridge disabled=no; :do { /interface bridge port set [find interface=wifi1] bridge=hotspot-bridge } on-error={ /interface bridge port add bridge=hotspot-bridge interface=wifi1 }")
+  :local wCmd (":foreach w in=[/interface/wifi/find] do={ :do { /interface/wifi/set $w configuration.mode=ap configuration.ssid=\\"" . $wifiSsid . "\\" datapath.bridge=hotspot-bridge disabled=no } on-error={ /interface/wifi/set $w mode=ap ssid=\\"" . $wifiSsid . "\\" disabled=no }; :local wName [/interface/wifi/get $w name]; :do { /interface/bridge/port/add bridge=hotspot-bridge interface=$wName } on-error={ :do { /interface/bridge/port/set [find interface=$wName] bridge=hotspot-bridge } on-error={} }; };")
   [ :parse $wCmd ]
   :set wifiConfigured true
-  :put "  Configured wifi1 interface (v7, Open Hotspot AP, SSID: AyeikSitt_WiFi)."
+  :put ("  Configured Wi-Fi interface (v7, Open Hotspot AP, SSID: " . $wifiSsid . ").")
 } on-error={}
+
+# 1b. Direct fallback for named wifi1
+:if (!$wifiConfigured) do={
+  :do {
+    :local wCmd2 ("/interface wifi set [find name=wifi1] configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" datapath.bridge=hotspot-bridge disabled=no; :do { /interface bridge port add bridge=hotspot-bridge interface=wifi1 } on-error={ /interface bridge port set [find interface=wifi1] bridge=hotspot-bridge }")
+    [ :parse $wCmd2 ]
+    :set wifiConfigured true
+    :put ("  Configured wifi1 interface (v7, Open Hotspot AP, SSID: " . $wifiSsid . ").")
+  } on-error={}
+}
 
 # 2. Fallback to legacy wireless interface (Open network for Hotspot)
 :if (!$wifiConfigured) do={
@@ -507,19 +517,19 @@
 :put "=== Step 8: API Service & User Accounts for HotspotManager ==="
 # Enable RouterOS API on standard port 8728 and 8729 without IP restriction
 :do {
-  /ip service set [find name="api"] disabled=no port=8728 address=""
+  /ip service set [find name="api"] disabled=no port=8728
   /ip service enable [find name="api"]
 } on-error={}
 :do {
-  /ip service set [find name="api-ssl"] disabled=no port=8729 address=""
+  /ip service set [find name="api-ssl"] disabled=no port=8729
   /ip service enable [find name="api-ssl"]
 } on-error={}
 :do {
-  /ip service set [find name="winbox"] disabled=no port=8291 address=""
+  /ip service set [find name="winbox"] disabled=no port=8291
   /ip service enable [find name="winbox"]
 } on-error={}
 :do {
-  /ip service set [find name="www"] disabled=no port=80 address=""
+  /ip service set [find name="www"] disabled=no port=80
   /ip service enable [find name="www"]
 } on-error={}
 :put "  RouterOS API service enabled on port 8728 (all IPs allowed)."
