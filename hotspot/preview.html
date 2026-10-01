@@ -2,217 +2,176 @@
 <html lang="my">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <title>Yadanar Tun Wifi – Sign In (Preview)</title>
+  <title>Yadanar Tun Wifi – အင်တာနက် အသုံးပြုရန် (Preview)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <meta name="description" content="Yadanar Tun Wifi – High-speed hotspot login with voucher or account." />
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23F59E0B'/%3E%3Cpolygon points='32,14 48,28 32,50 16,28' fill='%23FFFFFF'/%3E%3C/svg%3E" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23060913'/%3E%3Cpath d='M14 24 Q32 10 50 24' stroke='%2300F2FE' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M20 32 Q32 20 44 32' stroke='%2338BDF8' stroke-width='3.5' fill='none' stroke-linecap='round'/%3E%3Cpolygon points='27,43 37,43 41,47 32,56 23,47' fill='%23F59E0B'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-  <!-- Loading Overlay -->
-  <div class="body-loading" id="body_loading">
-    <div class="loading-inner">
-      <div class="loading-ring"></div>
-      <p class="loading-text">Connecting…</p>
-    </div>
+  <!-- Ambient Light Orbs -->
+  <div class="bg-ambient">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
   </div>
 
-  <div class="body-wrapper">
+  <div class="portal-container">
+    <div class="glass-card">
 
-    <!-- Ambient Mesh Background -->
-    <div class="body-background">
-      <div class="body-background-mask"></div>
-    </div>
+      <!-- Brand Logo & Title -->
+      <div class="brand-header">
+        <div class="brand-logo-wrap">
+          <!-- Radiant Wi-Fi Wave + Yadanar Golden Gem Emblem -->
+          <svg width="48" height="48" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Yadanar Tun Wifi">
+            <defs>
+              <linearGradient id="ytGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#00F2FE"/>
+                <stop offset="50%" stop-color="#38BDF8"/>
+                <stop offset="100%" stop-color="#818CF8"/>
+              </linearGradient>
+              <linearGradient id="gemGold" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#FDE68A"/>
+                <stop offset="50%" stop-color="#F59E0B"/>
+                <stop offset="100%" stop-color="#D97706"/>
+              </linearGradient>
+              <linearGradient id="greenPulse" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#34D399"/>
+                <stop offset="100%" stop-color="#10B981"/>
+              </linearGradient>
+            </defs>
+            <!-- Outer Wi-Fi Signal Rays -->
+            <path d="M12 24 Q32 8 52 24" stroke="url(#ytGrad)" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+            <path d="M18 31 Q32 18 46 31" stroke="url(#ytGrad)" stroke-width="3" stroke-linecap="round" fill="none"/>
+            <path d="M25 38 Q32 30 39 38" stroke="url(#ytGrad)" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+            <!-- Faceted Yadanar Gemstone -->
+            <polygon points="27,45 37,45 42,50 32,60 22,50" fill="url(#gemGold)" stroke="#FEF3C7" stroke-width="1.2" stroke-linejoin="round"/>
+            <polygon points="27,45 37,45 32,50" fill="#FFFBEB" opacity="0.9"/>
+            <polygon points="22,50 27,45 32,50" fill="#FDE68A" opacity="0.95"/>
+            <polygon points="42,50 37,45 32,50" fill="#D97706" opacity="0.95"/>
+            <!-- Center Core Pulse -->
+            <circle cx="32" cy="44" r="2" fill="url(#greenPulse)"/>
+          </svg>
+        </div>
+        <h1 class="brand-title">ရတနာထွန်း Wifi</h1>
+        <p class="brand-subtitle">
+          <span class="brand-subtitle-dot"></span>
+          မြန်နှုန်းမြင့် အင်တာနက် ဝန်ဆောင်မှု
+        </p>
+      </div>
 
-    <!-- Floating Sparkles -->
-    <div class="particles" aria-hidden="true">
-      <span></span><span></span><span></span><span></span><span></span>
-    </div>
+      <!-- Preview Form -->
+      <form id="login_form" onsubmit="event.preventDefault(); window.location.href='preview_status.html';">
+        <input type="hidden" name="username" id="username_field" />
+        <input type="hidden" name="password" id="password_field" value="" />
 
-    <!-- Main Card Container -->
-    <div class="body-content-wrapper">
-      <div class="login-card">
-
-        <!-- Radiant Gemstone & Wi-Fi Logo Badge -->
-        <div class="logo-badge-wrapper">
-          <div class="logo-badge">
-            <svg class="logo-svg" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Yadanar Tun Wifi Logo">
-              <defs>
-                <linearGradient id="ytGoldGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#FFFBEB"/>
-                  <stop offset="50%" stop-color="#F59E0B"/>
-                  <stop offset="100%" stop-color="#B45309"/>
-                </linearGradient>
-              </defs>
-              <!-- Radiant WiFi Arcs -->
-              <path d="M14 26 Q36 6 58 26" stroke="url(#ytGoldGlow)" stroke-width="4.2" stroke-linecap="round" fill="none"/>
-              <path d="M22 34 Q36 20 50 34" stroke="url(#ytGoldGlow)" stroke-width="4" stroke-linecap="round" fill="none"/>
-              <path d="M29 42 Q36 34 43 42" stroke="url(#ytGoldGlow)" stroke-width="3.6" stroke-linecap="round" fill="none"/>
-              <!-- Faceted Yadanar Gem -->
-              <polygon points="30,49 42,49 47,54 36,65 25,54" fill="#F59E0B" stroke="#FDE68A" stroke-width="1.5" stroke-linejoin="round"/>
-              <polygon points="30,49 42,49 36,54" fill="#FFFBEB" opacity="0.9"/>
-              <polygon points="25,54 30,49 36,54" fill="#FDE68A" opacity="0.95"/>
-              <polygon points="47,54 42,49 36,54" fill="#D97706" opacity="0.95"/>
-              <polygon points="25,54 36,54 36,65" fill="#F59E0B"/>
-              <polygon points="47,54 36,54 36,65" fill="#B45309"/>
+        <!-- Tab Switcher -->
+        <div class="tab-switcher" id="login_tabs">
+          <button type="button" class="tab-btn active" id="tab_voucher">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <rect x="2" y="6" width="20" height="12" rx="3"/>
+              <path d="M12 6v12M2 12h2M20 12h2"/>
             </svg>
-          </div>
+            ဘောင်ချာကုဒ်
+          </button>
+          <button type="button" class="tab-btn" id="tab_account">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            အကောင့်
+          </button>
         </div>
 
-        <!-- Brand Name & Subtitle -->
-        <h1 class="brand-name">Yadanar Tun Wifi</h1>
-        <p class="brand-sub">ရတနာထွန်း • <span>High-Speed Internet</span></p>
-
-        <!-- Mock Login Form for Preview -->
-        <form id="login_form" name="sendin" method="get" action="preview_status.html">
-          <input type="hidden" name="dst" value="preview_status.html" />
-          <input type="hidden" name="popup" value="false" />
-
-          <!-- Hidden RouterOS Credentials -->
-          <input type="hidden" name="username" id="username_field" />
-          <input type="hidden" name="password" id="password_field" value="" />
-
-          <!-- Tab Switcher: Voucher / Account -->
-          <div class="tab-toggle" id="login_tabs">
-            <button type="button" class="tab-btn active" id="tab_voucher">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                <rect x="2" y="6" width="20" height="12" rx="3"/>
-                <path d="M12 6v12M2 12h2M20 12h2"/>
+        <!-- ── Voucher Panel ── -->
+        <div class="tab-panel" id="panel_voucher">
+          <label class="input-label" for="voucher_input">ဘောင်ချာကုဒ် ရိုက်ထည့်ပါ (၄ မှ ၁၂ လုံး)</label>
+          <div class="input-box-wrapper">
+            <input
+              class="code-input-main"
+              id="voucher_input"
+              type="text"
+              maxlength="16"
+              placeholder="ကုဒ်နံပါတ် (ဥပမာ 3799, 49304727)"
+              autocomplete="off"
+            />
+            <button type="button" class="btn-icon-action" id="clear_voucher_btn" title="ဖျက်မည်" style="display:none;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
-              VOUCHER / ဘောင်ချာ
             </button>
-            <button type="button" class="tab-btn" id="tab_account">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                <circle cx="12" cy="7" r="4"/>
+            <button type="button" class="btn-icon-action" id="paste_voucher_btn" title="ကူးယူထည့်မည်">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
               </svg>
-              ACCOUNT / အကောင့်
             </button>
           </div>
+          <p class="field-hint">လက်မှတ်ပါ ကုဒ်နံပါတ် ၄ လုံးမှ ၁၂ လုံးကို ရိုက်ထည့်ပါ</p>
+        </div>
 
-          <!-- ── Voucher Panel ──────────────────────── -->
-          <div class="panel" id="field_voucher_panel">
-            <div class="field-label">
-              <span>VOUCHER CODE</span>
-              <span class="sub-label">ဘောင်ချာကုဒ်</span>
-            </div>
-
-            <!-- Unified High-Contrast Voucher Code Input -->
-            <div class="voucher-input-container">
-              <input
-                class="voucher-main-input"
-                id="voucher_input"
-                type="text"
-                maxlength="16"
-                placeholder="1819-9733"
-                autocomplete="off"
-                autocorrect="off"
-                autocapitalize="characters"
-                spellcheck="false"
-              />
-
-              <!-- Quick Clear Button -->
-              <button type="button" class="voucher-action-btn voucher-action-right" id="clear_voucher_btn" title="Clear Code" style="display:none;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <line x1="18" y1="6" x2="6" y2="18"/>
-                  <line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </button>
-
-              <!-- Quick Paste Button -->
-              <button type="button" class="voucher-action-btn voucher-action-right" id="paste_voucher_btn" title="Paste Voucher">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-                </svg>
-              </button>
-            </div>
-
-            <p class="voucher-hint">Enter code from ticket • လက်မှတ်ပါ ကုဒ်ကို ရိုက်ထည့်ပါ</p>
+        <!-- ── Account Panel ── -->
+        <div class="tab-panel hide" id="panel_account">
+          <div class="account-group">
+            <label class="input-label" for="account_input">အသုံးပြုသူအမည် (Username)</label>
+            <input
+              class="account-input"
+              type="text"
+              id="account_input"
+              placeholder="အသုံးပြုသူအမည် ထည့်ပါ"
+            />
           </div>
 
-          <!-- ── Account Panel ──────────────────────── -->
-          <div class="panel hide" id="field_account_panel">
-            <div class="field-label">
-              <span>USERNAME</span>
-              <span class="sub-label">အသုံးပြုသူအမည်</span>
-            </div>
-            <div class="input-group">
-              <span class="input-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                  <circle cx="12" cy="7" r="4"/>
-                </svg>
-              </span>
+          <div class="account-group">
+            <label class="input-label" for="account_password">လျှို့ဝှက်နံပါတ် (Password)</label>
+            <div style="position:relative;">
               <input
-                class="agw-input"
-                type="text"
-                id="account_input"
-                autocomplete="username"
-                placeholder="Enter username (ဥပမာ 5500)"
-                spellcheck="false"
-              />
-            </div>
-
-            <div class="field-label" style="margin-top:14px;">
-              <span>PASSWORD</span>
-              <span class="sub-label">လျှို့ဝှက်နံပါတ်</span>
-            </div>
-            <div class="input-group">
-              <span class="input-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
-              </span>
-              <input
-                class="agw-input"
+                class="account-input"
                 type="password"
                 id="account_password"
-                autocomplete="current-password"
-                placeholder="Enter password (ဥပမာ 35828)"
+                placeholder="လျှို့ဝှက်နံပါတ် ထည့်ပါ"
               />
-              <button type="button" class="password-toggle-btn" id="toggle_password_btn" title="Show/Hide Password">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <button type="button" class="btn-icon-action" id="toggle_password_btn" title="လျှို့ဝှက်နံပါတ် ကြည့်မည်">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                   <circle cx="12" cy="12" r="3"/>
                 </svg>
               </button>
             </div>
           </div>
-
-          <!-- Preview Helper Info -->
-          <div class="login-msg" id="login_msg" style="display:none;"></div>
-
-          <!-- Connect Now Button -->
-          <button class="connect-btn" type="submit" id="login_btn">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
-              <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
-              <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
-              <line x1="12" y1="20" x2="12.01" y2="20"/>
-            </svg>
-            CONNECT NOW • ချိတ်မည်
-          </button>
-        </form>
-
-        <!-- Feature Tags -->
-        <div class="feature-row">
-          <span class="feature-tag">&#10022; HIGH SPEED</span>
-          <span class="feature-tag">&#10022; ULTRA STABLE</span>
-          <span class="feature-tag">&#10022; 24/7 ONLINE</span>
         </div>
 
-        <p class="card-footer">
-          Yadanar Tun Wifi &nbsp;&bull;&nbsp; Powered by MikroTik
-        </p>
+        <div class="msg-alert hide" id="login_msg"></div>
 
-      </div><!-- /.login-card -->
-    </div><!-- /.body-content-wrapper -->
+        <button class="btn-connect" type="submit" id="login_btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+            <circle cx="12" cy="20" r="1"/>
+          </svg>
+          အင်တာနက် စတင်ချိတ်ဆက်မည်
+        </button>
+      </form>
 
-  </div><!-- /.body-wrapper -->
+      <div class="badges-row">
+        <span class="badge-chip">&#10003; မြန်နှုန်းမြင့်မားခြင်း</span>
+        <span class="badge-chip">&#10003; လိုင်းဆွဲအားကောင်း</span>
+        <span class="badge-chip">&#10003; ၂၄ နာရီလိုင်းရ</span>
+      </div>
+
+      <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 14px; padding: 12px 14px; margin-top: 16px; text-align: left; font-size: 11.5px; color: #CBD5E1; line-height: 1.5;">
+        <span style="color: #38BDF8; font-weight: 700;">📢 အသိပေးချက် (Notice):</span> ဘောင်ချာကုဒ် ၄ လုံးမှ ၁၂ လုံးအထိ လွတ်လပ်စွာ ရိုက်ထည့်နိုင်ပါပြီ။ အင်တာနက်ပြတ်တောက်ပါက လော့ဂ်အင်လိပ်စာ <strong style="color: #38BDF8;">http://yadanartun.wifi</strong> သို့ ပြန်လည်ဝင်ရောက်နိုင်ပါသည်။
+      </div>
+
+      <p class="footer-copy">
+        ရတနာထွန်း Wifi &bull; စိတ်ချယုံကြည်ရသော ဝန်ဆောင်မှု
+      </p>
+
+    </div>
+  </div>
 
   <script src="js/main.js"></script>
 </body>
