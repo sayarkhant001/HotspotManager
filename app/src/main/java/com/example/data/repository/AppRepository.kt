@@ -17,11 +17,30 @@ import org.json.JSONObject
 
 class AppRepository(
     private val dao: RouterDao,
-    val mikrotikClient: MikrotikClient
+    val mikrotikClient: MikrotikClient,
+    private val context: android.content.Context? = null
 ) {
     val profiles: Flow<List<UserProfile>> = dao.getAllProfiles()
     val vouchers: Flow<List<Voucher>> = dao.getAllVouchers()
     val sessions: Flow<List<RouterSessionLog>> = dao.getAllSessions()
+
+    suspend fun ensureConnected(): Boolean {
+        if (mikrotikClient.isConnected()) return true
+        if (mikrotikClient.ensureConnected()) return true
+        if (context != null) {
+            try {
+                val prefs = context.getSharedPreferences("hotspot_login_prefs", android.content.Context.MODE_PRIVATE)
+                val ip = prefs.getString("router_ip", null)
+                val user = prefs.getString("router_user", "admin") ?: "admin"
+                val pass = prefs.getString("router_pass", "") ?: ""
+                if (!ip.isNullOrBlank()) {
+                    val res = mikrotikClient.connect(ip, user, pass)
+                    return res.isSuccess
+                }
+            } catch (_: Exception) {}
+        }
+        return false
+    }
 
     fun getSessionsByDate(dateKey: String): Flow<List<RouterSessionLog>> = dao.getSessionsByDate(dateKey)
     fun getSessionsBetween(start: Long, end: Long): Flow<List<RouterSessionLog>> = dao.getSessionsBetween(start, end)
@@ -82,7 +101,7 @@ class AppRepository(
     }
 
     suspend fun syncMetadataToRouter(profilesList: List<UserProfile>) {
-        if (!mikrotikClient.isConnected()) return
+        if (!ensureConnected()) return
         try {
             val root = JSONObject()
             profilesList.forEach { p ->
@@ -103,96 +122,142 @@ class AppRepository(
     }
 
     suspend fun addProfile(profile: UserProfile): Result<Unit> {
-        if (!mikrotikClient.isConnected()) {
-            mikrotikClient.ensureConnected()
-        }
-        if (!mikrotikClient.isConnected()) {
+        if (!ensureConnected()) {
             return Result.failure(Exception("Router is not connected. Cannot add profile."))
         }
         val sessionTimeout = MikrotikClient.formatMikrotikUptime(profile.durationMinutes, profile.validityDays)
-        val ok = mikrotikClient.addRouterProfile(profile.name, profile.rateLimit, profile.sharedUsers, sessionTimeout)
-        if (!ok) {
-            return Result.failure(Exception("Router rejected creating profile '${profile.name}'."))
+        val res = mikrotikClient.addRouterProfile(profile.name, profile.rateLimit, profile.sharedUsers, sessionTimeout)
+        if (res.isFailure) {
+            return res
         }
-        dao.insertProfile(profile)
+        val existing = dao.getProfileByName(profile.name)
+        if (existing != null) {
+            dao.updateProfileByName(
+                oldName = profile.name,
+                id = existing.id,
+                newName = profile.name,
+                sharedUsers = profile.sharedUsers,
+                rateLimit = profile.rateLimit,
+                downloadLimitMbps = profile.downloadLimitMbps,
+                uploadLimitMbps = profile.uploadLimitMbps,
+                dataLimitMb = profile.dataLimitMb,
+                durationMinutes = profile.durationMinutes,
+                price = profile.price,
+                sellingPrice = profile.sellingPrice,
+                validityDays = profile.validityDays
+            )
+        } else {
+            dao.insertProfile(profile)
+        }
         syncMetadataToRouter(dao.getAllProfilesSync())
         return Result.success(Unit)
     }
 
     suspend fun syncProfilesFromRouter() {
-        if (mikrotikClient.isConnected()) {
-            val routerProfiles = mikrotikClient.getRouterProfiles()
-            val existingProfiles = dao.getAllProfilesSync().associateBy { it.name }
+        if (!ensureConnected()) return
 
-            // 1. Fetch persistent profiles metadata from RouterOS /system/script
-            val routerMetaRaw = mikrotikClient.getRouterScriptSource("wexz_profiles_meta")
-            val routerMeta = parseMetadataJson(routerMetaRaw)
+        val routerProfiles = mikrotikClient.getRouterProfiles()
+        if (routerProfiles.isEmpty()) return
 
-            val list = routerProfiles.map { rp ->
-                val existing = existingProfiles[rp.name]
-                val meta = routerMeta[rp.name]
-                val defaults = getDefaultProfilePriceAndQuota(rp.name)
+        val existingProfiles = dao.getAllProfilesSync().associateBy { it.name }
 
-                val price = when {
-                    meta != null -> meta.price
-                    existing != null && existing.price > 0.0 -> existing.price
-                    else -> defaults.first
-                }
-                val sellingPrice = when {
-                    meta != null -> meta.sellingPrice
-                    existing != null && existing.sellingPrice > 0.0 -> existing.sellingPrice
-                    else -> price
-                }
-                val quota = when {
-                    meta != null -> meta.dataLimitMb
-                    existing != null && existing.dataLimitMb > 0 -> existing.dataLimitMb
-                    else -> defaults.second
-                }
-                val validity = when {
-                    meta != null -> meta.validityDays
-                    existing != null && existing.validityDays > 0 -> existing.validityDays
-                    else -> defaults.third
-                }
-                val duration = when {
-                    meta != null && meta.durationMinutes > 0 -> meta.durationMinutes
-                    existing != null && existing.durationMinutes > 0 -> existing.durationMinutes
-                    validity > 0 -> validity * 1440
-                    else -> 0
-                }
+        // 1. Fetch persistent profiles metadata from RouterOS /system/script
+        val routerMetaRaw = mikrotikClient.getRouterScriptSource("wexz_profiles_meta")
+        val routerMeta = parseMetadataJson(routerMetaRaw)
 
-                UserProfile(
-                    name = rp.name,
-                    rateLimit = rp.rateLimit,
-                    sharedUsers = rp.sharedUsers.toIntOrNull() ?: 1,
-                    downloadLimitMbps = parseRateLimitMbps(rp.rateLimit),
-                    uploadLimitMbps = parseRateLimitMbps(rp.rateLimit),
-                    dataLimitMb = quota,
-                    durationMinutes = duration,
-                    price = price,
-                    sellingPrice = sellingPrice,
-                    validityDays = validity
-                )
+        val list = routerProfiles.map { rp ->
+            val existing = existingProfiles[rp.name]
+            val meta = routerMeta[rp.name]
+            val defaults = getDefaultProfilePriceAndQuota(rp.name)
+
+            // Duration: RouterOS session-timeout is the authoritative active router setting!
+            val routerUptimeMins = MikrotikClient.parseMikrotikUptimeToMinutes(rp.sessionTimeout)
+            val duration = when {
+                // If RouterOS has an explicit session-timeout (e.g. "2h", "1d", "30m"), that takes priority!
+                routerUptimeMins > 0 -> routerUptimeMins
+                // If RouterOS explicitly set session-timeout=none, duration is 0 (unlimited)
+                rp.sessionTimeout.equals("none", ignoreCase = true) || rp.sessionTimeout == "0s" -> 0
+                meta != null && meta.durationMinutes > 0 -> meta.durationMinutes
+                existing != null && existing.durationMinutes > 0 -> existing.durationMinutes
+                else -> defaults.third * 1440
             }
-            dao.clearProfiles()
-            dao.insertProfiles(list)
 
-            // Always ensure the router script has all profiles consolidated
-            syncMetadataToRouter(list)
+            val validity = when {
+                duration >= 1440 -> duration / 1440
+                duration in 1..1439 -> 1
+                meta != null && meta.validityDays > 0 -> meta.validityDays
+                existing != null && existing.validityDays > 0 -> existing.validityDays
+                else -> defaults.third
+            }
+
+            val (upSpeed, downSpeed) = MikrotikClient.parseRateLimits(rp.rateLimit)
+
+            val price = when {
+                meta != null -> meta.price
+                existing != null && existing.price > 0.0 -> existing.price
+                else -> defaults.first
+            }
+            val sellingPrice = when {
+                meta != null -> meta.sellingPrice
+                existing != null && existing.sellingPrice > 0.0 -> existing.sellingPrice
+                else -> price
+            }
+            val quota = when {
+                meta != null -> meta.dataLimitMb
+                existing != null && existing.dataLimitMb > 0 -> existing.dataLimitMb
+                else -> defaults.second
+            }
+
+            val existingId = existing?.id ?: 0
+
+            UserProfile(
+                id = existingId,
+                name = rp.name,
+                rateLimit = rp.rateLimit,
+                sharedUsers = rp.sharedUsers.toIntOrNull() ?: 1,
+                downloadLimitMbps = downSpeed,
+                uploadLimitMbps = upSpeed,
+                dataLimitMb = quota,
+                durationMinutes = duration,
+                price = price,
+                sellingPrice = sellingPrice,
+                validityDays = validity
+            )
         }
+
+        // Remove profiles from local DB that no longer exist on the router
+        val routerProfileNames = routerProfiles.map { it.name }.toSet()
+        val toDelete = existingProfiles.keys - routerProfileNames
+        for (delName in toDelete) {
+            dao.deleteProfileByName(delName)
+        }
+
+        // Upsert all router profiles into Room DB without wiping or corrupting IDs
+        dao.insertProfiles(list)
+
+        // Always ensure the router script has all profiles consolidated
+        syncMetadataToRouter(dao.getAllProfilesSync())
     }
 
     private fun getDefaultProfilePriceAndQuota(name: String): Triple<Double, Int, Int> {
         val upper = name.uppercase()
+        val gbMatch = Regex("(\\d+)\\s*GB").find(upper)
+        val gb = gbMatch?.groupValues?.get(1)?.toIntOrNull()
+        if (gb != null) {
+            val mb = gb * 1024
+            val price = (gb * 500.0).coerceAtLeast(500.0)
+            return Triple(price, mb, 30)
+        }
+        val mbMatch = Regex("(\\d+)\\s*MB").find(upper)
+        val mb = mbMatch?.groupValues?.get(1)?.toIntOrNull()
+        if (mb != null) {
+            return Triple(300.0, mb, 1)
+        }
         return when {
-            upper.contains("30GB") || upper.contains("30D") -> Triple(10000.0, 30720, 30)
-            upper.contains("7GB") -> Triple(3000.0, 7168, 7)
-            upper.contains("3GB") -> Triple(1000.0, 3072, 3)
-            upper.contains("2GB") -> Triple(800.0, 2048, 2)
-            upper.contains("1GB") -> Triple(500.0, 1024, 1)
-            upper.contains("50GB") -> Triple(15000.0, 51200, 30)
+            upper.contains("30D") -> Triple(10000.0, 30720, 30)
             upper.contains("UNLIM") && upper.contains("30") -> Triple(20000.0, 0, 30)
             upper.contains("UNLIM") -> Triple(5000.0, 0, 7)
-            else -> Triple(0.0, 0, 30)
+            else -> Triple(0.0, 0, 1)
         }
     }
 
@@ -211,10 +276,7 @@ class AppRepository(
         if (profileName.equals("default", ignoreCase = true)) {
             return Result.failure(Exception("Cannot delete default profile."))
         }
-        if (!mikrotikClient.isConnected()) {
-            mikrotikClient.ensureConnected()
-        }
-        if (!mikrotikClient.isConnected()) {
+        if (!ensureConnected()) {
             return Result.failure(Exception("Router is not connected. Cannot delete profile."))
         }
         val ok = mikrotikClient.deleteRouterProfile(profileName)
@@ -228,17 +290,14 @@ class AppRepository(
     }
 
     suspend fun updateProfile(oldName: String, profile: UserProfile): Result<Unit> {
-        if (!mikrotikClient.isConnected()) {
-            mikrotikClient.ensureConnected()
-        }
-        if (!mikrotikClient.isConnected()) {
+        if (!ensureConnected()) {
             return Result.failure(Exception("Router is not connected. Cannot update profile."))
         }
         val sessionTimeout = MikrotikClient.formatMikrotikUptime(profile.durationMinutes, profile.validityDays)
         val limitBytesTotal = if (profile.dataLimitMb > 0) profile.dataLimitMb.toLong() * 1024L * 1024L else 0L
         val limitUptime = sessionTimeout
 
-        val ok = mikrotikClient.updateRouterProfile(
+        val res = mikrotikClient.updateRouterProfile(
             oldName = oldName,
             newName = profile.name,
             rateLimit = profile.rateLimit,
@@ -247,10 +306,27 @@ class AppRepository(
             limitBytesTotal = limitBytesTotal,
             limitUptime = limitUptime
         )
-        if (!ok) {
-            return Result.failure(Exception("Router rejected updating profile '$oldName'."))
+        if (res.isFailure) {
+            return res
         }
-        dao.updateProfile(profile)
+        dao.updateProfileByName(
+            oldName = oldName,
+            id = profile.id,
+            newName = profile.name,
+            sharedUsers = profile.sharedUsers,
+            rateLimit = profile.rateLimit,
+            downloadLimitMbps = profile.downloadLimitMbps,
+            uploadLimitMbps = profile.uploadLimitMbps,
+            dataLimitMb = profile.dataLimitMb,
+            durationMinutes = profile.durationMinutes,
+            price = profile.price,
+            sellingPrice = profile.sellingPrice,
+            validityDays = profile.validityDays
+        )
+        val exists = dao.getAllProfilesSync().any { it.name.equals(profile.name, ignoreCase = true) }
+        if (!exists) {
+            dao.insertProfile(profile)
+        }
         // Align all existing local vouchers in Room DB with the new profile adjustments
         dao.updateVouchersForProfile(
             oldName = oldName,

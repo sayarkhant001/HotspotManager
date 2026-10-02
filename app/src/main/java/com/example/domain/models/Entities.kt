@@ -82,7 +82,9 @@ data class ActiveUser(
     val quotaTotalMb: Int = 0,
     val quotaRemainingMb: Double = 0.0,
     val profileName: String = "",
-    val comment: String = ""
+    val comment: String = "",
+    val sessionTimeLeft: String = "",
+    val limitUptime: String = ""
 )
 
 data class IpBinding(

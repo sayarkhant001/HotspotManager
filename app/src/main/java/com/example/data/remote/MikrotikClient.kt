@@ -41,6 +41,9 @@ data class RouterProfileInfo(
     val name: String,
     val rateLimit: String = "",
     val sharedUsers: String = "1",
+    val sessionTimeout: String = "",
+    val idleTimeout: String = "",
+    val keepaliveTimeout: String = "",
     val onLogin: String = ""
 )
 
@@ -431,7 +434,10 @@ class MikrotikClient {
         apiMutex.withLock {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext null
-                val res = conn.execute("/system/resource/print")
+                val res = conn.execute(
+                    "/system/resource/print",
+                    "=.proplist=cpu-load,free-memory,total-memory,uptime,board-name,version"
+                )
                 if (res.isNotEmpty()) {
                     val data = res[0]
                     RouterStats(
@@ -454,7 +460,7 @@ class MikrotikClient {
         apiMutex.withLock {
             val conn = ensureConnectedInternal() ?: return@withContext InterfaceMetrics(currentRxBps, currentTxBps, 0L, 0L)
             try {
-                val res = conn.execute("/interface/print")
+                val res = conn.execute("/interface/print", "=.proplist=.id,name,rx-byte,tx-byte")
                 var rxBytes = 0L
                 var txBytes = 0L
                 var rxTotal = 0L
@@ -526,7 +532,7 @@ class MikrotikClient {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext emptyList()
                 val now = System.currentTimeMillis()
-                if (now - lastLeaseTime > 30_000L || cachedLeasesMap.isEmpty()) {
+                if (now - lastLeaseTime > 60_000L || cachedLeasesMap.isEmpty()) {
                     try {
                         val leases = conn.execute("/ip/dhcp-server/lease/print", "=.proplist=address,mac-address,host-name")
                         val newMap = mutableMapOf<String, String>()
@@ -544,7 +550,10 @@ class MikrotikClient {
                     } catch (_: Exception) {}
                 }
 
-                val res = conn.execute("/ip/hotspot/active/print")
+                val res = conn.execute(
+                    "/ip/hotspot/active/print",
+                    "=.proplist=.id,server,user,address,mac-address,uptime,session-time-left,limit-uptime,bytes-in,bytes-out,comment"
+                )
                 res.map {
                     val mac = (it["mac-address"] ?: "").uppercase()
                     val ip = it["address"] ?: ""
@@ -564,7 +573,9 @@ class MikrotikClient {
                         bytesOut = it["bytes-out"] ?: "0",
                         hostName = host,
                         quotaUsedMb = Math.round(usedMb * 10.0) / 10.0,
-                        comment = it["comment"] ?: ""
+                        comment = it["comment"] ?: "",
+                        sessionTimeLeft = it["session-time-left"] ?: "",
+                        limitUptime = it["limit-uptime"] ?: ""
                     )
                 }
             } catch (e: Exception) {
@@ -752,7 +763,10 @@ class MikrotikClient {
         apiMutex.withLock {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext emptyList()
-                val res = conn.execute("/ip/hotspot/ip-binding/print")
+                val res = conn.execute(
+                    "/ip/hotspot/ip-binding/print",
+                    "=.proplist=.id,mac-address,address,to-address,type,comment,disabled"
+                )
                 res.map {
                     IpBinding(
                         id = it[".id"] ?: "",
@@ -1374,6 +1388,9 @@ class MikrotikClient {
                         name = it["name"] ?: "",
                         rateLimit = it["rate-limit"] ?: "",
                         sharedUsers = it["shared-users"] ?: "1",
+                        sessionTimeout = it["session-timeout"] ?: "",
+                        idleTimeout = it["idle-timeout"] ?: "",
+                        keepaliveTimeout = it["keepalive-timeout"] ?: "",
                         onLogin = it["on-login"] ?: ""
                     )
                 }
@@ -1389,10 +1406,10 @@ class MikrotikClient {
         rateLimit: String,
         sharedUsers: Int = 1,
         sessionTimeout: String = ""
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         apiMutex.withLock {
             try {
-                val conn = ensureConnectedInternal() ?: return@withContext false
+                val conn = ensureConnectedInternal() ?: return@withContext Result.failure(Exception("Not connected to router"))
                 val standardOnLogin = """:local u ${'$'}user; :local m ${'$'}"mac-address"; :do { /ip hotspot active remove [find user=${'$'}u and mac-address!=${'$'}m]; /ip hotspot cookie remove [find user=${'$'}u and mac-address!=${'$'}m] } on-error={}; :global hsUser ${'$'}user; :do { /system script run voucher-activate } on-error={}"""
                 val params = mutableListOf(
                     "shared-users=$sharedUsers",
@@ -1427,10 +1444,10 @@ class MikrotikClient {
                 } else {
                     conn.execute("/ip/hotspot/user/profile/add", "name=$name", *params.toTypedArray())
                 }
-                true
+                Result.success(Unit)
             } catch (e: Exception) {
                 handleApiError(e)
-                false
+                Result.failure(Exception(e.localizedMessage ?: "Router rejected creating profile '$name'"))
             }
         }
     }
@@ -1475,14 +1492,16 @@ class MikrotikClient {
         sessionTimeout: String = "",
         limitBytesTotal: Long = 0L,
         limitUptime: String = ""
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         apiMutex.withLock {
             try {
-                val conn = ensureConnectedInternal() ?: return@withContext false
+                val conn = ensureConnectedInternal() ?: return@withContext Result.failure(Exception("Not connected to router"))
                 val profs = conn.execute("/ip/hotspot/user/profile/print")
-                val prof = profs.firstOrNull { it["name"] == oldName }
+                val prof = profs.firstOrNull { it["name"].equals(oldName, ignoreCase = true) }
                 val profId = prof?.get(".id")
-                if (profId.isNullOrBlank()) return@withContext false
+                if (profId.isNullOrBlank()) {
+                    return@withContext Result.failure(Exception("Profile '$oldName' not found on router"))
+                }
 
                 val targetName = if (newName.isNotBlank()) newName else oldName
                 val cleanRate = if (rateLimit.isNotBlank()) {
@@ -1516,40 +1535,40 @@ class MikrotikClient {
                 }
                 conn.execute("/ip/hotspot/user/profile/set", *params.toTypedArray())
 
-                // 2. Query all users belonging to this profile (oldName or targetName) to align them
-                val allUsers = conn.execute("/ip/hotspot/user/print", "=.proplist=.id,name,profile")
-                val matchingUsers = allUsers.filter { it["profile"] == oldName || it["profile"] == targetName }
-                val matchingUserNames = matchingUsers.mapNotNull { it["name"] }.toSet()
-
-                // 3. Align remaining users in RouterOS
-                val userUpdates = mutableListOf<String>()
-                if (targetName != oldName) {
-                    userUpdates.add("profile=$targetName")
-                }
-                userUpdates.add(if (limitBytesTotal > 0L) "limit-bytes-total=$limitBytesTotal" else "limit-bytes-total=0")
-                userUpdates.add(if (limitUptime.isNotBlank()) "limit-uptime=$limitUptime" else "limit-uptime=0s")
-
-                if (userUpdates.isNotEmpty() && matchingUsers.isNotEmpty()) {
-                    for (u in matchingUsers) {
-                        val uid = u[".id"]
-                        if (!uid.isNullOrBlank()) {
-                            try {
-                                conn.execute("/ip/hotspot/user/set", ".id=$uid", *userUpdates.toTypedArray())
-                            } catch (_: Exception) {}
-                        }
-                    }
+                // 2. If profile was renamed, re-link existing users in RouterOS in bulk via a micro-script (takes 2ms instead of 60s)
+                if (targetName != oldName && !oldName.equals("default", ignoreCase = true)) {
+                    try {
+                        val scriptName = "tmp_ren_${System.currentTimeMillis() % 10000}"
+                        val scriptSrc = "/ip hotspot user set [find profile=\"$oldName\"] profile=\"$targetName\""
+                        conn.execute("/system/script/add", "name=$scriptName", "source=$scriptSrc")
+                        conn.execute("/system/script/run", "number=$scriptName")
+                        conn.execute("/system/script/remove", "numbers=$scriptName")
+                    } catch (_: Exception) {}
                 }
 
-                // 4. Align ACTIVE using users currently connected WITHOUT DISCONNECTING THEM
+                // 3. Align active users' simple queues and enforce timeout immediately
                 try {
-                    val activeRes = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,user,address")
-                    val activeMatching = activeRes.filter { it["user"] in matchingUserNames }
+                    val activeRes = conn.execute(
+                        "/ip/hotspot/active/print",
+                        "=.proplist=.id,user,address,uptime"
+                    )
+                    if (activeRes.isNotEmpty()) {
+                        val newTimeoutMins = parseMikrotikUptimeToMinutes(sessionTimeout)
+                        if (newTimeoutMins > 0) {
+                            for (active in activeRes) {
+                                val upt = active["uptime"] ?: ""
+                                val uptMins = parseMikrotikUptimeToMinutes(upt)
+                                if (uptMins >= newTimeoutMins) {
+                                    active[".id"]?.let { actId ->
+                                        try { conn.execute("/ip/hotspot/active/remove", ".id=$actId") } catch (_: Exception) {}
+                                    }
+                                }
+                            }
+                        }
 
-                    // If rateLimit changed, update simple queues dynamically for active users immediately
-                    if (cleanRate.isNotBlank()) {
-                        try {
+                        if (cleanRate.isNotBlank()) {
                             val queues = conn.execute("/queue/simple/print", "=.proplist=.id,name,target")
-                            activeMatching.forEach { active ->
+                            for (active in activeRes) {
                                 val u = active["user"] ?: ""
                                 val ip = active["address"] ?: ""
                                 val q = queues.firstOrNull { 
@@ -1562,14 +1581,13 @@ class MikrotikClient {
                                     } catch (_: Exception) {}
                                 }
                             }
-                        } catch (_: Exception) {}
+                        }
                     }
-                    // NOTE: Active sessions are preserved! We DO NOT remove active users so clients never get disconnected.
                 } catch (_: Exception) {}
 
                 // Update cached users in memory
                 cachedHotspotUsers = cachedHotspotUsers.map { u ->
-                    if (u.profile == oldName) {
+                    if (u.profile.equals(oldName, ignoreCase = true)) {
                         u.copy(
                             profile = targetName,
                             limitBytesTotal = if (limitBytesTotal > 0L) limitBytesTotal else u.limitBytesTotal
@@ -1577,10 +1595,10 @@ class MikrotikClient {
                     } else u
                 }
 
-                true
+                Result.success(Unit)
             } catch (e: Exception) {
                 handleApiError(e)
-                false
+                Result.failure(Exception(e.localizedMessage ?: "Router error updating profile '$oldName'"))
             }
         }
     }
@@ -2032,6 +2050,77 @@ class MikrotikClient {
                 durationMinutes >= 1440 -> "${durationMinutes}m"
                 validityDays > 0 -> "${validityDays}d"
                 else -> ""
+            }
+        }
+
+        /**
+         * Parses RouterOS session-timeout or uptime strings (e.g. "2h", "1d", "4w2d", "01:00:00", "1d02:00:00") into minutes.
+         */
+        fun parseMikrotikUptimeToMinutes(uptime: String): Int {
+            val s = uptime.trim()
+            if (s.isBlank() || s.equals("none", ignoreCase = true) || s.equals("0s", ignoreCase = true)) return 0
+
+            var totalMins = 0
+            var remainder = s
+
+            // If there is a colon (time notation like "01:00:00" or "1d02:00:00"), extract HH:MM[:SS]
+            if (remainder.contains(":")) {
+                val colonIdx = remainder.indexOf(':')
+                var hStart = colonIdx - 1
+                while (hStart >= 0 && remainder[hStart].isDigit()) {
+                    hStart--
+                }
+                val prefix = remainder.substring(0, hStart + 1).trim()
+                val timePart = remainder.substring(hStart + 1).trim()
+
+                val timeParts = timePart.split(":")
+                val h = timeParts.getOrNull(0)?.toIntOrNull() ?: 0
+                val m = timeParts.getOrNull(1)?.toIntOrNull() ?: 0
+                totalMins += h * 60 + m
+
+                remainder = prefix
+            }
+
+            var currentNum = ""
+            for (ch in remainder) {
+                if (ch.isDigit()) {
+                    currentNum += ch
+                } else {
+                    val num = currentNum.toIntOrNull() ?: 0
+                    when (ch.lowercaseChar()) {
+                        'w' -> totalMins += num * 7 * 1440
+                        'd' -> totalMins += num * 1440
+                        'h' -> totalMins += num * 60
+                        'm' -> totalMins += num
+                    }
+                    currentNum = ""
+                }
+            }
+            return totalMins
+        }
+
+        /**
+         * Parses RouterOS rate-limit string (e.g. "10M/20M" or "20M") into Pair(uploadMbps, downloadMbps).
+         * RouterOS format is rx/tx (upload/download).
+         */
+        fun parseRateLimits(rateLimit: String): Pair<Int, Int> {
+            if (rateLimit.isBlank() || rateLimit.equals("none", ignoreCase = true)) return Pair(5, 5)
+            val parts = rateLimit.split("/")
+            fun parseSingle(str: String): Int {
+                val s = str.trim()
+                return when {
+                    s.endsWith("M", ignoreCase = true) -> s.dropLast(1).toIntOrNull() ?: 5
+                    s.endsWith("k", ignoreCase = true) -> (s.dropLast(1).toIntOrNull() ?: 5000) / 1000
+                    else -> s.toIntOrNull() ?: 5
+                }
+            }
+            return if (parts.size >= 2) {
+                val up = parseSingle(parts[0])
+                val down = parseSingle(parts[1])
+                Pair(up, down)
+            } else {
+                val speed = parseSingle(parts[0])
+                Pair(speed, speed)
             }
         }
     }

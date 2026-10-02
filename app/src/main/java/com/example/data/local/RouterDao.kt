@@ -21,6 +21,38 @@ interface RouterDao {
     @Update
     suspend fun updateProfile(profile: UserProfile)
 
+    @Query("""
+        UPDATE user_profiles 
+        SET name = :newName,
+            sharedUsers = :sharedUsers,
+            rateLimit = :rateLimit,
+            downloadLimitMbps = :downloadLimitMbps,
+            uploadLimitMbps = :uploadLimitMbps,
+            dataLimitMb = :dataLimitMb,
+            durationMinutes = :durationMinutes,
+            price = :price,
+            sellingPrice = :sellingPrice,
+            validityDays = :validityDays
+        WHERE name = :oldName OR (id != 0 AND id = :id)
+    """)
+    suspend fun updateProfileByName(
+        oldName: String,
+        id: Int,
+        newName: String,
+        sharedUsers: Int,
+        rateLimit: String,
+        downloadLimitMbps: Int,
+        uploadLimitMbps: Int,
+        dataLimitMb: Int,
+        durationMinutes: Int,
+        price: Double,
+        sellingPrice: Double,
+        validityDays: Int
+    )
+
+    @Query("SELECT * FROM user_profiles WHERE name = :name LIMIT 1")
+    suspend fun getProfileByName(name: String): UserProfile?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertProfiles(profiles: List<UserProfile>)
 

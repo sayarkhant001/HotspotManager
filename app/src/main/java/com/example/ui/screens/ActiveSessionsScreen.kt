@@ -780,6 +780,28 @@ fun ActiveUserCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            if (user.sessionTimeLeft.isNotBlank() && !user.sessionTimeLeft.equals("none", ignoreCase = true)) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer
+                    ) {
+                        Text(
+                            text = "⏳ Time Left: ${user.sessionTimeLeft}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }

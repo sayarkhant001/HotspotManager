@@ -84,7 +84,6 @@ fun ProfilesScreen(viewModel: MainViewModel, navController: NavController) {
 
     LaunchedEffect(Unit) {
         viewModel.syncProfiles()
-        viewModel.syncVouchers()
     }
 
     Scaffold(
@@ -123,7 +122,6 @@ fun ProfilesScreen(viewModel: MainViewModel, navController: NavController) {
                     }
                     IconButton(onClick = {
                         viewModel.syncProfiles()
-                        viewModel.syncVouchers()
                     }) {
                         Icon(Icons.Default.Sync, contentDescription = strings.syncRouterProfiles)
                     }
@@ -1150,7 +1148,7 @@ fun EditProfileDialog(
     var name by remember { mutableStateOf(profile.name) }
     val parts = profile.rateLimit.split("/")
     val dlPart = parts.getOrNull(0)?.trim() ?: ""
-    val initialSpeedVal = dlPart.filter { it.isDigit() }.ifBlank { "10" }
+    val initialSpeedVal = if (profile.downloadLimitMbps > 0) profile.downloadLimitMbps.toString() else dlPart.filter { it.isDigit() }.ifBlank { "10" }
 
     val initValidityUnit = when {
         profile.durationMinutes in 1..59 -> "Minutes"

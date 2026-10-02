@@ -9,11 +9,12 @@ import com.example.data.repository.AppRepository
 import com.example.ui.screens.*
 
 @Composable
-fun AppNavigation(repository: AppRepository) {
+fun AppNavigation(repository: AppRepository, startRoute: String? = null) {
     val navController = rememberNavController()
     val viewModel: MainViewModel = viewModel(factory = MainViewModelFactory(repository))
+    val startDest = if (!startRoute.isNullOrBlank()) startRoute else "login"
 
-    NavHost(navController = navController, startDestination = "login") {
+    NavHost(navController = navController, startDestination = startDest) {
         composable("login") {
             LoginScreen(
                 viewModel = viewModel,

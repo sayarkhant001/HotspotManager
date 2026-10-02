@@ -17,7 +17,7 @@ class MainActivity : ComponentActivity() {
     
     val database = AppDatabase.getDatabase(this)
     val mikrotikClient = MikrotikClient()
-    val repository = AppRepository(database.routerDao(), mikrotikClient)
+    val repository = AppRepository(database.routerDao(), mikrotikClient, applicationContext)
     com.example.utils.LanguageManager.init(this)
 
     // Ensure Bluetooth permissions are granted on Android 12+ so paired thermal printers are immediately visible
@@ -34,10 +34,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    val initialRoute = intent.getStringExtra("route")
+
     setContent {
       MyApplicationTheme {
         com.example.ui.components.LiquidGlassBackground {
-          AppNavigation(repository = repository)
+          AppNavigation(repository = repository, startRoute = initialRoute)
         }
       }
     }
