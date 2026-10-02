@@ -17,25 +17,29 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
           cache: 'gradle'
 
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Build APK
+        run: ./gradlew assembleRelease --no-daemon || ./gradlew assembleDebug --no-daemon
 
       - name: Prepare Release APK Artifact
         run: |
           mkdir -p release-output
           TAG="${{ github.ref_name }}"
           if [ -z "$TAG" ]; then TAG="latest"; fi
-          cp app/build/outputs/apk/debug/app-debug.apk release-output/HotspotManager-${TAG}.apk
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk release-output/HotspotManager-${TAG}.apk
+          elif [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk release-output/HotspotManager-${TAG}.apk
+          fi
           cp setup.rsc release-output/setup.rsc
 
       - name: Create GitHub Release
