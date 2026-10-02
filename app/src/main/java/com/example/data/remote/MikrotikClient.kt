@@ -1094,19 +1094,39 @@ class MikrotikClient {
                     }
                 } catch (_: Exception) {}
 
-                // 4. Check existing IP bindings marked as AP
+                // 4. Check existing IP bindings marked as AP (strict deduplication and merging)
                 bindingsMap.values.forEach { b ->
+                    val bMacUpper = b.macAddress.trim().uppercase()
                     val c = b.comment.lowercase()
-                    if ((c.contains("ap") || c.contains("ruijie") || c.contains("reyee") || c.contains("est") || c.contains("tp-link") || c.contains("tplink") || c.contains("cpe")) && !apMap.containsKey(b.macAddress)) {
+                    val isApComment = c.contains("ap") || c.contains("ruijie") || c.contains("reyee") || c.contains("est") || c.contains("tp-link") || c.contains("tplink") || c.contains("cpe")
+                    val cleanCommentName = b.comment.replace(Regex("(?i)^ap:\\s*"), "").trim()
+
+                    val existingAp = (if (bMacUpper.isNotBlank()) apMap[bMacUpper] else null)
+                        ?: (if (b.address.isNotBlank()) apMap.values.firstOrNull { it.ipAddress.isNotBlank() && it.ipAddress == b.address } else null)
+                        ?: (if (cleanCommentName.length >= 3) apMap.values.firstOrNull {
+                            it.name.contains(cleanCommentName, ignoreCase = true) ||
+                            it.model.contains(cleanCommentName, ignoreCase = true) ||
+                            cleanCommentName.contains(it.name, ignoreCase = true)
+                        } else null)
+
+                    if (existingAp != null) {
+                        // Merge binding info into existing AP instead of creating duplicate
+                        val updated = existingAp.copy(
+                            isWhitelisted = existingAp.isWhitelisted || (b.type == "bypassed" && !b.disabled),
+                            bindingId = b.id.ifBlank { existingAp.bindingId },
+                            ipAddress = if (existingAp.ipAddress.isBlank()) b.address else existingAp.ipAddress
+                        )
+                        apMap[existingAp.macAddress] = updated
+                    } else if (isApComment && bMacUpper.isNotBlank()) {
                         val detected = com.example.utils.DeviceModelDetector.detectApOrClient(
                             name = b.comment,
                             hostName = "",
                             comment = b.comment,
-                            macAddress = b.macAddress
+                            macAddress = bMacUpper
                         )
-                        apMap[b.macAddress] = createApDevice(
-                            mac = b.macAddress,
-                            displayName = b.comment.ifBlank { "${detected.brand}-${b.macAddress.takeLast(5)}" },
+                        apMap[bMacUpper] = createApDevice(
+                            mac = bMacUpper,
+                            displayName = b.comment.ifBlank { "${detected.brand}-${bMacUpper.takeLast(5)}" },
                             modelName = detected.modelName,
                             ip = b.address,
                             isWhitelisted = b.type == "bypassed" && !b.disabled,

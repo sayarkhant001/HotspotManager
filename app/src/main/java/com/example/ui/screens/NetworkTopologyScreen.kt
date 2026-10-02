@@ -3,6 +3,10 @@ package com.example.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -92,6 +96,17 @@ fun NetworkTopologyScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedApForDetails by remember { mutableStateOf<AccessPointDevice?>(null) }
     var isListView by remember { mutableStateOf(false) }
+    var isCompactMode by remember { mutableStateOf(true) }
+    var expandedApMacs by remember { mutableStateOf(setOf<String>()) }
+
+    fun toggleApExpansion(mac: String) {
+        val upper = mac.uppercase()
+        expandedApMacs = if (expandedApMacs.contains(upper)) {
+            expandedApMacs - upper
+        } else {
+            expandedApMacs + upper
+        }
+    }
 
     val todayKey = remember {
         SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
@@ -134,6 +149,15 @@ fun NetworkTopologyScreen(
                     }
                 },
                 actions = {
+                    // Density toggle: Small (Fit Screen / Unscrollable) vs Expanded
+                    IconButton(onClick = { isCompactMode = !isCompactMode }) {
+                        Icon(
+                            imageVector = if (isCompactMode) Icons.Default.UnfoldMore else Icons.Default.FitScreen,
+                            contentDescription = if (isCompactMode) "Expand Mode" else "Small Mode",
+                            tint = if (isCompactMode) Color(0xFF10B981) else MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    // Layout toggle: Tree vs Cards
                     IconButton(onClick = { isListView = !isListView }) {
                         Icon(
                             imageVector = if (isListView) Icons.Default.AccountTree else Icons.Default.ViewAgenda,
@@ -141,6 +165,15 @@ fun NetworkTopologyScreen(
                             tint = Color(0xFF10B981)
                         )
                     }
+                    // Add Device
+                    IconButton(onClick = { showAddDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.AddCircleOutline,
+                            contentDescription = strings.addDevice,
+                            tint = Color(0xFF10B981)
+                        )
+                    }
+                    // Refresh
                     IconButton(onClick = {
                         viewModel.fetchNetworkTopology()
                         viewModel.fetchIpBindings()
@@ -155,60 +188,6 @@ fun NetworkTopologyScreen(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
-        },
-        floatingActionButton = {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Zoom Controls
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
-                    shadowElevation = 4.dp
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(4.dp)
-                    ) {
-                        IconButton(
-                            onClick = { scale = (scale + 0.15f).coerceAtMost(2.0f) },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = "Zoom In", modifier = Modifier.size(20.dp))
-                        }
-                        HorizontalDivider(
-                            modifier = Modifier.width(24.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
-                        IconButton(
-                            onClick = { scale = (scale - 0.15f).coerceAtLeast(0.6f) },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(Icons.Default.Remove, contentDescription = "Zoom Out", modifier = Modifier.size(20.dp))
-                        }
-                    }
-                }
-
-                // Add Device Button (Matches green button from screenshot)
-                Button(
-                    onClick = { showAddDialog = true },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF10B981) // Ruijie/Emerald green
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = strings.addDevice,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-            }
         }
     ) { innerPadding ->
         Box(
@@ -229,190 +208,166 @@ fun NetworkTopologyScreen(
                         scaleX = scale,
                         scaleY = scale
                     )
-                    .padding(16.dp),
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // 1. Internet Cloud Node
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = Color(0xFFE0F2FE),
-                        modifier = Modifier.size(64.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Cloud,
-                                contentDescription = "Internet",
-                                tint = Color(0xFF0284C7),
-                                modifier = Modifier.size(38.dp)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Internet",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                if (isCompactMode) {
+                    // COMPACT MODE: Unified Sleek Gateway & Internet Bar (~48dp)
+                    CompactGatewayNode(
+                        topology = topology,
+                        strings = strings
                     )
-                }
-
-                // Connecting Line (Internet -> Gateway) with 3 green dots
-                ConnectingVerticalLine(dots = 3, color = Color(0xFF10B981))
-
-                // 2. Gateway Router Node (RB4011iGS+)
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                ) {
+                } else {
+                    // EXPANDED MODE: Full Large Internet Cloud + Large Gateway Card
+                    Spacer(modifier = Modifier.height(4.dp))
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 14.dp)
+                        modifier = Modifier.padding(bottom = 2.dp)
                     ) {
-                        // Real MikroTik hardware photo from official assets
-                        val routerInfo = remember(topology.routerModel) {
-                            DeviceModelDetector.detectRouterGateway(topology.routerModel)
-                        }
-
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color.White,
-                            shadowElevation = 2.dp,
-                            modifier = Modifier
-                                .height(56.dp)
-                                .fillMaxWidth(0.65f)
-                                .padding(vertical = 2.dp)
+                            shape = CircleShape,
+                            color = Color(0xFFE0F2FE),
+                            modifier = Modifier.size(54.dp)
                         ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(4.dp)) {
-                                Image(
-                                    painter = painterResource(id = routerInfo.imageResId),
-                                    contentDescription = topology.routerModel,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Fit
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Cloud,
+                                    contentDescription = "Internet",
+                                    tint = Color(0xFF0284C7),
+                                    modifier = Modifier.size(30.dp)
                                 )
                             }
                         }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Model Name
+                        Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = topology.routerModel,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-
-                        // Gateway Badge
-                        Text(
-                            text = strings.gateway,
+                            text = "Internet",
                             style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0284C7)
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        // IP Details
-                        Text(
-                            text = "Manage IP: ${topology.manageIp}  •  Hotspot IP: ${topology.hotspotIp}",
-                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+
+                    ConnectingVerticalLine(dots = 3, color = Color(0xFF10B981))
+
+                    ExpandedGatewayNode(
+                        topology = topology,
+                        strings = strings
+                    )
                 }
 
-                // 3. Connected Access Points Section Header & View Switcher
+                // Connected Access Points Section Header & View Switcher
                 val aps = topology.accessPoints
 
                 if (aps.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Toolbar Strip (Compact & Unscrollable)
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                .padding(horizontal = 8.dp, vertical = 5.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
                                     modifier = Modifier
-                                        .size(10.dp)
+                                        .size(8.dp)
                                         .clip(CircleShape)
                                         .background(Color(0xFF10B981))
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "${aps.size} Devices Detected",
-                                    style = MaterialTheme.typography.labelMedium,
+                                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                             Row(
-                                modifier = Modifier
-                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
-                                    .padding(2.dp),
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
+                                // Small (Fit Screen) vs Expand Toggle Pill
                                 Surface(
-                                    onClick = { isListView = false },
+                                    onClick = { isCompactMode = !isCompactMode },
                                     shape = RoundedCornerShape(6.dp),
-                                    color = if (!isListView) Color(0xFF10B981) else Color.Transparent
+                                    color = if (isCompactMode) Color(0xFF10B981).copy(alpha = 0.15f) else Color.Transparent
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                                     ) {
                                         Icon(
-                                            Icons.Default.AccountTree,
+                                            imageVector = if (isCompactMode) Icons.Default.FitScreen else Icons.Default.UnfoldMore,
                                             contentDescription = null,
-                                            modifier = Modifier.size(14.dp),
-                                            tint = if (!isListView) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                            modifier = Modifier.size(13.dp),
+                                            tint = if (isCompactMode) Color(0xFF059669) else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                        Spacer(Modifier.width(3.dp))
+                                        Spacer(Modifier.width(2.dp))
                                         Text(
-                                            "Tree",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = if (!isListView) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (!isListView) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                            if (isCompactMode) "Small" else "Expand",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isCompactMode) Color(0xFF059669) else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
+
+                                // Tree / Cards Layout Toggle Pill
                                 Surface(
-                                    onClick = { isListView = true },
+                                    onClick = { isListView = !isListView },
                                     shape = RoundedCornerShape(6.dp),
-                                    color = if (isListView) Color(0xFF10B981) else Color.Transparent
+                                    color = Color(0xFF10B981).copy(alpha = 0.15f)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                                     ) {
                                         Icon(
-                                            Icons.Default.ViewAgenda,
+                                            imageVector = if (isListView) Icons.Default.ViewAgenda else Icons.Default.AccountTree,
                                             contentDescription = null,
-                                            modifier = Modifier.size(14.dp),
-                                            tint = if (isListView) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                            modifier = Modifier.size(13.dp),
+                                            tint = Color(0xFF059669)
                                         )
-                                        Spacer(Modifier.width(3.dp))
+                                        Spacer(Modifier.width(2.dp))
                                         Text(
-                                            "Cards",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = if (isListView) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isListView) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                            if (isListView) "Cards" else "Tree",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF059669)
+                                        )
+                                    }
+                                }
+
+                                // Add Device Button
+                                Surface(
+                                    onClick = { showAddDialog = true },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFF10B981)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Add,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(13.dp),
+                                            tint = Color.White
+                                        )
+                                        Spacer(Modifier.width(2.dp))
+                                        Text(
+                                            "Add",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
                                         )
                                     }
                                 }
@@ -420,16 +375,16 @@ fun NetworkTopologyScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     if (!isListView) {
-                        // VISUAL TREE VIEW
-                        BranchingLines(apCount = aps.size)
+                        // VISUAL TREE VIEW (Unscrollable & Smallable)
+                        BranchingLines(apCount = aps.size, isCompact = isCompactMode)
 
                         val chunkedAps = aps.chunked(2)
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+                            verticalArrangement = Arrangement.spacedBy(if (isCompactMode) 6.dp else 12.dp)
                         ) {
                             chunkedAps.forEachIndexed { rowIndex, rowAps ->
                                 if (rowIndex > 0) {
@@ -437,7 +392,7 @@ fun NetworkTopologyScreen(
                                 }
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                                     verticalAlignment = Alignment.Top
                                 ) {
                                     rowAps.forEach { ap ->
@@ -456,6 +411,9 @@ fun NetworkTopologyScreen(
                                                 if (count > 0) count else if (ap.connectedClientMacs.isEmpty()) activeUsers.size else 0
                                             }
                                         }
+                                        val isExpanded = expandedApMacs.contains(ap.macAddress.uppercase())
+                                        val todayBytes = ap.dailyBytesIn + ap.dailyBytesOut
+
                                         Box(
                                             modifier = Modifier.weight(1f),
                                             contentAlignment = Alignment.TopCenter
@@ -463,6 +421,10 @@ fun NetworkTopologyScreen(
                                             ApDeviceNode(
                                                 ap = ap,
                                                 clientCount = clientCount,
+                                                isCompact = isCompactMode,
+                                                isExpanded = isExpanded,
+                                                onToggleExpand = { toggleApExpansion(ap.macAddress) },
+                                                todayBytes = todayBytes,
                                                 strings = strings,
                                                 onClick = { selectedApForDetails = ap },
                                                 onAllowlist = { apToAllowlist = ap },
@@ -477,10 +439,10 @@ fun NetworkTopologyScreen(
                             }
                         }
                     } else {
-                        // DETAILED CARD LIST VIEW (shows every AP clearly in cards)
+                        // DETAILED / COMPACT CARD LIST VIEW
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+                            verticalArrangement = Arrangement.spacedBy(if (isCompactMode) 6.dp else 10.dp)
                         ) {
                             aps.forEach { ap ->
                                 val clientCount = remember(activeUsers, ap, topology) {
@@ -498,9 +460,16 @@ fun NetworkTopologyScreen(
                                         if (count > 0) count else if (ap.connectedClientMacs.isEmpty()) activeUsers.size else 0
                                     }
                                 }
+                                val isExpanded = expandedApMacs.contains(ap.macAddress.uppercase())
+                                val todayBytes = ap.dailyBytesIn + ap.dailyBytesOut
+
                                 ApListCard(
                                     ap = ap,
                                     clientCount = clientCount,
+                                    isCompact = isCompactMode,
+                                    isExpanded = isExpanded,
+                                    onToggleExpand = { toggleApExpansion(ap.macAddress) },
+                                    todayBytes = todayBytes,
                                     strings = strings,
                                     onClick = { selectedApForDetails = ap },
                                     onAllowlist = { apToAllowlist = ap },
@@ -510,23 +479,23 @@ fun NetworkTopologyScreen(
                         }
                     }
                 } else {
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(24.dp)
+                            modifier = Modifier.padding(20.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.WifiTetheringOff,
                                 contentDescription = null,
-                                modifier = Modifier.size(40.dp),
+                                modifier = Modifier.size(36.dp),
                                 tint = MaterialTheme.colorScheme.outline
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "No APs Detected Automatically",
                                 fontWeight = FontWeight.Bold,
@@ -534,7 +503,7 @@ fun NetworkTopologyScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Connect Ruijie APs (EST310, EST350, EW series) to Hotspot bridge or tap 'Add Device' below to manually allowlist an AP.",
+                                text = "Connect Ruijie APs (EST310, EST350, EW series) to Hotspot bridge or tap 'Add' above to manually allowlist an AP.",
                                 textAlign = TextAlign.Center,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -543,7 +512,7 @@ fun NetworkTopologyScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(90.dp))
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             if (isLoading) {
@@ -701,9 +670,187 @@ fun NetworkTopologyScreen(
 }
 
 @Composable
+fun CompactGatewayNode(
+    topology: NetworkTopologyData,
+    strings: com.example.utils.AppStrings
+) {
+    val routerInfo = remember(topology.routerModel) {
+        DeviceModelDetector.detectRouterGateway(topology.routerModel)
+    }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Internet mini pill
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFE0F2FE),
+                modifier = Modifier.size(30.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Cloud,
+                        contentDescription = "Internet",
+                        tint = Color(0xFF0284C7),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(5.dp))
+
+            // Mini green dots
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                repeat(2) {
+                    Box(
+                        modifier = Modifier
+                            .size(3.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF10B981))
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(5.dp))
+
+            // Router thumbnail
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color.White,
+                shadowElevation = 1.dp,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(2.dp)) {
+                    Image(
+                        painter = painterResource(id = routerInfo.imageResId),
+                        contentDescription = topology.routerModel,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Router name & IPs
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = topology.routerModel,
+                        style = MaterialTheme.typography.titleSmall.copy(fontSize = 12.sp),
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFF0284C7).copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = strings.gateway,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0284C7),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = "Manage: ${topology.manageIp} • Hotspot: ${topology.hotspotIp}",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ExpandedGatewayNode(
+    topology: NetworkTopologyData,
+    strings: com.example.utils.AppStrings
+) {
+    val routerInfo = remember(topology.routerModel) {
+        DeviceModelDetector.detectRouterGateway(topology.routerModel)
+    }
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        modifier = Modifier.padding(horizontal = 12.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color.White,
+                shadowElevation = 2.dp,
+                modifier = Modifier
+                    .height(48.dp)
+                    .fillMaxWidth(0.55f)
+                    .padding(vertical = 2.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(4.dp)) {
+                    Image(
+                        painter = painterResource(id = routerInfo.imageResId),
+                        contentDescription = topology.routerModel,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = topology.routerModel,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Text(
+                text = strings.gateway,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0284C7)
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            Text(
+                text = "Manage IP: ${topology.manageIp}  •  Hotspot IP: ${topology.hotspotIp}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
 fun ApDeviceNode(
     ap: AccessPointDevice,
     clientCount: Int = 0,
+    isCompact: Boolean = true,
+    isExpanded: Boolean = false,
+    onToggleExpand: () -> Unit = {},
+    todayBytes: Long = 0L,
     strings: com.example.utils.AppStrings,
     onClick: () -> Unit,
     onAllowlist: () -> Unit,
@@ -717,185 +864,301 @@ fun ApDeviceNode(
             macAddress = ap.macAddress
         )
     }
+    val clipboardManager = LocalClipboardManager.current
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (ap.isWhitelisted) Color(0xFF10B981).copy(alpha = 0.5f) else Color(0xFFEF4444).copy(alpha = 0.5f)
+        ),
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable { onClick() }
-            .padding(4.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onToggleExpand() }
     ) {
-        // Circular Real Hardware Photo with online / allowlist beacon dot (as shown in user photo!)
-        Box(contentAlignment = Alignment.TopEnd) {
-            Surface(
-                shape = CircleShape,
-                color = Color.White,
-                shadowElevation = 3.dp,
-                border = androidx.compose.foundation.BorderStroke(
-                    2.dp,
-                    if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444)
-                ),
-                modifier = Modifier.size(76.dp)
+        Column(
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 6.dp)
+        ) {
+            // Header Row: Photo + Name + Chevron
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.padding(6.dp)
-                ) {
-                    if (modelInfo.imageResId != 0) {
-                        Image(
-                            painter = painterResource(id = modelInfo.imageResId),
-                            contentDescription = modelInfo.modelName,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Fit
+                // Hardware photo with status dot
+                Box(contentAlignment = Alignment.TopEnd) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White,
+                        shadowElevation = 2.dp,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.5.dp,
+                            if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444)
+                        ),
+                        modifier = Modifier.size(if (isCompact) 36.dp else 46.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(2.dp)) {
+                            if (modelInfo.imageResId != 0) {
+                                Image(
+                                    painter = painterResource(id = modelInfo.imageResId),
+                                    contentDescription = modelInfo.modelName,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Fit
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Wifi,
+                                    contentDescription = null,
+                                    tint = Color(0xFF10B981),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444))
+                            .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = ap.name,
+                        style = MaterialTheme.typography.titleSmall.copy(fontSize = 11.sp),
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = modelInfo.modelName,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF059669),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = ap.ipAddress.ifBlank { "DHCP" },
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Pills Row: Clients, Speed, Whitelist
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFF10B981).copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = "👥 $clientCount",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF059669),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                         )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Wifi,
-                            contentDescription = null,
-                            tint = Color(0xFF10B981),
-                            modifier = Modifier.size(36.dp)
+                    }
+                    if (ap.currentRxBps > 0L || ap.currentTxBps > 0L) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFF0284C7).copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "↓ ${formatSpeed(ap.currentRxBps)}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0284C7),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Allowed badge or Allow button
+                if (ap.isWhitelisted) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFF10B981).copy(alpha = 0.15f),
+                        modifier = Modifier.clickable { onUndo() }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = strings.allowedBadge,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                color = Color(0xFF10B981),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                } else {
+                    Button(
+                        onClick = onAllowlist,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                        shape = RoundedCornerShape(6.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                        modifier = Modifier.height(20.dp)
+                    ) {
+                        Text(
+                            text = strings.allowlistAction,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
                         )
                     }
                 }
             }
 
-            // Top-right status dot (Green for allowlisted/online, Red for un-whitelisted/needs action)
-            Box(
-                modifier = Modifier
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444))
-                    .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Device Title
-        Text(
-            text = ap.name,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
-        )
-
-        // Subtitle "Access Point" or "Wireless Bridge"
-        Text(
-            text = modelInfo.deviceType,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = Color(0xFF10B981)
-        )
-
-        // Model Tag
-        Text(
-            text = modelInfo.modelName,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
-        )
-
-        // Speed & Client count badges
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(top = 3.dp)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = Color(0xFF10B981).copy(alpha = 0.15f)
+            // INLINE EXPANDABLE DETAILS ("in expandable")
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
             ) {
-                Text(
-                    text = "👥 $clientCount",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF059669),
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                )
-            }
-            if (ap.currentRxBps > 0L || ap.currentTxBps > 0L) {
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFF0284C7).copy(alpha = 0.15f)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
                 ) {
-                    Text(
-                        text = "↓ ${formatSpeed(ap.currentRxBps)}",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0284C7),
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                        thickness = 1.dp
                     )
-                }
-            }
-        }
+                    Spacer(modifier = Modifier.height(6.dp))
 
-        // IP Address and MAC Address
-        Text(
-            text = "${ap.ipAddress.ifBlank { "DHCP" }} · ${ap.macAddress.take(8)}...",
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 2.dp)
-        )
+                    // MAC Address row with quick copy
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "MAC: ${ap.macAddress}",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        IconButton(
+                            onClick = { clipboardManager.setText(AnnotatedString(ap.macAddress)) },
+                            modifier = Modifier.size(20.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = "Copy MAC",
+                                modifier = Modifier.size(12.dp),
+                                tint = Color(0xFF10B981)
+                            )
+                        }
+                    }
 
-        Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
-        // Allowlist Action Button or Whitelisted Status
-        if (!ap.isWhitelisted) {
-            Button(
-                onClick = onAllowlist,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF10B981)
-                ),
-                shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                modifier = Modifier.height(26.dp)
-            ) {
-                Text(
-                    text = strings.allowlistAction,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    maxLines = 1,
-                    softWrap = false
-                )
-            }
-        } else {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = Color(0xFF10B981).copy(alpha = 0.15f),
-                modifier = Modifier.clickable { onUndo() }
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = Color(0xFF10B981),
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = strings.allowedBadge,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                        color = Color(0xFF10B981),
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
+                    // Live Upload & Download speeds
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF10B981).copy(alpha = 0.1f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(4.dp)) {
+                                Text("↓ Download", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = Color(0xFF059669))
+                                Text(formatSpeed(ap.currentRxBps), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), fontWeight = FontWeight.Bold, color = Color(0xFF047857))
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF0284C7).copy(alpha = 0.1f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(4.dp)) {
+                                Text("↑ Upload", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = Color(0xFF0284C7))
+                                Text(formatSpeed(ap.currentTxBps), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), fontWeight = FontWeight.Bold, color = Color(0xFF0369A1))
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Today's Consumption
+                    if (todayBytes > 0L) {
+                        Text(
+                            text = "Today: ${formatDataBytes(todayBytes)} (reset at 12 AM)",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+
+                    // Action buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Button(
+                            onClick = onClick,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                            modifier = Modifier.weight(1f).height(26.dp)
+                        ) {
+                            Text(
+                                text = "👥 Clients ($clientCount)",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        if (ap.isWhitelisted) {
+                            Button(
+                                onClick = onUndo,
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                modifier = Modifier.weight(1f).height(26.dp)
+                            ) {
+                                Text(
+                                    text = "Undo",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -906,6 +1169,10 @@ fun ApDeviceNode(
 fun ApListCard(
     ap: AccessPointDevice,
     clientCount: Int,
+    isCompact: Boolean = true,
+    isExpanded: Boolean = false,
+    onToggleExpand: () -> Unit = {},
+    todayBytes: Long = 0L,
     strings: com.example.utils.AppStrings,
     onClick: () -> Unit,
     onAllowlist: () -> Unit,
@@ -919,152 +1186,253 @@ fun ApListCard(
             macAddress = ap.macAddress
         )
     }
+    val clipboardManager = LocalClipboardManager.current
 
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (ap.isWhitelisted) Color(0xFF10B981).copy(alpha = 0.5f) else Color(0xFFEF4444).copy(alpha = 0.5f)
+        ),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onToggleExpand() }
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Thumbnail with Online/Allowlist Badge
-            Box(contentAlignment = Alignment.TopEnd) {
-                Surface(
-                    shape = CircleShape,
-                    color = Color.White,
-                    shadowElevation = 2.dp,
-                    border = androidx.compose.foundation.BorderStroke(
-                        2.dp,
-                        if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444)
-                    ),
-                    modifier = Modifier.size(54.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(4.dp)) {
-                        if (modelInfo.imageResId != 0) {
-                            Image(
-                                painter = painterResource(id = modelInfo.imageResId),
-                                contentDescription = modelInfo.modelName,
-                                modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                contentScale = ContentScale.Fit
-                            )
-                        } else {
-                            Icon(Icons.Default.Wifi, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(28.dp))
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Thumbnail with Online/Allowlist Badge
+                Box(contentAlignment = Alignment.TopEnd) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White,
+                        shadowElevation = 2.dp,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.5.dp,
+                            if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444)
+                        ),
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(2.dp)) {
+                            if (modelInfo.imageResId != 0) {
+                                Image(
+                                    painter = painterResource(id = modelInfo.imageResId),
+                                    contentDescription = modelInfo.modelName,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Fit
+                                )
+                            } else {
+                                Icon(Icons.Default.Wifi, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
+                            }
                         }
                     }
-                }
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .clip(CircleShape)
-                        .background(if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444))
-                        .border(1.5.dp, MaterialTheme.colorScheme.surface, CircleShape)
-                )
-            }
-
-            Spacer(Modifier.width(12.dp))
-
-            // Details Column
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = ap.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444))
+                            .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
                     )
-                    Spacer(Modifier.width(6.dp))
+                }
+
+                Spacer(Modifier.width(10.dp))
+
+                // Details Column
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = ap.name,
+                            style = MaterialTheme.typography.titleSmall.copy(fontSize = 12.sp),
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFF10B981).copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = modelInfo.modelName,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF059669),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "${ap.ipAddress.ifBlank { "DHCP" }} • ${ap.macAddress}",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(Modifier.width(6.dp))
+
+                // Mini Badges
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     Surface(
                         shape = RoundedCornerShape(4.dp),
                         color = Color(0xFF10B981).copy(alpha = 0.15f)
                     ) {
                         Text(
-                            text = modelInfo.modelName,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF059669),
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = "${ap.ipAddress.ifBlank { "DHCP" }} • ${ap.macAddress}",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                    ) {
-                        Text(
-                            text = "👥 $clientCount clients",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            text = "👥 $clientCount",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            color = Color(0xFF059669),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                         )
                     }
                     if (ap.currentRxBps > 0L || ap.currentTxBps > 0L) {
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = RoundedCornerShape(4.dp),
                             color = Color(0xFF0284C7).copy(alpha = 0.15f)
                         ) {
                             Text(
                                 text = "↓ ${formatSpeed(ap.currentRxBps)}",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF0284C7),
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                             )
                         }
                     }
+                    if (ap.isWhitelisted) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFF10B981).copy(alpha = 0.15f),
+                            modifier = Modifier.clickable { onUndo() }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(10.dp))
+                                Spacer(Modifier.width(2.dp))
+                                Text(strings.allowedBadge, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = onAllowlist,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                            modifier = Modifier.height(24.dp)
+                        ) {
+                            Text(strings.allowlistAction, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (isExpanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
 
-            Spacer(Modifier.width(8.dp))
+            // INLINE EXPANDABLE SECTION ("in expandable")
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                ) {
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                        thickness = 1.dp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
 
-            // Action Button
-            if (!ap.isWhitelisted) {
-                Button(
-                    onClick = onAllowlist,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    Text(strings.allowlistAction, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White)
-                }
-            } else {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF10B981).copy(alpha = 0.15f),
-                    modifier = Modifier.clickable { onUndo() }
-                ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(3.dp))
-                        Text(strings.allowedBadge, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF10B981).copy(alpha = 0.1f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(6.dp)) {
+                                Text("↓ Download Speed", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = Color(0xFF059669))
+                                Text(formatSpeed(ap.currentRxBps), style = MaterialTheme.typography.titleSmall.copy(fontSize = 12.sp), fontWeight = FontWeight.Bold, color = Color(0xFF047857))
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF0284C7).copy(alpha = 0.1f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(6.dp)) {
+                                Text("↑ Upload Speed", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = Color(0xFF0284C7))
+                                Text(formatSpeed(ap.currentTxBps), style = MaterialTheme.typography.titleSmall.copy(fontSize = 12.sp), fontWeight = FontWeight.Bold, color = Color(0xFF0369A1))
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (todayBytes > 0L) "Today: ${formatDataBytes(todayBytes)} (from 12 AM)" else "Live connected device",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Button(
+                                onClick = onClick,
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(26.dp)
+                            ) {
+                                Text(
+                                    text = "👥 Manage Clients",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                            if (ap.isWhitelisted) {
+                                Button(
+                                    onClick = onUndo,
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                                    shape = RoundedCornerShape(6.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(26.dp)
+                                ) {
+                                    Text(
+                                        text = "Undo Whitelist",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1091,16 +1459,16 @@ fun ConnectingVerticalLine(dots: Int = 3, color: Color) {
 }
 
 @Composable
-fun BranchingLines(apCount: Int) {
+fun BranchingLines(apCount: Int, isCompact: Boolean = false) {
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(36.dp)
-            .padding(horizontal = 40.dp)
+            .height(if (isCompact) 14.dp else 32.dp)
+            .padding(horizontal = 30.dp)
     ) {
         val stroke = androidx.compose.ui.graphics.drawscope.Stroke(
-            width = 2.dp.toPx(),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+            width = 1.5.dp.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
         )
         val color = Color(0xFF94A3B8)
         val centerX = size.width / 2f
@@ -1110,7 +1478,7 @@ fun BranchingLines(apCount: Int) {
             color = color,
             start = Offset(centerX, 0f),
             end = Offset(centerX, size.height * 0.45f),
-            strokeWidth = 2.dp.toPx(),
+            strokeWidth = 1.5.dp.toPx(),
             pathEffect = stroke.pathEffect
         )
 
@@ -1120,7 +1488,7 @@ fun BranchingLines(apCount: Int) {
                 color = color,
                 start = Offset(size.width * 0.2f, size.height * 0.45f),
                 end = Offset(size.width * 0.8f, size.height * 0.45f),
-                strokeWidth = 2.dp.toPx(),
+                strokeWidth = 1.5.dp.toPx(),
                 pathEffect = stroke.pathEffect
             )
             // Left branch
@@ -1128,7 +1496,7 @@ fun BranchingLines(apCount: Int) {
                 color = color,
                 start = Offset(size.width * 0.2f, size.height * 0.45f),
                 end = Offset(size.width * 0.2f, size.height),
-                strokeWidth = 2.dp.toPx(),
+                strokeWidth = 1.5.dp.toPx(),
                 pathEffect = stroke.pathEffect
             )
             // Right branch
@@ -1136,7 +1504,7 @@ fun BranchingLines(apCount: Int) {
                 color = color,
                 start = Offset(size.width * 0.8f, size.height * 0.45f),
                 end = Offset(size.width * 0.8f, size.height),
-                strokeWidth = 2.dp.toPx(),
+                strokeWidth = 1.5.dp.toPx(),
                 pathEffect = stroke.pathEffect
             )
         } else {
@@ -1144,7 +1512,7 @@ fun BranchingLines(apCount: Int) {
                 color = color,
                 start = Offset(centerX, size.height * 0.45f),
                 end = Offset(centerX, size.height),
-                strokeWidth = 2.dp.toPx(),
+                strokeWidth = 1.5.dp.toPx(),
                 pathEffect = stroke.pathEffect
             )
         }
