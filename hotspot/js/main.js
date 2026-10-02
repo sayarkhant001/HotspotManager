@@ -182,7 +182,7 @@
 
         saveVoucher(code);
         uField.value = code;
-        pField.value = '';
+        pField.value = code;
       } else {
         var user = (aInput ? aInput.value : '').trim();
         var pass = (pInput ? pInput.value : '');

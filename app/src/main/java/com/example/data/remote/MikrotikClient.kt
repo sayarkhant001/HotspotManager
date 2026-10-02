@@ -18,6 +18,8 @@ import java.net.Socket
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
+class RouterApiTrapException(val errorMessage: String) : Exception(errorMessage)
+
 data class RouterStats(
     val cpuLoad: String,
     val freeMemory: String,
@@ -138,8 +140,8 @@ class RawRouterOSConnection {
                 word == "!trap" -> {
                     var errorMsg = "Router error: !trap"
                     while (true) {
-                        val rest = readWord(inS)
-                        if (rest.isNullOrEmpty()) break
+                        val rest = readWord(inS) ?: throw IllegalStateException("Router closed connection during trap")
+                        if (rest.isEmpty()) break
                         if (rest.startsWith("=message=")) {
                             errorMsg = rest.substring(9)
                         }
@@ -150,15 +152,18 @@ class RawRouterOSConnection {
                             val nextWord = readWord(inS) ?: break
                             if (nextWord == "!done") {
                                 while (true) {
-                                    val doneRest = readWord(inS)
-                                    if (doneRest.isNullOrEmpty()) break
+                                    val doneRest = readWord(inS) ?: break
+                                    if (doneRest.isEmpty()) break
                                 }
                                 break
                             }
-                            if (nextWord.isEmpty()) break
+                            if (nextWord.isEmpty()) continue
                         }
-                    } catch (_: Exception) {}
-                    throw RuntimeException(errorMsg)
+                    } catch (drainErr: Exception) {
+                        close()
+                        throw drainErr
+                    }
+                    throw RouterApiTrapException(errorMsg)
                 }
                 word == "!fatal" -> {
                     close()
@@ -403,6 +408,11 @@ class MikrotikClient {
     private var cachedLeasesMap = mutableMapOf<String, String>()
 
     private fun handleApiError(e: Exception) {
+        if (e is RouterApiTrapException) {
+            // Logical rejection from RouterOS (e.g. duplicate user/profile).
+            // Socket stream is intact and synchronized. Do NOT destroy the connection!
+            return
+        }
         e.printStackTrace()
         try {
             connection?.close()
@@ -1079,7 +1089,6 @@ class MikrotikClient {
                 val conn = ensureConnectedInternal() ?: return@withContext false
                 val onLoginScript = ":global hsUser \$user; /system script run voucher-activate;"
                 val params = mutableListOf(
-                    "name=$name",
                     "shared-users=$sharedUsers",
                     "keepalive-timeout=00:02:00",
                     "status-autorefresh=00:01:00",
@@ -1092,7 +1101,16 @@ class MikrotikClient {
                     val cleanRate = if (!rateLimit.contains("/")) "$rateLimit/$rateLimit" else rateLimit
                     params.add("rate-limit=$cleanRate")
                 }
-                conn.execute("/ip/hotspot/user/profile/add", *params.toTypedArray())
+                val profs = conn.execute("/ip/hotspot/user/profile/print", "=.proplist=.id,name")
+                val existing = profs.firstOrNull { it["name"].equals(name, ignoreCase = true) }
+                if (existing != null) {
+                    val profId = existing[".id"]
+                    if (!profId.isNullOrBlank()) {
+                        conn.execute("/ip/hotspot/user/profile/set", ".id=$profId", "name=$name", *params.toTypedArray())
+                    }
+                } else {
+                    conn.execute("/ip/hotspot/user/profile/add", "name=$name", *params.toTypedArray())
+                }
                 true
             } catch (e: Exception) {
                 handleApiError(e)
@@ -1108,10 +1126,24 @@ class MikrotikClient {
                 val conn = ensureConnectedInternal() ?: return@withContext false
                 val profs = conn.execute("/ip/hotspot/user/profile/print", "=.proplist=.id,name")
                 val profId = profs.firstOrNull { it["name"] == profileName }?.get(".id")
-                if (!profId.isNullOrBlank()) {
-                    conn.execute("/ip/hotspot/user/profile/remove", ".id=$profId")
+                if (profId.isNullOrBlank()) {
+                    return@withContext true
                 }
-                cachedHotspotUsers = cachedHotspotUsers.filter { it.profile != profileName }
+                // First reassign any users using this profile to default so RouterOS does not reject with 'profile is in use by user'
+                try {
+                    val usersWithProfile = conn.execute("/ip/hotspot/user/print", "=.proplist=.id", "?profile=$profileName")
+                    for (u in usersWithProfile) {
+                        val uid = u[".id"]
+                        if (!uid.isNullOrBlank()) {
+                            try { conn.execute("/ip/hotspot/user/set", ".id=$uid", "profile=default") } catch (_: Exception) {}
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                conn.execute("/ip/hotspot/user/profile/remove", ".id=$profId")
+                cachedHotspotUsers = cachedHotspotUsers.map {
+                    if (it.profile == profileName) it.copy(profile = "default") else it
+                }
                 true
             } catch (e: Exception) {
                 handleApiError(e)
@@ -1256,10 +1288,11 @@ class MikrotikClient {
                 val code = name.trim()
                 val pass = if (password.isNotBlank()) password.trim() else code
                 val cleanComment = comment.replace("\"", "").trim()
+                val targetProfile = if (profile.isNotBlank()) profile else "default"
                 val params = mutableListOf(
                     "name=$code",
                     "password=$pass",
-                    "profile=$profile"
+                    "profile=$targetProfile"
                 )
                 if (cleanComment.isNotBlank()) {
                     params.add("comment=$cleanComment")
@@ -1270,7 +1303,22 @@ class MikrotikClient {
                 if (limitUptime.isNotBlank()) {
                     params.add("limit-uptime=$limitUptime")
                 }
-                conn.execute("/ip/hotspot/user/add", *params.toTypedArray())
+                try {
+                    conn.execute("/ip/hotspot/user/add", *params.toTypedArray())
+                } catch (e: Exception) {
+                    if (e.message?.contains("already have", ignoreCase = true) == true) {
+                        val existing = conn.execute("/ip/hotspot/user/print", "=.proplist=.id", "?name=$code")
+                        val id = existing.firstOrNull()?.get(".id")
+                        if (!id.isNullOrBlank()) {
+                            conn.execute("/ip/hotspot/user/set", ".id=$id", *params.toTypedArray())
+                        }
+                    } else if (e.message?.contains("profile", ignoreCase = true) == true && targetProfile != "default") {
+                        val fallbackParams = params.map { if (it.startsWith("profile=")) "profile=default" else it }
+                        conn.execute("/ip/hotspot/user/add", *fallbackParams.toTypedArray())
+                    } else {
+                        throw e
+                    }
+                }
                 true
             } catch (e: Exception) {
                 handleApiError(e)
@@ -1291,11 +1339,12 @@ class MikrotikClient {
                         val pass = if (v.isAccount && v.password.isNotBlank()) v.password.trim() else code
                         val cleanComment = v.comment.replace("\"", "").trim()
                         val limitBytes = if (v.dataLimitMb > 0) v.dataLimitMb.toLong() * 1024L * 1024L else 0L
+                        val targetProfile = if (v.profileName.isNotBlank()) v.profileName else "default"
 
                         val params = mutableListOf(
                             "name=$code",
                             "password=$pass",
-                            "profile=${v.profileName}"
+                            "profile=$targetProfile"
                         )
                         if (cleanComment.isNotBlank()) {
                             params.add("comment=$cleanComment")
@@ -1309,8 +1358,20 @@ class MikrotikClient {
                             params.add("limit-uptime=$uptimeStr")
                         }
 
-                        conn.execute("/ip/hotspot/user/add", *params.toTypedArray())
-                        successCount++
+                        try {
+                            conn.execute("/ip/hotspot/user/add", *params.toTypedArray())
+                            successCount++
+                        } catch (e: Exception) {
+                            if (e.message?.contains("already have", ignoreCase = true) == true) {
+                                successCount++
+                            } else if (e.message?.contains("profile", ignoreCase = true) == true && targetProfile != "default") {
+                                val fallbackParams = params.map { if (it.startsWith("profile=")) "profile=default" else it }
+                                conn.execute("/ip/hotspot/user/add", *fallbackParams.toTypedArray())
+                                successCount++
+                            } else {
+                                e.printStackTrace()
+                            }
+                        }
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
@@ -1329,39 +1390,49 @@ class MikrotikClient {
                 val conn = ensureConnectedInternal() ?: return@withContext false
                 val target = username.trim()
                 val targetClean = target.replace("-", "").trim()
-                var id = cachedHotspotUsers.firstOrNull { it.name == target || it.name == targetClean }?.id
-                if (id.isNullOrBlank()) {
-                    val res = conn.execute("/ip/hotspot/user/print", "=.proplist=.id,name")
-                    id = res.firstOrNull { it["name"] == target || it["name"] == targetClean }?.get(".id")
+
+                // Fast targeted query (?name=...) in 1ms instead of loading all 4,500+ users
+                var id: String? = null
+                val userRes = conn.execute("/ip/hotspot/user/print", "=.proplist=.id,name", "?name=$target")
+                id = userRes.firstOrNull()?.get(".id")
+                if (id.isNullOrBlank() && targetClean != target) {
+                    val cleanRes = conn.execute("/ip/hotspot/user/print", "=.proplist=.id,name", "?name=$targetClean")
+                    id = cleanRes.firstOrNull()?.get(".id")
                 }
+                if (id.isNullOrBlank()) {
+                    id = cachedHotspotUsers.firstOrNull { it.name == target || it.name == targetClean }?.id
+                }
+
                 if (!id.isNullOrBlank()) {
                     conn.execute("/ip/hotspot/user/remove", ".id=$id")
                 }
+
                 // Drop any active session for this user and drop host so connection cuts off immediately!
                 try {
-                    val activeRes = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,user,address,mac-address")
-                    val matching = activeRes.filter { it["user"] == target || it["user"] == targetClean }
-                    val ips = matching.mapNotNull { it["address"] }
-                    val macs = matching.mapNotNull { it["mac-address"] }
-                    matching.forEach {
+                    val activeRes = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,address,mac-address", "?user=$target")
+                    val ips = activeRes.mapNotNull { it["address"] }
+                    val macs = activeRes.mapNotNull { it["mac-address"] }
+                    activeRes.forEach {
                         val activeId = it[".id"]
                         if (!activeId.isNullOrBlank()) {
                             try { conn.execute("/ip/hotspot/active/remove", ".id=$activeId") } catch (_: Exception) {}
                         }
                     }
-                    val cookieRes = conn.execute("/ip/hotspot/cookie/print", "=.proplist=.id,user")
-                    cookieRes.filter { it["user"] == target || it["user"] == targetClean }.forEach {
+                    val cookieRes = conn.execute("/ip/hotspot/cookie/print", "=.proplist=.id", "?user=$target")
+                    cookieRes.forEach {
                         val cId = it[".id"]
                         if (!cId.isNullOrBlank()) {
                             try { conn.execute("/ip/hotspot/cookie/remove", ".id=$cId") } catch (_: Exception) {}
                         }
                     }
-                    val hostRes = conn.execute("/ip/hotspot/host/print", "=.proplist=.id,user,address,mac-address")
-                    hostRes.filter { it["user"] == target || it["user"] == targetClean || it["address"] in ips || it["mac-address"] in macs }.forEach {
-                        val hId = it[".id"]
-                        if (!hId.isNullOrBlank()) {
-                            try { conn.execute("/ip/hotspot/host/remove", ".id=$hId") } catch (_: Exception) {}
-                        }
+                    for (ip in ips) {
+                        try {
+                            val hostRes = conn.execute("/ip/hotspot/host/print", "=.proplist=.id", "?address=$ip")
+                            hostRes.forEach {
+                                val hId = it[".id"]
+                                if (!hId.isNullOrBlank()) conn.execute("/ip/hotspot/host/remove", ".id=$hId")
+                            }
+                        } catch (_: Exception) {}
                     }
                 } catch (_: Exception) {}
 
