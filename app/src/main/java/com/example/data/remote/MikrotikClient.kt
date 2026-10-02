@@ -102,7 +102,8 @@ class RawRouterOSConnection {
         writeWord(out, command)
         for (p in params) {
             val trimmed = p.trim()
-            if (trimmed.startsWith("=") || trimmed.startsWith("?") || trimmed.startsWith(".")) {
+            if (trimmed.isEmpty()) continue
+            if (trimmed.startsWith("=") || trimmed.startsWith("?")) {
                 writeWord(out, trimmed)
             } else {
                 writeWord(out, "=$trimmed")
