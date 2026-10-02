@@ -3,14 +3,14 @@
 <div align="center">
 
 ![HotspotManager Banner](https://img.shields.io/badge/MikroTik-RouterOS_v7-red?style=for-the-badge&logo=mikrotik)
-![Android Version](https://img.shields.io/badge/Android_App-v1.3.6-green?style=for-the-badge&logo=android)
+![Android Version](https://img.shields.io/badge/Android_App-v1.4.7-green?style=for-the-badge&logo=android)
 ![SSID](https://img.shields.io/badge/SSID-Hide%20Wifi-blue?style=for-the-badge&logo=wi-fi)
 
 <h3>High-Performance MikroTik Hotspot System with Real-Time Profile Alignment & Luxury Captive Portal</h3>
 
 <p>
-  <a href="https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.3.6.apk">
-    <img src="https://img.shields.io/badge/Download_APK-v1.3.6_(Direct)-success?style=for-the-badge&logo=android" alt="Download APK" />
+  <a href="https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.4.7.apk">
+    <img src="https://img.shields.io/badge/Download_APK-v1.4.7_(Direct)-success?style=for-the-badge&logo=android" alt="Download APK" />
   </a>
 </p>
 
@@ -20,17 +20,15 @@
 
 ## 📱 App Download for Users
 
-- **Direct Download Link:** [HotspotManager-v1.3.6.apk](https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.3.6.apk)
-- **Version:** v1.3.6 (versionCode: 13)
-- **What's New in v1.3.6:**
-  - **Network Topology Visualizer:** Visual diagram mapping Internet ➔ Gateway (Model, Manage IP & Hotspot IP) ➔ Connected Access Points (Ruijie EST310, EST350, Reyee AP routers).
-  - **Access Point Detection & Allowlisting:** Auto-detects connected Ruijie/Reyee APs and prompts admins to allowlist (bypass captive portal) with a single click.
-  - **Active Clients Whitelist & Ban Management:**
-    - 1-click **Whitelist** button directly on active client cards.
-    - Three organized tabs: **Active Clients**, **Whitelisted Clients**, and **Banned Clients**.
-    - Full **Undo** capability to remove whitelist bypass or unban blocked devices.
-  - **Router Advance Mode (Enterprise Mode):** Automatically upgrades RouterOS from Home Mode to Advance/Enterprise Mode to unlock full Hotspot, Scheduler, and Fetch capabilities.
-  - **Dashboard Topology Button:** Quick-access Network Topology button card placed right at the hardware Uptime position.
+- **Direct Download Link:** [HotspotManager-v1.4.7.apk](https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.4.7.apk)
+- **Version:** v1.4.7 (versionCode: 24)
+- **What's New in v1.4.7:**
+  - 🗑️ **30-Day Auto-Prune Expired Vouchers:** Automatically cleans up expired vouchers that reached expiration 30 or more days ago, preventing local Room DB bloat while keeping active online users and unexpired/stock inventory 100% safe.
+  - 🛡️ **Non-Disruptive Advance Mode:** Inspects RouterOS `/system/device-mode/print` first; prevents triggering hardware power-cycle confirmation prompts and preserves active connections for all connected clients.
+  - ⚡ **Safe RouterOS Script Execution:** RouterOS API script runner executes scripts by name (`=number=$scriptName`) with output capture and cleanup, preventing API trap errors.
+  - 🔄 **Voucher Release & Transfer:** Red circle button unbinds a client's MAC address from a voucher so it can be reinserted into another phone without losing remaining quota/time.
+  - 📑 **Using & Expired Tabs:** Clean separation between vouchers currently being used and vouchers whose quota/time is fully expired. Removed Mikhmon references and removed blocked tab.
+  - 🚀 **GitHub Remote Script Runner & Terminal Console:** Fetch and run `setup.rsc` and custom RSC scripts directly from GitHub with 1 tap.
 
 ---
 
