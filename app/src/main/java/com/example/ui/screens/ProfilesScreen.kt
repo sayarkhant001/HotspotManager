@@ -1273,16 +1273,15 @@ fun EditProfileDialog(
                         }
                     }
 
-                    if (!profile.name.equals("default", ignoreCase = true)) {
-                        OutlinedTextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            label = { Text(strings.profileName) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            singleLine = true
-                        )
-                    }
+                    OutlinedTextField(
+                        value = if (profile.name.equals("default", ignoreCase = true)) "default" else name,
+                        onValueChange = { if (!profile.name.equals("default", ignoreCase = true)) name = it },
+                        label = { Text(if (profile.name.equals("default", ignoreCase = true)) "${strings.profileName} (Router System Default - Fixed Name)" else strings.profileName) },
+                        enabled = !profile.name.equals("default", ignoreCase = true),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
+                    )
 
                     // Speed Limit
                     Column(
@@ -1577,6 +1576,26 @@ fun EditProfileDialog(
                                 singleLine = true
                             )
                         }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("+Price:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            listOf(500, 1000, 3000, 5000).forEach { addP ->
+                                SuggestionChip(
+                                    onClick = {
+                                        val current = price.toIntOrNull() ?: 0
+                                        price = (current + addP).toString()
+                                    },
+                                    label = { Text("+$addP", style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.height(28.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -1617,10 +1636,13 @@ fun EditProfileDialog(
                             }
                             val priceVal = price.trim().toDoubleOrNull() ?: 0.0
 
+                            val finalName = if (profile.name.equals("default", ignoreCase = true)) "default" else name.trim().ifBlank { profile.name }
                             onSave(
                                 profile.copy(
-                                    name = name.trim(),
+                                    name = finalName,
                                     rateLimit = rateLimitStr,
+                                    downloadLimitMbps = speedNum,
+                                    uploadLimitMbps = speedNum,
                                     sharedUsers = sharedUsers.toIntOrNull() ?: 1,
                                     dataLimitMb = dataMb,
                                     validityDays = vDays,

@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyColumn
@@ -657,8 +658,8 @@ fun VoucherItemCard(
 
     GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
         Row(
-            modifier = Modifier.padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.Top
         ) {
             Checkbox(
                 checked = isSelected,
@@ -776,6 +777,52 @@ fun VoucherItemCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+                if (voucher.isUsed) {
+                    val totalBytes = voucher.bytesIn + voucher.bytesOut
+                    val usedMb = (totalBytes / (1024 * 1024))
+                    val limitMb = voucher.dataLimitMb
+                    val progress = if (limitMb > 0) (usedMb.toFloat() / limitMb.toFloat()).coerceIn(0f, 1f) else 1f
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFFE65100).copy(alpha = 0.08f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE65100).copy(alpha = 0.25f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (limitMb > 0) "Data Used: $usedMb MB / $limitMb MB" else "Data Used: $usedMb MB",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFE65100)
+                                )
+                                if (voucher.uptime.isNotBlank() && voucher.uptime != "0s") {
+                                    Text(
+                                        text = "⏱ ${voucher.uptime}",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            if (limitMb > 0) {
+                                Spacer(modifier = Modifier.height(3.dp))
+                                LinearProgressIndicator(
+                                    progress = progress,
+                                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                                    color = Color(0xFFE65100),
+                                    trackColor = Color(0xFFE65100).copy(alpha = 0.2f)
+                                )
+                            }
+                        }
+                    }
                 }
             }
 

@@ -267,19 +267,21 @@
       }
     }
 
-    function formatBytes(bytes) {
+    function formatBytesToMB(bytes) {
       var b = parseFloat(bytes) || 0;
-      if (b < 1024) return b + ' B';
-      if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
-      if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
-      return (b / 1073741824).toFixed(2) + ' GB';
+      if (b <= 0) return '0 MB';
+      var mb = b / 1048576;
+      if (mb >= 100) return (Math.round(mb * 10) / 10).toLocaleString() + ' MB';
+      if (mb >= 1) return (Math.round(mb * 100) / 100).toFixed(1) + ' MB';
+      var f = (Math.round(mb * 100) / 100).toFixed(2);
+      return (f === '0.00' ? '< 0.01' : f) + ' MB';
     }
 
     var inBytes = parseFloat(bytesInEl ? bytesInEl.textContent : 0) || 0;
     var outBytes = parseFloat(bytesOutEl ? bytesOutEl.textContent : 0) || 0;
     var totalBytes = inBytes + outBytes;
     if (totalBytes > 0 && dataUsedEl) {
-      dataUsedEl.textContent = formatBytes(totalBytes);
+      dataUsedEl.textContent = formatBytesToMB(totalBytes);
     } else if (dataUsedEl && dataUsedEl.textContent.indexOf('$(') !== -1) {
       dataUsedEl.textContent = '14.9 MB / 959.3 MB';
     }
@@ -287,7 +289,7 @@
     if (dataRemainingEl) {
       var rawRem = parseFloat(dataRemainingEl.textContent.trim());
       if (!isNaN(rawRem) && rawRem > 0) {
-        dataRemainingEl.textContent = formatBytes(rawRem);
+        dataRemainingEl.textContent = formatBytesToMB(rawRem);
       } else {
         var uName = (gid('display_username') ? gid('display_username').textContent : '').toUpperCase();
         var quotaMatch = uName.match(/(\d+)\s*(GB|MB|G|M)/i);
@@ -296,7 +298,7 @@
           var unit = quotaMatch[2].toUpperCase();
           var quotaBytes = num * (unit.indexOf('G') !== -1 ? 1073741824 : 1048576);
           var rem = Math.max(0, quotaBytes - totalBytes);
-          dataRemainingEl.textContent = formatBytes(rem);
+          dataRemainingEl.textContent = formatBytesToMB(rem);
         } else {
           dataRemainingEl.textContent = 'အကန့်အသတ်မရှိ (Unlimited)';
         }

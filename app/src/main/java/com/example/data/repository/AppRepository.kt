@@ -134,28 +134,29 @@ class AppRepository(
                 val defaults = getDefaultProfilePriceAndQuota(rp.name)
 
                 val price = when {
-                    meta != null && meta.price > 0.0 -> meta.price
+                    meta != null -> meta.price
                     existing != null && existing.price > 0.0 -> existing.price
                     else -> defaults.first
                 }
                 val sellingPrice = when {
-                    meta != null && meta.sellingPrice > 0.0 -> meta.sellingPrice
+                    meta != null -> meta.sellingPrice
                     existing != null && existing.sellingPrice > 0.0 -> existing.sellingPrice
                     else -> price
                 }
                 val quota = when {
-                    meta != null && meta.dataLimitMb > 0 -> meta.dataLimitMb
+                    meta != null -> meta.dataLimitMb
                     existing != null && existing.dataLimitMb > 0 -> existing.dataLimitMb
                     else -> defaults.second
                 }
                 val validity = when {
-                    meta != null && meta.validityDays > 0 -> meta.validityDays
+                    meta != null -> meta.validityDays
                     existing != null && existing.validityDays > 0 -> existing.validityDays
                     else -> defaults.third
                 }
                 val duration = when {
                     meta != null && meta.durationMinutes > 0 -> meta.durationMinutes
                     existing != null && existing.durationMinutes > 0 -> existing.durationMinutes
+                    validity > 0 -> validity * 1440
                     else -> 0
                 }
 
@@ -175,10 +176,8 @@ class AppRepository(
             dao.clearProfiles()
             dao.insertProfiles(list)
 
-            // If router metadata was missing or incomplete, push consolidated metadata to router
-            if (routerMeta.size < list.size || list.any { it.price > 0.0 && routerMeta[it.name]?.price != it.price }) {
-                syncMetadataToRouter(list)
-            }
+            // Always ensure the router script has all profiles consolidated
+            syncMetadataToRouter(list)
         }
     }
 
@@ -297,6 +296,57 @@ class AppRepository(
         val routerUsers = mikrotikClient.getAllHotspotUsers()
         if (routerUsers.isEmpty()) return 0
 
+        val existingVouchersMap = dao.getAllVouchersSync().associateBy { it.code }
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Yangon")
+        }
+        val dateTimeFormat1 = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Yangon")
+        }
+        val dateTimeFormat2 = SimpleDateFormat("MMM/dd/yyyy HH:mm:ss", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Yangon")
+        }
+
+        fun parseActivationTimestamp(comment: String): Long? {
+            val actIdx = comment.indexOf("[ACT:")
+            if (actIdx >= 0) {
+                val endIdx = comment.indexOf("]", actIdx)
+                val rawDate = if (endIdx > actIdx) comment.substring(actIdx + 5, endIdx).trim() else comment.substring(actIdx + 5).trim()
+                try {
+                    val t = dateTimeFormat1.parse(rawDate)?.time
+                    if (t != null) return t
+                } catch (_: Exception) {}
+                try {
+                    val t = dateTimeFormat2.parse(rawDate)?.time
+                    if (t != null) return t
+                } catch (_: Exception) {}
+                try {
+                    val t = dateFormat.parse(rawDate)?.time
+                    if (t != null) return t
+                } catch (_: Exception) {}
+            }
+            return null
+        }
+
+        fun parseUptimeSeconds(uptime: String): Long {
+            var total = 0L
+            val clean = uptime.trim().lowercase()
+            val regex = Regex("(\\d+)([wdhms])")
+            regex.findAll(clean).forEach { m ->
+                val v = m.groupValues[1].toLongOrNull() ?: 0L
+                when (m.groupValues[2]) {
+                    "w" -> total += v * 7 * 86400
+                    "d" -> total += v * 86400
+                    "h" -> total += v * 3600
+                    "m" -> total += v * 60
+                    "s" -> total += v
+                }
+            }
+            return total
+        }
+
+        val sessionLogs = mutableListOf<com.example.domain.models.RouterSessionLog>()
+
         val vouchers = routerUsers.map { u ->
             val prof = profileMap[u.profile]
             val isAcc = u.password.isNotBlank() && u.password != u.name
@@ -304,6 +354,36 @@ class AppRepository(
             val mb = if (totalBytes > 0) (totalBytes / (1024 * 1024)).toInt() else (prof?.dataLimitMb ?: 0)
             val isUsed = (u.uptime != "0s" && u.uptime.isNotBlank()) || u.bytesOut > 0
             val isPrinted = u.comment.contains("PRINTED", ignoreCase = true)
+
+            val existing = existingVouchersMap[u.name]
+            val parsedActTime = parseActivationTimestamp(u.comment)
+            val uptimeSec = parseUptimeSeconds(u.uptime)
+            val generatedAt = when {
+                parsedActTime != null -> parsedActTime
+                existing != null && existing.generatedAt > 0L -> existing.generatedAt
+                isUsed && uptimeSec > 0 -> System.currentTimeMillis() - (uptimeSec * 1000L)
+                else -> existing?.generatedAt ?: System.currentTimeMillis()
+            }
+
+            if (isUsed) {
+                val bIn = u.bytesIn
+                val bOut = u.bytesOut
+                val mbUsed = (bIn + bOut) / (1024.0 * 1024.0)
+                val sDateKey = dateFormat.format(Date(generatedAt))
+                sessionLogs.add(
+                    com.example.domain.models.RouterSessionLog(
+                        macAddress = u.name,
+                        ipAddress = "",
+                        voucherCode = u.name,
+                        uptime = u.uptime,
+                        bytesIn = bIn,
+                        bytesOut = bOut,
+                        dataUsedMb = Math.round(mbUsed * 100.0) / 100.0,
+                        sessionStartTime = generatedAt,
+                        dateKey = sDateKey
+                    )
+                )
+            }
 
             Voucher(
                 code = u.name,
@@ -318,15 +398,23 @@ class AppRepository(
                 durationMinutes = prof?.durationMinutes ?: 0,
                 validityDays = prof?.validityDays ?: 1,
                 price = if (prof != null && prof.sellingPrice > 0) prof.sellingPrice else (prof?.price ?: 0.0),
-                generatedAt = System.currentTimeMillis(),
+                generatedAt = generatedAt,
                 isUsed = isUsed,
                 isPrinted = isPrinted,
-                comment = u.comment
+                comment = u.comment,
+                bytesIn = u.bytesIn,
+                bytesOut = u.bytesOut,
+                uptime = u.uptime
             )
         }
         dao.clearAllVouchers()
         vouchers.chunked(250).forEach { chunk ->
             dao.insertVouchers(chunk)
+        }
+        if (sessionLogs.isNotEmpty()) {
+            sessionLogs.chunked(250).forEach { chunk ->
+                dao.insertSessions(chunk)
+            }
         }
         return vouchers.size
     }
@@ -632,6 +720,7 @@ class AppRepository(
     suspend fun whitelistDevice(mac: String, ip: String = "", comment: String = "Whitelisted Device"): Boolean = mikrotikClient.whitelistDevice(mac, ip, comment)
     suspend fun removeIpBinding(id: String, mac: String = ""): Boolean = mikrotikClient.removeIpBinding(id, mac)
     suspend fun getNetworkTopology(): com.example.domain.models.NetworkTopologyData = mikrotikClient.getNetworkTopology()
+    suspend fun renameAccessPoint(mac: String, newName: String): Boolean = mikrotikClient.renameAccessPoint(mac, newName)
     suspend fun setRouterAdvanceMode(): Boolean = mikrotikClient.setRouterAdvanceMode()
 }
 

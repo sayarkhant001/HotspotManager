@@ -779,6 +779,8 @@
 :do { /ip firewall filter add action=reject chain=forward in-interface=hotspot-bridge protocol=tcp dst-port=853 reject-with=tcp-reset comment="Reject DoT" } on-error={}
 # Accept ONLY authorized Hotspot clients (logged in via voucher or bypassed in ip-binding)
 :do { /ip firewall filter add action=accept chain=forward hotspot=auth in-interface=hotspot-bridge comment="Accept authorized Hotspot clients" } on-error={}
+# Accept Whitelisted / Bypassed Devices before dropping unauthorized clients
+:do { /ip firewall filter add action=accept chain=forward src-address-list=whitelisted-devices in-interface=hotspot-bridge comment="Accept Whitelisted Devices" } on-error={}
 # Drop all unauthorized Hotspot forwarding to WAN (forces captive portal login)
 :do { /ip firewall filter add action=drop chain=forward in-interface=hotspot-bridge out-interface-list=WAN comment="Drop unauthorized Hotspot clients (WAN List)" } on-error={}
 :do { /ip firewall filter add action=drop chain=forward in-interface=hotspot-bridge out-interface=ether1 comment="Drop unauthorized Hotspot clients (ether1)" } on-error={}

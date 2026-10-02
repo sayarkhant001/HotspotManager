@@ -786,19 +786,32 @@ class MikrotikClient {
                     val bId = matched[".id"]
                     params.add(".id=$bId")
                     params.add("type=bypassed")
+                    params.add("server=all")
                     params.add("comment=$comment")
-                    if (ip.isNotBlank()) params.add("address=$ip")
+                    // Clear address restriction (0.0.0.0) so phone has instant internet regardless of DHCP IP
+                    params.add("address=0.0.0.0")
                     params.add("disabled=no")
                     conn.execute("/ip/hotspot/ip-binding/set", *params.toTypedArray())
                 } else {
                     params.add("mac-address=$cleanMac")
                     params.add("type=bypassed")
+                    params.add("server=all")
                     params.add("comment=$comment")
-                    if (ip.isNotBlank()) params.add("address=$ip")
                     conn.execute("/ip/hotspot/ip-binding/add", *params.toTypedArray())
                 }
 
-                // Drop hotspot host entry so the client or AP immediately gains bypassed state without Wi-Fi toggle
+                // 1. Remove any old non-bypassed active sessions for this device
+                try {
+                    val activeSessions = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,mac-address")
+                    activeSessions.filter { it["mac-address"].equals(cleanMac, ignoreCase = true) }.forEach {
+                        val aId = it[".id"]
+                        if (!aId.isNullOrBlank()) {
+                            try { conn.execute("/ip/hotspot/active/remove", ".id=$aId") } catch (_: Exception) {}
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // 2. Drop hotspot host entry so RouterOS immediately recreates host with bypassed=true
                 try {
                     val hosts = conn.execute("/ip/hotspot/host/print", "=.proplist=.id,mac-address")
                     hosts.filter { it["mac-address"].equals(cleanMac, ignoreCase = true) }.forEach {
@@ -808,6 +821,121 @@ class MikrotikClient {
                         }
                     }
                 } catch (_: Exception) {}
+
+                // 3. Convert dynamic DHCP lease to static if present
+                try {
+                    val leases = conn.execute("/ip/dhcp-server/lease/print", "=.proplist=.id,mac-address,dynamic")
+                    leases.filter { it["mac-address"].equals(cleanMac, ignoreCase = true) && it["dynamic"] == "true" }.forEach {
+                        val lId = it[".id"]
+                        if (!lId.isNullOrBlank()) {
+                            try { conn.execute("/ip/dhcp-server/lease/make-static", "=.id=$lId") } catch (_: Exception) {}
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // 4. Ensure firewall forward accept rule exists before the drop rule
+                try {
+                    val filterRules = conn.execute("/ip/firewall/filter/print", "=.proplist=.id,chain,action,src-address-list,comment")
+                    val hasWhitelistAccept = filterRules.any {
+                        it["chain"] == "forward" &&
+                        it["action"] == "accept" &&
+                        it["src-address-list"] == "whitelisted-devices"
+                    }
+                    if (!hasWhitelistAccept) {
+                        val addRes = conn.execute(
+                            "/ip/firewall/filter/add",
+                            "chain=forward",
+                            "action=accept",
+                            "src-address-list=whitelisted-devices",
+                            "in-interface=hotspot-bridge",
+                            "comment=Accept Whitelisted Devices"
+                        )
+                        val newRuleId = addRes.firstOrNull()?.get("ret")
+                        val dropRule = filterRules.firstOrNull {
+                            it["chain"] == "forward" &&
+                            it["action"] == "drop" &&
+                            (it["comment"]?.contains("unauthorized", ignoreCase = true) == true ||
+                             it["comment"]?.contains("hotspot", ignoreCase = true) == true)
+                        }
+                        if (newRuleId != null && dropRule != null) {
+                            val dropId = dropRule[".id"]
+                            if (!dropId.isNullOrBlank()) {
+                                conn.execute("/ip/firewall/filter/move", "numbers=$newRuleId", "destination=$dropId")
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // 5. Resolve device IP and add to /ip/firewall/address-list (list=whitelisted-devices)
+                try {
+                    var deviceIp = ip.trim()
+                    if (deviceIp.isBlank() || deviceIp == "0.0.0.0") {
+                        val leases = conn.execute("/ip/dhcp-server/lease/print", "=.proplist=mac-address,address")
+                        deviceIp = leases.firstOrNull { it["mac-address"].equals(cleanMac, ignoreCase = true) }?.get("address") ?: ""
+                    }
+                    if (deviceIp.isBlank()) {
+                        val arps = conn.execute("/ip/arp/print", "=.proplist=mac-address,address")
+                        deviceIp = arps.firstOrNull { it["mac-address"].equals(cleanMac, ignoreCase = true) }?.get("address") ?: ""
+                    }
+                    if (deviceIp.isBlank()) {
+                        val hosts = conn.execute("/ip/hotspot/host/print", "=.proplist=mac-address,address")
+                        deviceIp = hosts.firstOrNull { it["mac-address"].equals(cleanMac, ignoreCase = true) }?.get("address") ?: ""
+                    }
+                    if (deviceIp.isNotBlank()) {
+                        val addrList = conn.execute("/ip/firewall/address-list/print", "=.proplist=.id,list,address")
+                        val existingEntry = addrList.firstOrNull { it["list"] == "whitelisted-devices" && it["address"] == deviceIp }
+                        if (existingEntry == null) {
+                            conn.execute(
+                                "/ip/firewall/address-list/add",
+                                "list=whitelisted-devices",
+                                "address=$deviceIp",
+                                "comment=$comment"
+                            )
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                true
+            } catch (e: Exception) {
+                handleApiError(e)
+                false
+            }
+        }
+    }
+
+    suspend fun renameAccessPoint(mac: String, newName: String): Boolean = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withContext false
+                val cleanMac = mac.trim().uppercase()
+                val cleanName = newName.trim()
+                if (cleanMac.isBlank() || cleanName.isBlank()) return@withContext false
+
+                val apComment = if (cleanName.startsWith("AP:", ignoreCase = true) || cleanName.startsWith("Ruijie", ignoreCase = true) || cleanName.startsWith("TP-Link", ignoreCase = true)) {
+                    cleanName
+                } else {
+                    "AP: $cleanName"
+                }
+
+                // 1. Update IP binding comment
+                val bindings = conn.execute("/ip/hotspot/ip-binding/print", "=.proplist=.id,mac-address")
+                val matchedBinding = bindings.firstOrNull { it["mac-address"].equals(cleanMac, ignoreCase = true) }
+                if (matchedBinding != null) {
+                    val bId = matchedBinding[".id"]
+                    if (!bId.isNullOrBlank()) {
+                        conn.execute("/ip/hotspot/ip-binding/set", ".id=$bId", "comment=$apComment")
+                    }
+                }
+
+                // 2. Update DHCP lease comment
+                val leases = conn.execute("/ip/dhcp-server/lease/print", "=.proplist=.id,mac-address")
+                val matchedLease = leases.firstOrNull { it["mac-address"].equals(cleanMac, ignoreCase = true) }
+                if (matchedLease != null) {
+                    val lId = matchedLease[".id"]
+                    if (!lId.isNullOrBlank()) {
+                        conn.execute("/ip/dhcp-server/lease/set", ".id=$lId", "comment=$apComment")
+                    }
+                }
 
                 true
             } catch (e: Exception) {
@@ -821,18 +949,40 @@ class MikrotikClient {
         apiMutex.withLock {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext false
+                var removedMac = mac.trim().uppercase()
                 if (id.isNotBlank()) {
+                    if (removedMac.isBlank()) {
+                        val bindings = conn.execute("/ip/hotspot/ip-binding/print", "=.proplist=.id,mac-address")
+                        removedMac = (bindings.firstOrNull { it[".id"] == id }?.get("mac-address") ?: "").uppercase()
+                    }
                     conn.execute("/ip/hotspot/ip-binding/remove", ".id=$id")
-                } else if (mac.isNotBlank()) {
-                    val cleanMac = mac.trim().uppercase()
+                } else if (removedMac.isNotBlank()) {
                     val bindings = conn.execute("/ip/hotspot/ip-binding/print", "=.proplist=.id,mac-address")
-                    bindings.filter { it["mac-address"].equals(cleanMac, ignoreCase = true) }.forEach {
+                    bindings.filter { it["mac-address"].equals(removedMac, ignoreCase = true) }.forEach {
                         val bId = it[".id"]
                         if (!bId.isNullOrBlank()) {
                             try { conn.execute("/ip/hotspot/ip-binding/remove", ".id=$bId") } catch (_: Exception) {}
                         }
                     }
                 }
+
+                // Remove device IP from /ip/firewall/address-list (list=whitelisted-devices)
+                try {
+                    if (removedMac.isNotBlank()) {
+                        val leases = conn.execute("/ip/dhcp-server/lease/print", "=.proplist=mac-address,address")
+                        val targetIp = leases.firstOrNull { it["mac-address"].equals(removedMac, ignoreCase = true) }?.get("address") ?: ""
+                        if (targetIp.isNotBlank()) {
+                            val addrList = conn.execute("/ip/firewall/address-list/print", "=.proplist=.id,list,address")
+                            addrList.filter { it["list"] == "whitelisted-devices" && it["address"] == targetIp }.forEach {
+                                val aId = it[".id"]
+                                if (!aId.isNullOrBlank()) {
+                                    try { conn.execute("/ip/firewall/address-list/remove", ".id=$aId") } catch (_: Exception) {}
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+
                 true
             } catch (e: Exception) {
                 handleApiError(e)
@@ -983,6 +1133,23 @@ class MikrotikClient {
 
                 val apMap = mutableMapOf<String, AccessPointDevice>()
 
+                // Query ARP table for active online MACs & IPs
+                val onlineArpMacs = mutableSetOf<String>()
+                val onlineArpIps = mutableSetOf<String>()
+                try {
+                    val arps = conn.execute("/ip/arp/print", "=.proplist=mac-address,address,status,complete")
+                    arps.forEach { a ->
+                        val m = (a["mac-address"] ?: "").uppercase()
+                        val ip = a["address"] ?: ""
+                        val status = (a["status"] ?: "").lowercase()
+                        val complete = a["complete"] ?: "true"
+                        if (status != "failed" && status != "stale" && complete != "false") {
+                            if (m.isNotBlank()) onlineArpMacs.add(m)
+                            if (ip.isNotBlank()) onlineArpIps.add(ip)
+                        }
+                    }
+                } catch (_: Exception) {}
+
                 // 1. Check DHCP leases for Ruijie / Reyee and TP-Link APs & Bridges
                 try {
                     val leases = conn.execute("/ip/dhcp-server/lease/print")
@@ -1003,7 +1170,7 @@ class MikrotikClient {
                         if (detected.isApOrBridge && mac.isNotBlank()) {
                             val binding = bindingsMap[mac]
                             val isWhitelisted = binding?.type == "bypassed" && !binding.disabled
-                            val isOnline = status == "bound" || status == "active" || status.isNotBlank()
+                            val isOnline = (mac in onlineArpMacs) || (ip.isNotBlank() && ip in onlineArpIps) || status == "bound"
 
                             val displayName = when {
                                 host.isNotBlank() -> host
@@ -1046,6 +1213,7 @@ class MikrotikClient {
                             val binding = bindingsMap[mac]
                             val isWhitelisted = binding?.type == "bypassed" && !binding.disabled
                             val displayName = identity.ifBlank { "${detected.brand}-${mac.takeLast(5)}" }
+                            val isOnline = (mac in onlineArpMacs) || (ip.isNotBlank() && ip in onlineArpIps) || true
 
                             apMap[mac] = createApDevice(
                                 mac = mac,
@@ -1053,7 +1221,7 @@ class MikrotikClient {
                                 modelName = detected.modelName,
                                 ip = ip.ifBlank { apMap[mac]?.ipAddress ?: "" },
                                 isWhitelisted = isWhitelisted,
-                                isOnline = true,
+                                isOnline = isOnline,
                                 bindingId = binding?.id,
                                 brand = detected.brand,
                                 interfaceHint = ifaceHint
@@ -1070,25 +1238,29 @@ class MikrotikClient {
                         val ip = h["address"] ?: ""
                         val comment = h["comment"] ?: ""
                         if (mac.isNotBlank() && !apMap.containsKey(mac)) {
-                            val detected = com.example.utils.DeviceModelDetector.detectApOrClient(
-                                name = comment,
-                                hostName = "",
-                                comment = comment,
-                                macAddress = mac
-                            )
-                            if (detected.isApOrBridge) {
-                                val binding = bindingsMap[mac]
-                                val isWhitelisted = binding?.type == "bypassed" && !binding.disabled
-                                apMap[mac] = createApDevice(
-                                    mac = mac,
-                                    displayName = comment.ifBlank { "${detected.brand}-${mac.takeLast(5).replace(":", "")}" },
-                                    modelName = detected.modelName,
-                                    ip = ip,
-                                    isWhitelisted = isWhitelisted,
-                                    isOnline = true,
-                                    bindingId = binding?.id,
-                                    brand = detected.brand
+                            // Only check if it's NOT a client device or voucher comment
+                            if (!com.example.utils.DeviceModelDetector.isClientDevice("", "", comment, mac)) {
+                                val detected = com.example.utils.DeviceModelDetector.detectApOrClient(
+                                    name = comment,
+                                    hostName = "",
+                                    comment = comment,
+                                    macAddress = mac
                                 )
+                                if (detected.isApOrBridge) {
+                                    val binding = bindingsMap[mac]
+                                    val isWhitelisted = binding?.type == "bypassed" && !binding.disabled
+                                    val isOnline = (mac in onlineArpMacs) || (ip.isNotBlank() && ip in onlineArpIps)
+                                    apMap[mac] = createApDevice(
+                                        mac = mac,
+                                        displayName = comment.ifBlank { "${detected.brand}-${mac.takeLast(5).replace(":", "")}" },
+                                        modelName = detected.modelName,
+                                        ip = ip,
+                                        isWhitelisted = isWhitelisted,
+                                        isOnline = isOnline,
+                                        bindingId = binding?.id,
+                                        brand = detected.brand
+                                    )
+                                }
                             }
                         }
                     }
@@ -1098,8 +1270,9 @@ class MikrotikClient {
                 bindingsMap.values.forEach { b ->
                     val bMacUpper = b.macAddress.trim().uppercase()
                     val c = b.comment.lowercase()
-                    val isApComment = c.contains("ap") || c.contains("ruijie") || c.contains("reyee") || c.contains("est") || c.contains("tp-link") || c.contains("tplink") || c.contains("cpe")
-                    val cleanCommentName = b.comment.replace(Regex("(?i)^ap:\\s*"), "").trim()
+                    val isClient = com.example.utils.DeviceModelDetector.isClientDevice("", "", b.comment, bMacUpper)
+                    val isApComment = !isClient && (c.startsWith("ruijie ap:") || c.startsWith("ap:") || c.contains("reyee") || c.contains("est") || c.contains("tp-link") || c.contains("tplink") || c.contains("cpe"))
+                    val cleanCommentName = b.comment.replace(Regex("(?i)^(ruijie\\s+)?ap:\\s*"), "").trim()
 
                     val existingAp = (if (bMacUpper.isNotBlank()) apMap[bMacUpper] else null)
                         ?: (if (b.address.isNotBlank()) apMap.values.firstOrNull { it.ipAddress.isNotBlank() && it.ipAddress == b.address } else null)
@@ -1109,10 +1282,13 @@ class MikrotikClient {
                             cleanCommentName.contains(it.name, ignoreCase = true)
                         } else null)
 
+                    val isOnline = (bMacUpper in onlineArpMacs) || (b.address.isNotBlank() && b.address in onlineArpIps)
+
                     if (existingAp != null) {
                         // Merge binding info into existing AP instead of creating duplicate
                         val updated = existingAp.copy(
                             isWhitelisted = existingAp.isWhitelisted || (b.type == "bypassed" && !b.disabled),
+                            isOnline = existingAp.isOnline || isOnline,
                             bindingId = b.id.ifBlank { existingAp.bindingId },
                             ipAddress = if (existingAp.ipAddress.isBlank()) b.address else existingAp.ipAddress
                         )
@@ -1124,16 +1300,18 @@ class MikrotikClient {
                             comment = b.comment,
                             macAddress = bMacUpper
                         )
-                        apMap[bMacUpper] = createApDevice(
-                            mac = bMacUpper,
-                            displayName = b.comment.ifBlank { "${detected.brand}-${bMacUpper.takeLast(5)}" },
-                            modelName = detected.modelName,
-                            ip = b.address,
-                            isWhitelisted = b.type == "bypassed" && !b.disabled,
-                            isOnline = true,
-                            bindingId = b.id,
-                            brand = detected.brand
-                        )
+                        if (detected.isApOrBridge) {
+                            apMap[bMacUpper] = createApDevice(
+                                mac = bMacUpper,
+                                displayName = b.comment.ifBlank { "${detected.brand}-${bMacUpper.takeLast(5)}" },
+                                modelName = detected.modelName,
+                                ip = b.address,
+                                isWhitelisted = b.type == "bypassed" && !b.disabled,
+                                isOnline = isOnline,
+                                bindingId = b.id,
+                                brand = detected.brand
+                            )
+                        }
                     }
                 }
 
@@ -1215,25 +1393,36 @@ class MikrotikClient {
         apiMutex.withLock {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext false
+                val standardOnLogin = """:local u ${'$'}user; :local m ${'$'}"mac-address"; :do { /ip hotspot active remove [find user=${'$'}u and mac-address!=${'$'}m]; /ip hotspot cookie remove [find user=${'$'}u and mac-address!=${'$'}m] } on-error={}; :global hsUser ${'$'}user; :do { /system script run voucher-activate } on-error={}"""
                 val params = mutableListOf(
                     "shared-users=$sharedUsers",
                     "keepalive-timeout=none",
+                    "idle-timeout=none",
                     "status-autorefresh=00:01:00",
-                    "on-login="
+                    "on-login=$standardOnLogin"
                 )
                 if (sessionTimeout.isNotBlank()) {
                     params.add("session-timeout=$sessionTimeout")
+                } else {
+                    params.add("session-timeout=none")
                 }
                 if (rateLimit.isNotBlank()) {
                     val cleanRate = if (!rateLimit.contains("/")) "$rateLimit/$rateLimit" else rateLimit
                     params.add("rate-limit=$cleanRate")
+                } else {
+                    params.add("rate-limit=none")
                 }
                 val profs = conn.execute("/ip/hotspot/user/profile/print", "=.proplist=.id,name")
                 val existing = profs.firstOrNull { it["name"].equals(name, ignoreCase = true) }
                 if (existing != null) {
                     val profId = existing[".id"]
                     if (!profId.isNullOrBlank()) {
-                        conn.execute("/ip/hotspot/user/profile/set", ".id=$profId", "name=$name", *params.toTypedArray())
+                        val setParams = mutableListOf(".id=$profId")
+                        if (!name.equals("default", ignoreCase = true)) {
+                            setParams.add("name=$name")
+                        }
+                        setParams.addAll(params)
+                        conn.execute("/ip/hotspot/user/profile/set", *setParams.toTypedArray())
                     }
                 } else {
                     conn.execute("/ip/hotspot/user/profile/add", "name=$name", *params.toTypedArray())
@@ -1290,8 +1479,9 @@ class MikrotikClient {
         apiMutex.withLock {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext false
-                val profs = conn.execute("/ip/hotspot/user/profile/print", "=.proplist=.id,name")
-                val profId = profs.firstOrNull { it["name"] == oldName }?.get(".id")
+                val profs = conn.execute("/ip/hotspot/user/profile/print")
+                val prof = profs.firstOrNull { it["name"] == oldName }
+                val profId = prof?.get(".id")
                 if (profId.isNullOrBlank()) return@withContext false
 
                 val targetName = if (newName.isNotBlank()) newName else oldName
@@ -1299,26 +1489,36 @@ class MikrotikClient {
                     if (!rateLimit.contains("/")) "$rateLimit/$rateLimit" else rateLimit
                 } else ""
 
+                val standardOnLogin = """:local u ${'$'}user; :local m ${'$'}"mac-address"; :do { /ip hotspot active remove [find user=${'$'}u and mac-address!=${'$'}m]; /ip hotspot cookie remove [find user=${'$'}u and mac-address!=${'$'}m] } on-error={}; :global hsUser ${'$'}user; :do { /system script run voucher-activate } on-error={}"""
+                val existingOnLogin = prof["on-login"] ?: ""
+                val finalOnLogin = if (existingOnLogin.contains("voucher-activate")) existingOnLogin else standardOnLogin
+
                 val params = mutableListOf(
                     ".id=$profId",
-                    "name=$targetName",
                     "shared-users=$sharedUsers",
                     "keepalive-timeout=none",
                     "idle-timeout=none",
                     "status-autorefresh=00:01:00",
-                    "on-login="
+                    "on-login=$finalOnLogin"
                 )
+                if (targetName != oldName && !oldName.equals("default", ignoreCase = true)) {
+                    params.add("name=$targetName")
+                }
                 if (sessionTimeout.isNotBlank()) {
                     params.add("session-timeout=$sessionTimeout")
+                } else {
+                    params.add("session-timeout=none")
                 }
                 if (cleanRate.isNotBlank()) {
                     params.add("rate-limit=$cleanRate")
+                } else {
+                    params.add("rate-limit=none")
                 }
                 conn.execute("/ip/hotspot/user/profile/set", *params.toTypedArray())
 
-                // 2. Query all users belonging to this profile (oldName) to align them
+                // 2. Query all users belonging to this profile (oldName or targetName) to align them
                 val allUsers = conn.execute("/ip/hotspot/user/print", "=.proplist=.id,name,profile")
-                val matchingUsers = allUsers.filter { it["profile"] == oldName }
+                val matchingUsers = allUsers.filter { it["profile"] == oldName || it["profile"] == targetName }
                 val matchingUserNames = matchingUsers.mapNotNull { it["name"] }.toSet()
 
                 // 3. Align remaining users in RouterOS
@@ -1340,12 +1540,12 @@ class MikrotikClient {
                     }
                 }
 
-                // 4. Align ACTIVE using users currently connected
+                // 4. Align ACTIVE using users currently connected WITHOUT DISCONNECTING THEM
                 try {
                     val activeRes = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,user,address")
                     val activeMatching = activeRes.filter { it["user"] in matchingUserNames }
 
-                    // If rateLimit changed, update simple queues for active users immediately
+                    // If rateLimit changed, update simple queues dynamically for active users immediately
                     if (cleanRate.isNotBlank()) {
                         try {
                             val queues = conn.execute("/queue/simple/print", "=.proplist=.id,name,target")
@@ -1364,18 +1564,7 @@ class MikrotikClient {
                             }
                         } catch (_: Exception) {}
                     }
-
-                    // Refresh active sessions so client devices immediately pick up new profile, limits & queue
-                    val activeIds = activeMatching.mapNotNull { it[".id"] }
-                    for (chunk in activeIds.chunked(50)) {
-                        try {
-                            conn.execute("/ip/hotspot/active/remove", ".id=" + chunk.joinToString(","))
-                        } catch (_: Exception) {
-                            for (id in chunk) {
-                                try { conn.execute("/ip/hotspot/active/remove", ".id=$id") } catch (_: Exception) {}
-                            }
-                        }
-                    }
+                    // NOTE: Active sessions are preserved! We DO NOT remove active users so clients never get disconnected.
                 } catch (_: Exception) {}
 
                 // Update cached users in memory

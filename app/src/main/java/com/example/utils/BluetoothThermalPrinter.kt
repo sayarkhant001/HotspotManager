@@ -451,13 +451,9 @@ object BluetoothThermalPrinter {
                     val pSize = autoFitTextSize(textPaint, pText, codeMaxW, if (is80) 34f else 22f, 11f)
                     canvas.drawText(pText, leftCenter, if (is80) 88f else 58f, textPaint)
                 } else {
-                    val preferredCodeSize = when {
-                        voucher.code.length <= 4 -> if (is80) 42f else 28f
-                        voucher.code.length <= 6 -> if (is80) 38f else 25f
-                        voucher.code.length <= 8 -> if (is80) 34f else 22f
-                        voucher.code.length <= 10 -> if (is80) 30f else 19f
-                        else -> if (is80) 26f else 16.5f
-                    }
+                    // Adaptively fill box to biggest available font size without exceeding borders
+                    val maxAllowedH = (boxHeight - 4f) * 0.70f
+                    val preferredCodeSize = if (is80) maxOf(maxAllowedH, 60f) else maxOf(maxAllowedH, 40f)
                     val cSize = autoFitTextSize(textPaint, voucher.code, codeMaxW, preferredCodeSize, if (is80) 15f else 10.5f)
                     canvas.drawText(voucher.code, leftCenter, boxHeight / 2f + (cSize * 0.35f), textPaint)
                 }
@@ -506,13 +502,9 @@ object BluetoothThermalPrinter {
                     val pSize = autoFitTextSize(textPaint, pText, codeMaxW, if (is80) 38f else 25f, 13f)
                     canvas.drawText(pText, totalWidth / 2f, row1H + (codeAreaH * 0.78f) + (pSize * 0.32f), textPaint)
                 } else {
-                    val preferredCodeSize = when {
-                        voucher.code.length <= 4 -> if (is80) 54f else 35f
-                        voucher.code.length <= 6 -> if (is80) 48f else 31f
-                        voucher.code.length <= 8 -> if (is80) 42f else 27f
-                        voucher.code.length <= 10 -> if (is80) 36f else 23f
-                        else -> if (is80) 30f else 19f
-                    }
+                    // Adaptively fill box to biggest available font size without exceeding borders
+                    val maxAllowedH = codeAreaH * 0.72f
+                    val preferredCodeSize = if (is80) maxOf(maxAllowedH, 80f) else maxOf(maxAllowedH, 54f)
                     val cSize = autoFitTextSize(textPaint, voucher.code, codeMaxW, preferredCodeSize, if (is80) 18f else 12f)
                     canvas.drawText(voucher.code, totalWidth / 2f, codeCenterY + (cSize * 0.35f), textPaint)
                 }
@@ -570,13 +562,9 @@ object BluetoothThermalPrinter {
                     val passSize = autoFitTextSize(textPaint, passText, leftMaxW, if (is80) 28f else 18f, 11f)
                     canvas.drawText(passText, leftCenter, headerH + (codeAreaH * 0.78f) + (passSize * 0.32f), textPaint)
                 } else {
-                    val preferredCodeSize = when {
-                        voucher.code.length <= 4 -> if (is80) 48f else 32f
-                        voucher.code.length <= 6 -> if (is80) 42f else 28f
-                        voucher.code.length <= 8 -> if (is80) 36f else 24f
-                        voucher.code.length <= 10 -> if (is80) 32f else 21f
-                        else -> if (is80) 28f else 18f
-                    }
+                    // Adaptively fill box to biggest available font size without exceeding borders
+                    val maxAllowedH = codeAreaH * 0.72f
+                    val preferredCodeSize = if (is80) maxOf(maxAllowedH, 70f) else maxOf(maxAllowedH, 48f)
                     val cSize = autoFitTextSize(textPaint, voucher.code, leftMaxW, preferredCodeSize, if (is80) 18f else 12f)
                     canvas.drawText(voucher.code, leftCenter, codeCenterY + (cSize * 0.35f), textPaint)
                 }

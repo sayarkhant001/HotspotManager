@@ -26,7 +26,7 @@ object DeviceModelDetector {
         "C0:A4:76", "10:5F:02", "00:D0:F8", "70:70:8B", "74:05:A5",
         "BC:B2:D6", "24:72:60", "94:07:9A", "F4:CB:52", "80:05:88",
         "B8:F8:83", "14:75:90", "00:1A:A9", "54:FA:3E", "48:57:02",
-        "38:4F:F0", "4C:49:68", "28:2C:B2", "E0:97:96"
+        "38:4F:F0", "4C:49:68", "28:2C:B2", "E0:97:96", "E0:5D:54"
     )
 
     private val TPLINK_OUIS = listOf(
@@ -35,7 +35,7 @@ object DeviceModelDetector {
         "54:AF:97", "98:DA:C4", "AC:84:C6", "B0:4E:26", "C0:25:E9",
         "C4:6E:1F", "CC:32:E5", "D4:6E:0E", "E4:C3:2A", "F4:EC:38",
         "F4:F2:6D", "0C:80:63", "70:4F:57", "84:D8:1B", "A4:2B:B0",
-        "B4:B0:24"
+        "B4:B0:24", "8C:90:2D"
     )
 
     // Predefined hardware catalog for quick selection in Topology & Allowlist
@@ -57,7 +57,7 @@ object DeviceModelDetector {
             shortName = "EW3000GX",
             deviceType = "Wi-Fi 6 Gaming Router AP",
             imageResId = R.drawable.img_ruijie_ew3000gx,
-            defaultPrefix = "C0:A4:76:"
+            defaultPrefix = "4C:49:68:"
         ),
         HardwarePreset(
             id = "ew3200gx",
@@ -113,7 +113,7 @@ object DeviceModelDetector {
             shortName = "EW1200",
             deviceType = "Home Router AP",
             imageResId = R.drawable.img_ruijie_ew1200,
-            defaultPrefix = "C0:A4:76:"
+            defaultPrefix = "4C:49:68:"
         ),
 
         // Ruijie Reyee Wireless Bridges
@@ -153,7 +153,7 @@ object DeviceModelDetector {
             shortName = "RAP2200(E)",
             deviceType = "AC1300 Ceiling AP",
             imageResId = R.drawable.img_ruijie_rap,
-            defaultPrefix = "C0:A4:76:"
+            defaultPrefix = "E0:5D:54:"
         ),
         HardwarePreset(
             id = "rap2260",
@@ -178,8 +178,26 @@ object DeviceModelDetector {
             brand = "Ruijie / Reyee",
             modelName = "Reyee RG-RAP6260(H)",
             shortName = "RAP6260(H)",
+            deviceType = "Outdoor High-Power AP",
+            imageResId = R.drawable.img_ruijie_rap6260,
+            defaultPrefix = "C0:A4:76:"
+        ),
+        HardwarePreset(
+            id = "rap6262",
+            brand = "Ruijie / Reyee",
+            modelName = "Reyee RG-RAP6262(H)",
+            shortName = "RAP6262(H)",
+            deviceType = "Outdoor Wi-Fi 6 AP",
+            imageResId = R.drawable.img_ruijie_rap6260,
+            defaultPrefix = "C0:A4:76:"
+        ),
+        HardwarePreset(
+            id = "rap6202",
+            brand = "Ruijie / Reyee",
+            modelName = "Reyee RG-RAP6202(G)",
+            shortName = "RAP6202(G)",
             deviceType = "Outdoor Omnidirectional AP",
-            imageResId = R.drawable.img_ruijie_rap,
+            imageResId = R.drawable.img_ruijie_rap6202,
             defaultPrefix = "C0:A4:76:"
         ),
 
@@ -228,6 +246,17 @@ object DeviceModelDetector {
             deviceType = "AC1200 Gigabit Router AP",
             imageResId = R.drawable.img_tplink_archer,
             defaultPrefix = "E8:48:B8:"
+        ),
+
+        // TP-Link Archer Routers
+        HardwarePreset(
+            id = "archer_c54",
+            brand = "TP-Link",
+            modelName = "TP-Link Archer C54",
+            shortName = "Archer C54",
+            deviceType = "AC1200 Dual-Band Router AP",
+            imageResId = R.drawable.img_tplink_archer,
+            defaultPrefix = "8C:90:2D:"
         ),
 
         // TP-Link Deco Mesh
@@ -334,18 +363,47 @@ object DeviceModelDetector {
         }
     }
 
+    fun isClientDevice(name: String, hostName: String, comment: String, macAddress: String): Boolean {
+        val raw = "$name $hostName $comment".lowercase()
+        // If it was explicitly marked as whitelisted client
+        if (raw.contains("whitelisted:")) return true
+        // If it was whitelisted as a client under an AP: "AP: EW3000GX - realme-C11"
+        if (comment.startsWith("ap:", ignoreCase = true) && comment.contains(" - ")) return true
+        // If it contains voucher / import / profile keywords
+        if (raw.contains("import") || raw.contains("voucher") || raw.contains("|") || raw.contains("profile") || raw.contains("ks") || raw.contains("mbps")) return true
+        // Known mobile phone/tablet/PC brands & keywords
+        val clientKeywords = listOf(
+            "realme", "redmi", "iphone", "ipad", "android", "samsung", "oppo", "vivo",
+            "xiaomi", "huawei", "infinix", "tecno", "poco", "honor", "motorola",
+            "galaxy", "pixel", "oneplus", "phone", "tab", "pad", "desktop", "laptop", "pc"
+        )
+        if (clientKeywords.any { raw.contains(it) }) return true
+        return false
+    }
+
     fun detectApOrClient(
         name: String,
         hostName: String = "",
         comment: String = "",
         macAddress: String = ""
     ): DeviceModelInfo {
+        // First check if this is definitely a client (phone, tablet, voucher, or whitelisted client)
+        if (isClientDevice(name, hostName, comment, macAddress)) {
+            return DeviceModelInfo(
+                brand = "Client",
+                modelName = hostName.ifBlank { name.ifBlank { "Connected Device" } },
+                deviceType = "Connected Client",
+                imageResId = 0,
+                isApOrBridge = false
+            )
+        }
+
         val rawCombined = "$name $hostName $comment".uppercase()
         // Normalized alphanumeric string for flexible regex-free keyword matching
         val norm = rawCombined.replace(Regex("[^A-Z0-9]"), "")
         val mac = macAddress.trim().uppercase()
-        val isRuijie = isRuijieMac(mac) || norm.contains("RUIJIE") || norm.contains("REYEE")
-        val isTpLink = isTpLinkMac(mac) || norm.contains("TPLINK")
+        val isTpLink = isTpLinkMac(mac) || norm.contains("TPLINK") || norm.contains("ARCHER")
+        val isRuijie = !isTpLink && (isRuijieMac(mac) || norm.contains("RUIJIE") || norm.contains("REYEE"))
 
         // 1. Ruijie Reyee Wireless Bridges (EST350, EST310, EST302)
         if (norm.contains("EST350") || norm.contains("EST310") || norm.contains("EST302") || (isRuijie && norm.contains("EST"))) {
@@ -413,14 +471,29 @@ object DeviceModelDetector {
             )
         }
 
-        // 5. Ruijie / Reyee Ceiling & Wall APs (RAP2200, RAP2260, RAP1200, RAP6260, RAP6262)
-        if (norm.contains("RAP") || (isRuijie && (norm.contains("AP") || norm.contains("CEILING")))) {
+        // 5. Ruijie Reyee Outdoor APs (RAP6260, RAP6262, RAP6202)
+        if (norm.contains("6260") || norm.contains("6262") || norm.contains("6202") || (norm.contains("RAP") && norm.contains("OUTDOOR"))) {
+            val isOmni = norm.contains("6202")
+            val model = when {
+                isOmni -> "Reyee RG-RAP6202(G)"
+                norm.contains("6262") -> "Reyee RG-RAP6262(H)"
+                else -> "Reyee RG-RAP6260(H)"
+            }
+            return DeviceModelInfo(
+                brand = "Ruijie / Reyee",
+                modelName = model,
+                deviceType = if (isOmni) "Outdoor Omnidirectional AP" else "Outdoor High-Power AP",
+                imageResId = if (isOmni) R.drawable.img_ruijie_rap6202 else R.drawable.img_ruijie_rap6260,
+                isApOrBridge = true
+            )
+        }
+
+        // 6. Ruijie / Reyee Ceiling & Wall APs (RAP2200, RAP2260, RAP1200)
+        if (!isTpLink && (norm.contains("RAP") || (isRuijie && (norm.contains("AP") || norm.contains("CEILING"))))) {
             val model = when {
                 norm.contains("2260") -> "Reyee RG-RAP2260(E)"
                 norm.contains("2200") -> "Reyee RG-RAP2200(E)"
                 norm.contains("1200") -> "Reyee RG-RAP1200(F)"
-                norm.contains("6262") -> "Reyee RG-RAP6262"
-                norm.contains("6260") -> "Reyee RG-RAP6260(H)"
                 else -> "Reyee RG-RAP2200(E)"
             }
             return DeviceModelInfo(
@@ -432,7 +505,7 @@ object DeviceModelDetector {
             )
         }
 
-        // 6. TP-Link Deco Mesh System
+        // 7. TP-Link Deco Mesh System
         if (norm.contains("DECO")) {
             val model = when {
                 norm.contains("X60") -> "TP-Link Deco X60"
@@ -451,7 +524,7 @@ object DeviceModelDetector {
             )
         }
 
-        // 7. TP-Link Pharos CPE Wireless Bridge (CPE210, CPE220, CPE510, CPE610, CPE710)
+        // 8. TP-Link Pharos CPE Wireless Bridge (CPE210, CPE220, CPE510, CPE610, CPE710)
         if (norm.contains("CPE") || norm.contains("PHAROS")) {
             val model = when {
                 norm.contains("710") -> "TP-Link Pharos CPE710"
@@ -469,7 +542,7 @@ object DeviceModelDetector {
             )
         }
 
-        // 8. TP-Link Omada Ceiling & Outdoor AP (EAP225, EAP245, EAP610, EAP620, EAP650, EAP660)
+        // 9. TP-Link Omada Ceiling & Outdoor AP (EAP225, EAP245, EAP610, EAP620, EAP650, EAP660)
         if (norm.contains("EAP") || norm.contains("OMADA")) {
             val model = when {
                 norm.contains("660") -> "TP-Link Omada EAP660 HD"
@@ -488,9 +561,10 @@ object DeviceModelDetector {
             )
         }
 
-        // 9. TP-Link Archer / TL-WR Home Routers
-        if (norm.contains("ARCHER") || norm.contains("TLWR") || norm.contains("WR840") || norm.contains("WR841") || norm.contains("AX73") || norm.contains("AX53") || norm.contains("AX23") || norm.contains("AX12") || norm.contains("AX10") || norm.contains("C80") || isTpLink) {
+        // 10. TP-Link Archer / TL-WR Home Routers
+        if (norm.contains("ARCHER") || norm.contains("TLWR") || norm.contains("WR840") || norm.contains("WR841") || norm.contains("AX73") || norm.contains("AX53") || norm.contains("AX23") || norm.contains("AX12") || norm.contains("AX10") || norm.contains("C80") || norm.contains("C54") || isTpLink) {
             val model = when {
+                norm.contains("C54") || norm.contains("54") -> "TP-Link Archer C54"
                 norm.contains("AX73") || norm.contains("AX72") -> "TP-Link Archer AX73"
                 norm.contains("AX53") || norm.contains("AX50") -> "TP-Link Archer AX53"
                 norm.contains("AX23") || norm.contains("AX20") -> "TP-Link Archer AX23"
@@ -499,7 +573,8 @@ object DeviceModelDetector {
                 norm.contains("C80") -> "TP-Link Archer C80"
                 norm.contains("C50") || norm.contains("C20") -> "TP-Link Archer C50"
                 norm.contains("WR840") || norm.contains("WR841") -> "TP-Link TL-WR840N"
-                else -> "TP-Link Archer C6"
+                isTpLinkMac(mac) -> "TP-Link Archer C54"
+                else -> "TP-Link Archer C54"
             }
             return DeviceModelInfo(
                 brand = "TP-Link",

@@ -208,19 +208,63 @@
     }
   }
 
-  /* ── Status Page Live Uptime Counter ──────────────────────── */
+  /* ── Status Page Live Uptime Counter & Data Formatter ─────── */
+  function formatBytesToMB(val) {
+    if (!val) return 'Unlimited';
+    var s = String(val).trim();
+    if (!s || s.indexOf('$(') !== -1 || s.toLowerCase() === 'unlimited' || s.toLowerCase() === 'none') {
+      return 'Unlimited';
+    }
+    var m = s.match(/([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)?/);
+    if (!m) return s;
+    var num = parseFloat(m[1]);
+    if (isNaN(num)) return s;
+    if (num === 0) return '0 MB';
+
+    var unit = (m[2] || '').toLowerCase();
+    var mb = 0;
+    if (unit.indexOf('g') !== -1) {
+      mb = num * 1024;
+    } else if (unit.indexOf('m') !== -1) {
+      mb = num;
+    } else if (unit.indexOf('k') !== -1) {
+      mb = num / 1024;
+    } else if (unit === 'b' || unit === 'byte' || unit === 'bytes') {
+      mb = num / (1024 * 1024);
+    } else {
+      if (num > 10000) {
+        mb = num / (1024 * 1024);
+      } else {
+        mb = num;
+      }
+    }
+
+    if (mb >= 100) {
+      return (Math.round(mb * 10) / 10).toLocaleString() + ' MB';
+    } else if (mb >= 1) {
+      return (Math.round(mb * 100) / 100).toFixed(1) + ' MB';
+    } else if (mb > 0) {
+      var f = (Math.round(mb * 100) / 100).toFixed(2);
+      return (f === '0.00' ? '< 0.01' : f) + ' MB';
+    } else {
+      return '0 MB';
+    }
+  }
+
   function initStatusPage() {
     var uptimeEl = gid('stat_uptime');
-    if (!uptimeEl) return;
-
-    // Clean up template variable fallback
-    if (uptimeEl.textContent.indexOf('$(') !== -1) {
+    if (uptimeEl && uptimeEl.textContent.indexOf('$(') !== -1) {
       uptimeEl.textContent = 'Active';
     }
 
     var timeleftEl = gid('stat_timeleft');
     if (timeleftEl && timeleftEl.textContent.indexOf('$(') !== -1) {
       timeleftEl.textContent = 'Unlimited';
+    }
+
+    var remainingEl = gid('stat_data_remaining');
+    if (remainingEl) {
+      remainingEl.textContent = formatBytesToMB(remainingEl.textContent);
     }
   }
 

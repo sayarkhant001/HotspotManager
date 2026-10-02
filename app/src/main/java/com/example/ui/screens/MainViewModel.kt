@@ -686,6 +686,19 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         }
     }
 
+    fun renameAccessPoint(mac: String, newName: String) {
+        viewModelScope.launch {
+            val ok = repository.renameAccessPoint(mac, newName)
+            if (ok) {
+                userMessage.value = "✓ Renamed AP to $newName!"
+                fetchNetworkTopology()
+                fetchIpBindings()
+            } else {
+                userMessage.value = "✗ Failed to rename AP"
+            }
+        }
+    }
+
     fun removeIpBinding(id: String, mac: String = "") {
         viewModelScope.launch {
             val ok = repository.removeIpBinding(id, mac)

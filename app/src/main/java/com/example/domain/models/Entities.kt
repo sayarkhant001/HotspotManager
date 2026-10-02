@@ -42,7 +42,10 @@ data class Voucher(
     val isUsed: Boolean = false,
     val isPrinted: Boolean = false,
     val styleType: Int = 1,
-    val comment: String = ""
+    val comment: String = "",
+    val bytesIn: Long = 0L,
+    val bytesOut: Long = 0L,
+    val uptime: String = ""
 )
 
 @Entity(

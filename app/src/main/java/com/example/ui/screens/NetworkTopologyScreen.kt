@@ -95,6 +95,7 @@ fun NetworkTopologyScreen(
     var apToUndo by remember { mutableStateOf<AccessPointDevice?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedApForDetails by remember { mutableStateOf<AccessPointDevice?>(null) }
+    var apToRename by remember { mutableStateOf<AccessPointDevice?>(null) }
     var isListView by remember { mutableStateOf(false) }
     var isCompactMode by remember { mutableStateOf(true) }
     var expandedApMacs by remember { mutableStateOf(setOf<String>()) }
@@ -397,18 +398,32 @@ fun NetworkTopologyScreen(
                                 ) {
                                     rowAps.forEach { ap ->
                                         val clientCount = remember(activeUsers, ap, topology) {
-                                            if (topology.accessPoints.size <= 1) {
-                                                activeUsers.size
-                                            } else {
-                                                val macSet = ap.connectedClientMacs.map { it.uppercase() }.toSet()
-                                                val count = activeUsers.count { u ->
-                                                    val mac = u.macAddress.uppercase()
-                                                    (macSet.isNotEmpty() && mac in macSet) ||
-                                                    (ap.ipAddress.isNotBlank() && u.address.substringBeforeLast(".") == ap.ipAddress.substringBeforeLast(".") && u.macAddress != ap.macAddress) ||
-                                                    u.user.contains(ap.name, ignoreCase = true) ||
-                                                    u.comment.contains(ap.name, ignoreCase = true)
+                                            if (!ap.isOnline) 0 else {
+                                                val onlineAps = topology.accessPoints.filter { it.isOnline }
+                                                if (onlineAps.size <= 1) {
+                                                    activeUsers.size
+                                                } else {
+                                                    val apNameNorm = ap.name.replace(" ", "").lowercase()
+                                                    val directMatches = activeUsers.filter { u ->
+                                                        val uNorm = u.user.lowercase()
+                                                        val cNorm = u.comment.lowercase()
+                                                        (apNameNorm.length >= 3 && (uNorm.contains(apNameNorm) || cNorm.contains(apNameNorm))) ||
+                                                        (ap.connectedClientMacs.isNotEmpty() && u.macAddress.uppercase() in ap.connectedClientMacs.map { it.uppercase() })
+                                                    }
+                                                    val unassigned = activeUsers.filter { u ->
+                                                        onlineAps.none { other ->
+                                                            val oNorm = other.name.replace(" ", "").lowercase()
+                                                            (oNorm.length >= 3 && (u.user.lowercase().contains(oNorm) || u.comment.lowercase().contains(oNorm))) ||
+                                                            (other.connectedClientMacs.isNotEmpty() && u.macAddress.uppercase() in other.connectedClientMacs.map { it.uppercase() })
+                                                        }
+                                                    }
+                                                    val apIdx = onlineAps.indexOfFirst { it.macAddress == ap.macAddress }
+                                                    val partitioned = unassigned.filter { u ->
+                                                        val h = Math.abs(u.macAddress.ifBlank { u.user }.hashCode())
+                                                        (h % onlineAps.size) == apIdx
+                                                    }
+                                                    directMatches.size + partitioned.size
                                                 }
-                                                if (count > 0) count else if (ap.connectedClientMacs.isEmpty()) activeUsers.size else 0
                                             }
                                         }
                                         val isExpanded = expandedApMacs.contains(ap.macAddress.uppercase())
@@ -428,7 +443,8 @@ fun NetworkTopologyScreen(
                                                 strings = strings,
                                                 onClick = { selectedApForDetails = ap },
                                                 onAllowlist = { apToAllowlist = ap },
-                                                onUndo = { apToUndo = ap }
+                                                onUndo = { apToUndo = ap },
+                                                onRename = { apToRename = ap }
                                             )
                                         }
                                     }
@@ -446,18 +462,32 @@ fun NetworkTopologyScreen(
                         ) {
                             aps.forEach { ap ->
                                 val clientCount = remember(activeUsers, ap, topology) {
-                                    if (topology.accessPoints.size <= 1) {
-                                        activeUsers.size
-                                    } else {
-                                        val macSet = ap.connectedClientMacs.map { it.uppercase() }.toSet()
-                                        val count = activeUsers.count { u ->
-                                            val mac = u.macAddress.uppercase()
-                                            (macSet.isNotEmpty() && mac in macSet) ||
-                                            (ap.ipAddress.isNotBlank() && u.address.substringBeforeLast(".") == ap.ipAddress.substringBeforeLast(".") && u.macAddress != ap.macAddress) ||
-                                            u.user.contains(ap.name, ignoreCase = true) ||
-                                            u.comment.contains(ap.name, ignoreCase = true)
+                                    if (!ap.isOnline) 0 else {
+                                        val onlineAps = topology.accessPoints.filter { it.isOnline }
+                                        if (onlineAps.size <= 1) {
+                                            activeUsers.size
+                                        } else {
+                                            val apNameNorm = ap.name.replace(" ", "").lowercase()
+                                            val directMatches = activeUsers.filter { u ->
+                                                val uNorm = u.user.lowercase()
+                                                val cNorm = u.comment.lowercase()
+                                                (apNameNorm.length >= 3 && (uNorm.contains(apNameNorm) || cNorm.contains(apNameNorm))) ||
+                                                (ap.connectedClientMacs.isNotEmpty() && u.macAddress.uppercase() in ap.connectedClientMacs.map { it.uppercase() })
+                                            }
+                                            val unassigned = activeUsers.filter { u ->
+                                                onlineAps.none { other ->
+                                                    val oNorm = other.name.replace(" ", "").lowercase()
+                                                    (oNorm.length >= 3 && (u.user.lowercase().contains(oNorm) || u.comment.lowercase().contains(oNorm))) ||
+                                                    (other.connectedClientMacs.isNotEmpty() && u.macAddress.uppercase() in other.connectedClientMacs.map { it.uppercase() })
+                                                }
+                                            }
+                                            val apIdx = onlineAps.indexOfFirst { it.macAddress == ap.macAddress }
+                                            val partitioned = unassigned.filter { u ->
+                                                val h = Math.abs(u.macAddress.ifBlank { u.user }.hashCode())
+                                                (h % onlineAps.size) == apIdx
+                                            }
+                                            directMatches.size + partitioned.size
                                         }
-                                        if (count > 0) count else if (ap.connectedClientMacs.isEmpty()) activeUsers.size else 0
                                     }
                                 }
                                 val isExpanded = expandedApMacs.contains(ap.macAddress.uppercase())
@@ -473,7 +503,8 @@ fun NetworkTopologyScreen(
                                     strings = strings,
                                     onClick = { selectedApForDetails = ap },
                                     onAllowlist = { apToAllowlist = ap },
-                                    onUndo = { apToUndo = ap }
+                                    onUndo = { apToUndo = ap },
+                                    onRename = { apToRename = ap }
                                 )
                             }
                         }
@@ -515,9 +546,17 @@ fun NetworkTopologyScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            if (isLoading) {
+            if (isLoading && topology.accessPoints.isEmpty() && topology.routerModel.isBlank()) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center)
+                )
+            } else if (isLoading) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.5.dp)
+                        .align(Alignment.TopCenter),
+                    color = Color(0xFF10B981)
                 )
             }
         }
@@ -617,6 +656,51 @@ fun NetworkTopologyScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { apToUndo = null }) {
+                        Text(strings.cancel)
+                    }
+                }
+            )
+        }
+
+        // Rename AP Dialog
+        if (apToRename != null) {
+            val ap = apToRename!!
+            var renameText by remember(ap) { mutableStateOf(ap.name) }
+            AlertDialog(
+                onDismissRequest = { apToRename = null },
+                title = { Text("Rename Access Point", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        Text(
+                            text = "Set a custom display name for ${ap.model} (${ap.macAddress}).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = renameText,
+                            onValueChange = { renameText = it },
+                            label = { Text("AP Name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (renameText.isNotBlank()) {
+                                viewModel.renameAccessPoint(ap.macAddress, renameText.trim())
+                            }
+                            apToRename = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                    ) {
+                        Text("Save")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { apToRename = null }) {
                         Text(strings.cancel)
                     }
                 }
@@ -854,7 +938,8 @@ fun ApDeviceNode(
     strings: com.example.utils.AppStrings,
     onClick: () -> Unit,
     onAllowlist: () -> Unit,
-    onUndo: () -> Unit
+    onUndo: () -> Unit,
+    onRename: () -> Unit = {}
 ) {
     val modelInfo = remember(ap) {
         DeviceModelDetector.detectApOrClient(
@@ -871,7 +956,7 @@ fun ApDeviceNode(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (ap.isWhitelisted) Color(0xFF10B981).copy(alpha = 0.5f) else Color(0xFFEF4444).copy(alpha = 0.5f)
+            if (ap.isOnline) Color(0xFF10B981).copy(alpha = 0.5f) else Color(0xFFEF4444).copy(alpha = 0.8f)
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -894,7 +979,7 @@ fun ApDeviceNode(
                         shadowElevation = 2.dp,
                         border = androidx.compose.foundation.BorderStroke(
                             1.5.dp,
-                            if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444)
+                            if (ap.isOnline) Color(0xFF10B981) else Color(0xFFEF4444)
                         ),
                         modifier = Modifier.size(if (isCompact) 36.dp else 46.dp)
                     ) {
@@ -910,7 +995,7 @@ fun ApDeviceNode(
                                 Icon(
                                     imageVector = Icons.Default.Wifi,
                                     contentDescription = null,
-                                    tint = Color(0xFF10B981),
+                                    tint = if (ap.isOnline) Color(0xFF10B981) else Color(0xFFEF4444),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -920,7 +1005,7 @@ fun ApDeviceNode(
                         modifier = Modifier
                             .size(10.dp)
                             .clip(CircleShape)
-                            .background(if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444))
+                            .background(if (ap.isOnline) Color(0xFF10B981) else Color(0xFFEF4444))
                             .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
                     )
                 }
@@ -928,13 +1013,58 @@ fun ApDeviceNode(
                 Spacer(modifier = Modifier.width(6.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = ap.name,
-                        style = MaterialTheme.typography.titleSmall.copy(fontSize = 11.sp),
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = ap.name,
+                            style = MaterialTheme.typography.titleSmall.copy(fontSize = 11.sp),
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (ap.isWhitelisted) {
+                            Spacer(Modifier.width(3.dp))
+                            Surface(
+                                shape = RoundedCornerShape(3.dp),
+                                color = Color(0xFF10B981).copy(alpha = 0.15f),
+                                modifier = Modifier.clickable { onUndo() }
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 0.5.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Allowed",
+                                        tint = Color(0xFF10B981),
+                                        modifier = Modifier.size(9.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(1.dp))
+                                    Text(
+                                        text = strings.allowedBadge,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+                                        color = Color(0xFF10B981),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(Modifier.width(2.dp))
+                        IconButton(
+                            onClick = onRename,
+                            modifier = Modifier.size(16.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Rename AP",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.size(11.dp)
+                            )
+                        }
+                    }
                     Text(
                         text = modelInfo.modelName,
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
@@ -962,78 +1092,62 @@ fun ApDeviceNode(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Pills Row: Clients, Speed, Whitelist
+            // Pills Row: Clients, Speed, Online
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = if (ap.isOnline) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFEF4444).copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = if (ap.isOnline) "🟢 Online" else "🔴 Offline",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = if (ap.isOnline) Color(0xFF059669) else Color(0xFFEF4444),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = Color(0xFF10B981).copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = "👥 $clientCount",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF059669),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
+                if (ap.currentRxBps > 0L || ap.currentTxBps > 0L) {
                     Surface(
                         shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFF10B981).copy(alpha = 0.15f)
+                        color = Color(0xFF0284C7).copy(alpha = 0.15f)
                     ) {
                         Text(
-                            text = "👥 $clientCount",
+                            text = "↓ ${formatSpeed(ap.currentRxBps)}",
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF059669),
+                            color = Color(0xFF0284C7),
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                         )
                     }
-                    if (ap.currentRxBps > 0L || ap.currentTxBps > 0L) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFF0284C7).copy(alpha = 0.15f)
-                        ) {
-                            Text(
-                                text = "↓ ${formatSpeed(ap.currentRxBps)}",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0284C7),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                            )
-                        }
-                    }
                 }
-
-                // Allowed badge or Allow button
-                if (ap.isWhitelisted) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFF10B981).copy(alpha = 0.15f),
-                        modifier = Modifier.clickable { onUndo() }
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = null,
-                                tint = Color(0xFF10B981),
-                                modifier = Modifier.size(10.dp)
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text(
-                                text = strings.allowedBadge,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                color = Color(0xFF10B981),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                } else {
+                if (!ap.isWhitelisted) {
+                    Spacer(Modifier.weight(1f))
                     Button(
                         onClick = onAllowlist,
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                        shape = RoundedCornerShape(6.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                        modifier = Modifier.height(20.dp)
+                        shape = RoundedCornerShape(4.dp),
+                        contentPadding = PaddingValues(horizontal = 5.dp, vertical = 0.dp),
+                        modifier = Modifier.height(18.dp)
                     ) {
                         Text(
-                            text = strings.allowlistAction,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            text = "+Allow",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
@@ -1176,7 +1290,8 @@ fun ApListCard(
     strings: com.example.utils.AppStrings,
     onClick: () -> Unit,
     onAllowlist: () -> Unit,
-    onUndo: () -> Unit
+    onUndo: () -> Unit,
+    onRename: () -> Unit = {}
 ) {
     val modelInfo = remember(ap) {
         DeviceModelDetector.detectApOrClient(
@@ -1193,7 +1308,7 @@ fun ApListCard(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (ap.isWhitelisted) Color(0xFF10B981).copy(alpha = 0.5f) else Color(0xFFEF4444).copy(alpha = 0.5f)
+            if (ap.isOnline) Color(0xFF10B981).copy(alpha = 0.5f) else Color(0xFFEF4444).copy(alpha = 0.8f)
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -1213,7 +1328,7 @@ fun ApListCard(
                         shadowElevation = 2.dp,
                         border = androidx.compose.foundation.BorderStroke(
                             1.5.dp,
-                            if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444)
+                            if (ap.isOnline) Color(0xFF10B981) else Color(0xFFEF4444)
                         ),
                         modifier = Modifier.size(36.dp)
                     ) {
@@ -1226,7 +1341,7 @@ fun ApListCard(
                                     contentScale = ContentScale.Fit
                                 )
                             } else {
-                                Icon(Icons.Default.Wifi, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
+                                Icon(Icons.Default.Wifi, contentDescription = null, tint = if (ap.isOnline) Color(0xFF10B981) else Color(0xFFEF4444), modifier = Modifier.size(20.dp))
                             }
                         }
                     }
@@ -1234,7 +1349,7 @@ fun ApListCard(
                         modifier = Modifier
                             .size(10.dp)
                             .clip(CircleShape)
-                            .background(if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444))
+                            .background(if (ap.isOnline) Color(0xFF10B981) else Color(0xFFEF4444))
                             .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
                     )
                 }
@@ -1251,6 +1366,18 @@ fun ApListCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+                        Spacer(Modifier.width(2.dp))
+                        IconButton(
+                            onClick = onRename,
+                            modifier = Modifier.size(16.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Rename AP",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.size(11.dp)
+                            )
+                        }
                         Spacer(Modifier.width(4.dp))
                         Surface(
                             shape = RoundedCornerShape(4.dp),
@@ -1285,6 +1412,18 @@ fun ApListCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = if (ap.isOnline) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFEF4444).copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = if (ap.isOnline) "🟢 Online" else "🔴 Offline",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = if (ap.isOnline) Color(0xFF059669) else Color(0xFFEF4444),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
                     Surface(
                         shape = RoundedCornerShape(4.dp),
                         color = Color(0xFF10B981).copy(alpha = 0.15f)
@@ -1805,18 +1944,32 @@ fun ApDetailsBottomSheet(
     }
 
     val apClients = remember(activeUsers, ap, topology) {
-        if (topology.accessPoints.size <= 1) {
-            activeUsers
-        } else {
-            val macSet = ap.connectedClientMacs.map { it.uppercase() }.toSet()
-            val matched = activeUsers.filter { u ->
-                val mac = u.macAddress.uppercase()
-                (macSet.isNotEmpty() && mac in macSet) ||
-                (ap.ipAddress.isNotBlank() && u.address.substringBeforeLast(".") == ap.ipAddress.substringBeforeLast(".") && u.macAddress != ap.macAddress) ||
-                u.user.contains(ap.name, ignoreCase = true) ||
-                u.comment.contains(ap.name, ignoreCase = true)
+        if (!ap.isOnline) emptyList() else {
+            val onlineAps = topology.accessPoints.filter { it.isOnline }
+            if (onlineAps.size <= 1) {
+                activeUsers
+            } else {
+                val apNameNorm = ap.name.replace(" ", "").lowercase()
+                val directMatches = activeUsers.filter { u ->
+                    val uNorm = u.user.lowercase()
+                    val cNorm = u.comment.lowercase()
+                    (apNameNorm.length >= 3 && (uNorm.contains(apNameNorm) || cNorm.contains(apNameNorm))) ||
+                    (ap.connectedClientMacs.isNotEmpty() && u.macAddress.uppercase() in ap.connectedClientMacs.map { it.uppercase() })
+                }
+                val unassigned = activeUsers.filter { u ->
+                    onlineAps.none { other ->
+                        val oNorm = other.name.replace(" ", "").lowercase()
+                        (oNorm.length >= 3 && (u.user.lowercase().contains(oNorm) || u.comment.lowercase().contains(oNorm))) ||
+                        (other.connectedClientMacs.isNotEmpty() && u.macAddress.uppercase() in other.connectedClientMacs.map { it.uppercase() })
+                    }
+                }
+                val apIdx = onlineAps.indexOfFirst { it.macAddress == ap.macAddress }
+                val partitioned = unassigned.filter { u ->
+                    val h = Math.abs(u.macAddress.ifBlank { u.user }.hashCode())
+                    (h % onlineAps.size) == apIdx
+                }
+                directMatches + partitioned
             }
-            if (matched.isNotEmpty()) matched else if (ap.connectedClientMacs.isEmpty()) activeUsers else emptyList()
         }
     }
 
