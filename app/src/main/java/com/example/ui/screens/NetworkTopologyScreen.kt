@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,6 +15,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import com.example.utils.DeviceModelDetector
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -214,32 +218,27 @@ fun NetworkTopologyScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 14.dp)
                     ) {
-                        // Router Icon & Port LEDs representation
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
+                        // Real MikroTik hardware photo from official assets
+                        val routerInfo = remember(topology.routerModel) {
+                            DeviceModelDetector.detectRouterGateway(topology.routerModel)
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.White,
+                            shadowElevation = 2.dp,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                                .height(56.dp)
+                                .fillMaxWidth(0.65f)
+                                .padding(vertical = 2.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Router,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            // Visual Ethernet Ports
-                            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                                repeat(6) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(width = 6.dp, height = 8.dp)
-                                            .clip(RoundedCornerShape(1.dp))
-                                            .background(if (it < 3) Color(0xFF10B981) else Color(0xFF64748B))
-                                    )
-                                }
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(4.dp)) {
+                                Image(
+                                    painter = painterResource(id = routerInfo.imageResId),
+                                    contentDescription = topology.routerModel,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
                             }
                         }
 
@@ -462,37 +461,61 @@ fun ApDeviceNode(
     onAllowlist: () -> Unit,
     onUndo: () -> Unit
 ) {
+    val modelInfo = remember(ap) {
+        DeviceModelDetector.detectApOrClient(
+            name = ap.name,
+            hostName = ap.name,
+            comment = ap.model,
+            macAddress = ap.macAddress
+        )
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(160.dp)
             .padding(4.dp)
     ) {
-        // Circular AP Icon with online/allowlist badge
+        // Circular Real Hardware Photo with online / allowlist beacon dot (as shown in user photo!)
         Box(contentAlignment = Alignment.TopEnd) {
             Surface(
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                color = Color.White,
+                shadowElevation = 3.dp,
                 border = androidx.compose.foundation.BorderStroke(
                     2.dp,
                     if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444)
                 ),
-                modifier = Modifier.size(68.dp)
+                modifier = Modifier.size(76.dp)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Wifi,
-                        contentDescription = "AP",
-                        tint = if (ap.isWhitelisted) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(34.dp)
-                    )
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.padding(6.dp)
+                ) {
+                    if (modelInfo.imageResId != 0) {
+                        Image(
+                            painter = painterResource(id = modelInfo.imageResId),
+                            contentDescription = modelInfo.modelName,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Fit
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Wifi,
+                            contentDescription = null,
+                            tint = Color(0xFF10B981),
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
                 }
             }
 
             // Top-right status dot (Green for allowlisted/online, Red for un-whitelisted/needs action)
             Box(
                 modifier = Modifier
-                    .size(14.dp)
+                    .size(16.dp)
                     .clip(CircleShape)
                     .background(if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444))
                     .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
@@ -511,15 +534,24 @@ fun ApDeviceNode(
             textAlign = TextAlign.Center
         )
 
-        // Subtitle "Access Point"
+        // Subtitle "Access Point" or "Wireless Bridge"
         Text(
-            text = strings.accessPoint,
+            text = modelInfo.deviceType,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             color = Color(0xFF10B981)
         )
 
-        Spacer(modifier = Modifier.height(2.dp))
+        // Model Tag
+        Text(
+            text = modelInfo.modelName,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Normal,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
 
         // IP Address and MAC Address
         Text(
@@ -545,7 +577,7 @@ fun ApDeviceNode(
                 modifier = Modifier.height(28.dp)
             ) {
                 Text(
-                    text = "Allowlist",
+                    text = strings.allowlistAction,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -569,7 +601,7 @@ fun ApDeviceNode(
                     )
                     Spacer(modifier = Modifier.width(3.dp))
                     Text(
-                        text = "Allowed",
+                        text = strings.allowedBadge,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF10B981)

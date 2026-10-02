@@ -1,8 +1,11 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -11,7 +14,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -19,6 +25,7 @@ import androidx.navigation.NavController
 import com.example.domain.models.ActiveUser
 import com.example.domain.models.IpBinding
 import com.example.ui.components.GlassCard
+import com.example.utils.DeviceModelDetector
 import com.example.utils.LanguageManager
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -149,10 +156,57 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
             when (selectedTab) {
                 0 -> {
                     // Active Sessions Tab
+                    val unwhitelistedAps = remember(filteredUsers, whitelisted) {
+                        val whitelistedMacs = whitelisted.map { it.macAddress.trim().uppercase() }.toSet()
+                        filteredUsers.filter { user ->
+                            val info = DeviceModelDetector.detectApOrClient(user.user, user.hostName, user.profileName, user.macAddress)
+                            info.isApOrBridge && !whitelistedMacs.contains(user.macAddress.trim().uppercase())
+                        }
+                    }
+
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(vertical = 6.dp)
                     ) {
+                        if (unwhitelistedAps.isNotEmpty()) {
+                            item {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFF10B981).copy(alpha = 0.12f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.4f)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.SettingsInputAntenna,
+                                            contentDescription = null,
+                                            tint = Color(0xFF059669),
+                                            modifier = Modifier.size(26.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "${unwhitelistedAps.size} AP/Bridge Detected",
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = Color(0xFF059669)
+                                            )
+                                            Text(
+                                                text = "Connected Ruijie/TP-Link hardware detected. Tap Whitelist on the card below to bypass captive portal.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         items(filteredUsers, key = { it.id }) { user ->
                             ActiveUserCard(
                                 user = user,
@@ -248,6 +302,15 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
         // Whitelist Confirmation Dialog
         if (userToWhitelist != null) {
             val u = userToWhitelist!!
+            val modelInfo = remember(u) {
+                DeviceModelDetector.detectApOrClient(u.user, u.hostName, u.profileName, u.macAddress)
+            }
+            val defaultComment = if (modelInfo.isApOrBridge) {
+                "${modelInfo.modelName}: ${u.hostName.ifBlank { u.user }}"
+            } else {
+                "Whitelisted: ${u.hostName.ifBlank { u.user }}"
+            }
+
             AlertDialog(
                 onDismissRequest = { userToWhitelist = null },
                 icon = {
@@ -258,9 +321,76 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                         modifier = Modifier.size(36.dp)
                     )
                 },
-                title = { Text(strings.whitelistAction, fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        text = if (modelInfo.isApOrBridge) "Whitelist ${modelInfo.modelName}" else strings.whitelistAction,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 text = {
-                    Text("Allow \"${u.user}\" (${u.address} / ${u.macAddress}) to use the internet without voucher authentication?")
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                        if (modelInfo.isApOrBridge && modelInfo.imageResId != 0) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color.White,
+                                shadowElevation = 3.dp,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.5f)),
+                                modifier = Modifier
+                                    .size(76.dp)
+                                    .padding(bottom = 10.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(6.dp)) {
+                                    Image(
+                                        painter = painterResource(id = modelInfo.imageResId),
+                                        contentDescription = modelInfo.modelName,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Fit
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            text = if (modelInfo.isApOrBridge)
+                                "Allow ${modelInfo.brand} ${modelInfo.modelName} to bypass Hotspot authentication without voucher?"
+                            else
+                                "Allow \"${u.user}\" (${u.address} / ${u.macAddress}) to use the internet without voucher authentication?",
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                if (modelInfo.isApOrBridge) {
+                                    Text(
+                                        text = "Model: ${modelInfo.modelName} (${modelInfo.deviceType})",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF059669)
+                                    )
+                                }
+                                Text(
+                                    text = "IP: ${u.address}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Text(
+                                    text = "MAC: ${u.macAddress}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                if (u.hostName.isNotBlank()) {
+                                    Text(
+                                        text = "Hostname: ${u.hostName}",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        }
+                    }
                 },
                 confirmButton = {
                     Button(
@@ -268,7 +398,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                             viewModel.whitelistDevice(
                                 mac = u.macAddress,
                                 ip = u.address,
-                                comment = "Whitelisted: ${u.user}"
+                                comment = defaultComment
                             )
                             userToWhitelist = null
                         },
@@ -393,7 +523,20 @@ fun ActiveUserCard(
     onKick: () -> Unit,
     onBan: () -> Unit
 ) {
-    GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    val modelInfo = remember(user.macAddress, user.hostName, user.user) {
+        DeviceModelDetector.detectApOrClient(
+            name = user.user,
+            hostName = user.hostName,
+            comment = user.profileName,
+            macAddress = user.macAddress
+        )
+    }
+
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -404,16 +547,33 @@ fun ActiveUserCard(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f, fill = false)
                 ) {
+                    // Left image/icon: Real photo if AP, else device/user icon
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(34.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (modelInfo.isApOrBridge) Color.White else MaterialTheme.colorScheme.primaryContainer,
+                        shadowElevation = if (modelInfo.isApOrBridge) 2.dp else 0.dp,
+                        border = if (modelInfo.isApOrBridge) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.5f)) else null,
+                        modifier = Modifier.size(if (modelInfo.isApOrBridge) 48.dp else 36.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(3.dp)) {
+                            if (modelInfo.isApOrBridge && modelInfo.imageResId != 0) {
+                                Image(
+                                    painter = painterResource(id = modelInfo.imageResId),
+                                    contentDescription = modelInfo.modelName,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = if (user.hostName.isNotBlank()) Icons.Default.PhoneAndroid else Icons.Default.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
                         }
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
@@ -439,7 +599,34 @@ fun ActiveUserCard(
                                 }
                             }
                         }
-                        if (user.hostName.isNotBlank()) {
+                        if (modelInfo.isApOrBridge) {
+                            // AP Brand & Model Badge
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFF10B981).copy(alpha = 0.15f)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.SettingsInputAntenna,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp),
+                                            tint = Color(0xFF059669)
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = "${modelInfo.modelName} • ${modelInfo.deviceType}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF059669)
+                                        )
+                                    }
+                                }
+                            }
+                        } else if (user.hostName.isNotBlank()) {
                             Text(
                                 text = "📱 ${user.hostName}",
                                 style = MaterialTheme.typography.labelSmall,
@@ -460,14 +647,35 @@ fun ActiveUserCard(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Whitelist button (Allow internet without voucher)
-                    IconButton(onClick = onWhitelist, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            Icons.Default.VerifiedUser,
-                            contentDescription = strings.whitelistAction,
-                            tint = Color(0xFF10B981),
-                            modifier = Modifier.size(18.dp)
-                        )
+                    if (modelInfo.isApOrBridge) {
+                        // Prominent Whitelist button for AP
+                        Button(
+                            onClick = onWhitelist,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(30.dp)
+                        ) {
+                            Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(13.dp), tint = Color.White)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = strings.whitelistAction,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                    } else {
+                        // Whitelist button icon for normal client
+                        IconButton(onClick = onWhitelist, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                Icons.Default.VerifiedUser,
+                                contentDescription = strings.whitelistAction,
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                     // Kick button
                     IconButton(onClick = onKick, modifier = Modifier.size(32.dp)) {
@@ -582,6 +790,15 @@ fun WhitelistedUserCard(
     strings: com.example.utils.AppStrings,
     onUndo: () -> Unit
 ) {
+    val modelInfo = remember(item.macAddress, item.comment) {
+        DeviceModelDetector.detectApOrClient(
+            name = item.comment,
+            hostName = "",
+            comment = item.comment,
+            macAddress = item.macAddress
+        )
+    }
+
     GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(
             modifier = Modifier
@@ -593,16 +810,27 @@ fun WhitelistedUserCard(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF10B981).copy(alpha = 0.15f),
-                    modifier = Modifier.size(36.dp)
+                    color = if (modelInfo.isApOrBridge) Color.White else Color(0xFF10B981).copy(alpha = 0.15f),
+                    shadowElevation = if (modelInfo.isApOrBridge) 2.dp else 0.dp,
+                    border = if (modelInfo.isApOrBridge) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.5f)) else null,
+                    modifier = Modifier.size(if (modelInfo.isApOrBridge) 44.dp else 36.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.VerifiedUser,
-                            contentDescription = null,
-                            tint = Color(0xFF10B981),
-                            modifier = Modifier.size(20.dp)
-                        )
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(3.dp)) {
+                        if (modelInfo.isApOrBridge && modelInfo.imageResId != 0) {
+                            Image(
+                                painter = painterResource(id = modelInfo.imageResId),
+                                contentDescription = modelInfo.modelName,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.VerifiedUser,
+                                contentDescription = null,
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.width(10.dp))
@@ -611,8 +839,17 @@ fun WhitelistedUserCard(
                         text = item.comment.ifBlank { "Whitelisted Device" },
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
+                    if (modelInfo.isApOrBridge) {
+                        Text(
+                            text = "📡 ${modelInfo.modelName} • ${modelInfo.deviceType}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF059669)
+                        )
+                    }
                     Text(
                         text = "MAC: ${item.macAddress}",
                         style = MaterialTheme.typography.bodySmall,

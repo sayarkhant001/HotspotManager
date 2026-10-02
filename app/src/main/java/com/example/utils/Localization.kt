@@ -194,7 +194,9 @@ data class AppStrings(
     val advanceModeSuccess: String,
     val deviceWhitelistedSuccess: String,
     val deviceRemovedFromWhitelist: String,
-    val unbanSuccess: String
+    val unbanSuccess: String,
+    val allowedBadge: String,
+    val allowlistAction: String
 )
 
 val MyanmarStrings = AppStrings(
@@ -380,7 +382,9 @@ val MyanmarStrings = AppStrings(
     advanceModeSuccess = "Router အား Advance Mode သို့ အောင်မြင်စွာ ပြောင်းလဲပြီးပါပြီ!",
     deviceWhitelistedSuccess = "စက်အား အောင်မြင်စွာ Whitelist ပေးပြီးပါပြီ!",
     deviceRemovedFromWhitelist = "Whitelist မှ အောင်မြင်စွာ ပြန်လည် ဖယ်ရှားပြီးပါပြီ!",
-    unbanSuccess = "ပိတ်ပင်ထားခြင်းမှ အောင်မြင်စွာ ပြန်လည် ဖွင့်ပေးပြီးပါပြီ!"
+    unbanSuccess = "ပိတ်ပင်ထားခြင်းမှ အောင်မြင်စွာ ပြန်လည် ဖွင့်ပေးပြီးပါပြီ!",
+    allowedBadge = "ခွင့်ပြုပြီး",
+    allowlistAction = "ခွင့်ပြုမည်"
 )
 
 val EnglishStrings = AppStrings(
@@ -566,7 +570,9 @@ val EnglishStrings = AppStrings(
     advanceModeSuccess = "Router successfully switched to Advance Mode!",
     deviceWhitelistedSuccess = "Device successfully added to Whitelist!",
     deviceRemovedFromWhitelist = "Device removed from Whitelist!",
-    unbanSuccess = "Device successfully unbanned!"
+    unbanSuccess = "Device successfully unbanned!",
+    allowedBadge = "Allowed",
+    allowlistAction = "Allowlist"
 )
 
 object LanguageManager {

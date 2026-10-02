@@ -872,13 +872,6 @@ class MikrotikClient {
                     }
                 } catch (_: Exception) {}
 
-                // Known Ruijie / Reyee OUI MAC address prefixes
-                val ruijieOuis = listOf(
-                    "C0:A4:76", "10:5F:02", "00:D0:F8", "70:70:8B", "74:05:A5",
-                    "BC:B2:D6", "24:72:60", "94:07:9A", "F4:CB:52", "80:05:88",
-                    "B8:F8:83", "14:75:90", "00:1A:A9", "54:FA:3E", "48:57:02", "38:4F:F0"
-                )
-
                 // Get IP Bindings (to check whitelisted status)
                 val bindingsMap = mutableMapOf<String, IpBinding>()
                 try {
@@ -901,7 +894,7 @@ class MikrotikClient {
 
                 val apMap = mutableMapOf<String, AccessPointDevice>()
 
-                // 1. Check DHCP leases for Ruijie / Reyee APs
+                // 1. Check DHCP leases for Ruijie / Reyee and TP-Link APs & Bridges
                 try {
                     val leases = conn.execute("/ip/dhcp-server/lease/print")
                     leases.forEach { l ->
@@ -911,21 +904,14 @@ class MikrotikClient {
                         val status = l["status"] ?: ""
                         val comment = l["comment"] ?: ""
 
-                        val isRuijieMac = ruijieOuis.any { mac.startsWith(it) }
-                        val isApHost = host.startsWith("EST", ignoreCase = true) ||
-                                host.contains("EST310", ignoreCase = true) ||
-                                host.contains("EST350", ignoreCase = true) ||
-                                host.contains("Reyee", ignoreCase = true) ||
-                                host.contains("Ruijie", ignoreCase = true) ||
-                                host.contains("RG-", ignoreCase = true) ||
-                                host.contains("RAP", ignoreCase = true) ||
-                                host.contains("EW", ignoreCase = true) ||
-                                host.contains("EAP", ignoreCase = true) ||
-                                host.contains("AP-", ignoreCase = true) ||
-                                comment.contains("AP", ignoreCase = true) ||
-                                comment.contains("Ruijie", ignoreCase = true)
+                        val detected = com.example.utils.DeviceModelDetector.detectApOrClient(
+                            name = host.ifBlank { comment },
+                            hostName = host,
+                            comment = comment,
+                            macAddress = mac
+                        )
 
-                        if ((isRuijieMac || isApHost) && mac.isNotBlank()) {
+                        if (detected.isApOrBridge && mac.isNotBlank()) {
                             val binding = bindingsMap[mac]
                             val isWhitelisted = binding?.type == "bypassed" && !binding.disabled
                             val isOnline = status == "bound" || status == "active" || status.isNotBlank()
@@ -933,31 +919,24 @@ class MikrotikClient {
                             val displayName = when {
                                 host.isNotBlank() -> host
                                 comment.isNotBlank() -> comment
-                                else -> "Ruijie-AP-${mac.takeLast(5).replace(":", "")}"
-                            }
-
-                            val model = when {
-                                displayName.contains("EST310", ignoreCase = true) -> "RG-EST310"
-                                displayName.contains("EST350", ignoreCase = true) -> "RG-EST350"
-                                displayName.contains("EW", ignoreCase = true) -> "Reyee Router AP"
-                                else -> "Ruijie Access Point"
+                                else -> "${detected.brand}-${mac.takeLast(5).replace(":", "")}"
                             }
 
                             apMap[mac] = AccessPointDevice(
                                 name = displayName,
-                                model = model,
+                                model = detected.modelName,
                                 ipAddress = ip,
                                 macAddress = mac,
                                 isWhitelisted = isWhitelisted,
                                 isOnline = isOnline,
                                 bindingId = binding?.id,
-                                vendor = "Ruijie / Reyee"
+                                vendor = detected.brand
                             )
                         }
                     }
                 } catch (_: Exception) {}
 
-                // 2. Check CDP/LLDP / MNDP neighbors
+                // 2. Check CDP / LLDP / MNDP neighbors
                 try {
                     val neighbors = conn.execute("/ip/neighbor/print")
                     neighbors.forEach { n ->
@@ -966,45 +945,83 @@ class MikrotikClient {
                         val mac = (n["mac-address"] ?: "").uppercase()
                         val ip = n["address"] ?: ""
 
-                        val isRuijie = identity.contains("Ruijie", ignoreCase = true) ||
-                                identity.contains("Reyee", ignoreCase = true) ||
-                                identity.startsWith("EST", ignoreCase = true) ||
-                                platform.contains("Ruijie", ignoreCase = true) ||
-                                ruijieOuis.any { mac.startsWith(it) }
+                        val detected = com.example.utils.DeviceModelDetector.detectApOrClient(
+                            name = identity,
+                            hostName = identity,
+                            comment = platform,
+                            macAddress = mac
+                        )
 
-                        if (isRuijie && mac.isNotBlank()) {
+                        if (detected.isApOrBridge && mac.isNotBlank()) {
                             val binding = bindingsMap[mac]
                             val isWhitelisted = binding?.type == "bypassed" && !binding.disabled
-                            val displayName = identity.ifBlank { "Ruijie-AP-${mac.takeLast(5)}" }
-                            val model = if (displayName.contains("EST", ignoreCase = true)) "Ruijie Bridge" else "Ruijie Access Point"
+                            val displayName = identity.ifBlank { "${detected.brand}-${mac.takeLast(5)}" }
 
                             apMap[mac] = AccessPointDevice(
                                 name = displayName,
-                                model = model,
+                                model = detected.modelName,
                                 ipAddress = ip.ifBlank { apMap[mac]?.ipAddress ?: "" },
                                 macAddress = mac,
                                 isWhitelisted = isWhitelisted,
                                 isOnline = true,
                                 bindingId = binding?.id,
-                                vendor = "Ruijie / Reyee"
+                                vendor = detected.brand
                             )
                         }
                     }
                 } catch (_: Exception) {}
 
-                // 3. Check existing IP bindings marked as AP
+                // 3. Check Hotspot hosts for any active AP or bridge
+                try {
+                    val hosts = conn.execute("/ip/hotspot/host/print", "=.proplist=.id,mac-address,address,comment")
+                    hosts.forEach { h ->
+                        val mac = (h["mac-address"] ?: "").uppercase()
+                        val ip = h["address"] ?: ""
+                        val comment = h["comment"] ?: ""
+                        if (mac.isNotBlank() && !apMap.containsKey(mac)) {
+                            val detected = com.example.utils.DeviceModelDetector.detectApOrClient(
+                                name = comment,
+                                hostName = "",
+                                comment = comment,
+                                macAddress = mac
+                            )
+                            if (detected.isApOrBridge) {
+                                val binding = bindingsMap[mac]
+                                val isWhitelisted = binding?.type == "bypassed" && !binding.disabled
+                                apMap[mac] = AccessPointDevice(
+                                    name = comment.ifBlank { "${detected.brand}-${mac.takeLast(5).replace(":", "")}" },
+                                    model = detected.modelName,
+                                    ipAddress = ip,
+                                    macAddress = mac,
+                                    isWhitelisted = isWhitelisted,
+                                    isOnline = true,
+                                    bindingId = binding?.id,
+                                    vendor = detected.brand
+                                )
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // 4. Check existing IP bindings marked as AP
                 bindingsMap.values.forEach { b ->
                     val c = b.comment.lowercase()
-                    if ((c.contains("ap") || c.contains("ruijie") || c.contains("reyee") || c.contains("est")) && !apMap.containsKey(b.macAddress)) {
+                    if ((c.contains("ap") || c.contains("ruijie") || c.contains("reyee") || c.contains("est") || c.contains("tp-link") || c.contains("tplink") || c.contains("cpe")) && !apMap.containsKey(b.macAddress)) {
+                        val detected = com.example.utils.DeviceModelDetector.detectApOrClient(
+                            name = b.comment,
+                            hostName = "",
+                            comment = b.comment,
+                            macAddress = b.macAddress
+                        )
                         apMap[b.macAddress] = AccessPointDevice(
-                            name = b.comment.ifBlank { "AP-${b.macAddress.takeLast(5)}" },
-                            model = "Ruijie Access Point",
+                            name = b.comment.ifBlank { "${detected.brand}-${b.macAddress.takeLast(5)}" },
+                            model = detected.modelName,
                             ipAddress = b.address,
                             macAddress = b.macAddress,
                             isWhitelisted = b.type == "bypassed" && !b.disabled,
                             isOnline = true,
                             bindingId = b.id,
-                            vendor = "Ruijie / Reyee"
+                            vendor = detected.brand
                         )
                     }
                 }
