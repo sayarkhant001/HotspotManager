@@ -15,6 +15,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
 import com.example.utils.DeviceModelDetector
@@ -49,6 +51,7 @@ fun NetworkTopologyScreen(
 ) {
     val topology by viewModel.networkTopology.collectAsStateWithLifecycle()
     val isLoading by viewModel.isTopologyLoading.collectAsStateWithLifecycle()
+    val activeUsers by viewModel.activeUsers.collectAsStateWithLifecycle()
     val strings = LanguageManager.strings
 
     var apToAllowlist by remember { mutableStateOf<AccessPointDevice?>(null) }
@@ -277,19 +280,51 @@ fun NetworkTopologyScreen(
                 if (aps.isNotEmpty()) {
                     BranchingLines(apCount = aps.size)
 
-                    // Connected APs Grid / Row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        aps.forEach { ap ->
-                            ApDeviceNode(
-                                ap = ap,
-                                strings = strings,
-                                onAllowlist = { apToAllowlist = ap },
-                                onUndo = { apToUndo = ap }
-                            )
+                    if (aps.size <= 2) {
+                        // Connected APs Single Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            aps.forEach { ap ->
+                                ApDeviceNode(
+                                    ap = ap,
+                                    strings = strings,
+                                    onAllowlist = { apToAllowlist = ap },
+                                    onUndo = { apToUndo = ap }
+                                )
+                            }
+                        }
+                    } else {
+                        // Multi-device Grid Layout (2 per row with connecting branch)
+                        val chunkedAps = aps.chunked(2)
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            chunkedAps.forEachIndexed { rowIndex, rowAps ->
+                                if (rowIndex > 0) {
+                                    ConnectingVerticalLine(dots = 2, color = Color(0xFF94A3B8))
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    rowAps.forEach { ap ->
+                                        ApDeviceNode(
+                                            ap = ap,
+                                            strings = strings,
+                                            onAllowlist = { apToAllowlist = ap },
+                                            onUndo = { apToUndo = ap }
+                                        )
+                                    }
+                                    if (rowAps.size == 1) {
+                                        Spacer(modifier = Modifier.width(160.dp))
+                                    }
+                                }
+                            }
                         }
                     }
                 } else {
@@ -440,6 +475,7 @@ fun NetworkTopologyScreen(
         // Add Device Dialog
         if (showAddDialog) {
             AddDeviceDialog(
+                activeUsers = activeUsers,
                 onDismiss = { showAddDialog = false },
                 onAdd = { name, ip, mac ->
                     viewModel.whitelistDevice(
@@ -693,22 +729,204 @@ fun BranchingLines(apCount: Int) {
 
 @Composable
 fun AddDeviceDialog(
+    activeUsers: List<com.example.domain.models.ActiveUser> = emptyList(),
     onDismiss: () -> Unit,
     onAdd: (name: String, ip: String, mac: String) -> Unit
 ) {
-    var deviceName by remember { mutableStateOf("EST310-AP") }
+    val presets = remember { DeviceModelDetector.HARDWARE_PRESETS }
+    var selectedCategory by remember { mutableStateOf("All") }
+    val categories = listOf("All", "EW Series", "EST Bridges", "Ceiling APs", "TP-Link")
+
+    val filteredPresets = remember(selectedCategory) {
+        when (selectedCategory) {
+            "EW Series" -> presets.filter { it.shortName.startsWith("EW") || it.modelName.contains("EW") }
+            "EST Bridges" -> presets.filter { it.shortName.startsWith("EST") || it.modelName.contains("EST") }
+            "Ceiling APs" -> presets.filter { it.shortName.startsWith("RAP") || it.modelName.contains("RAP") }
+            "TP-Link" -> presets.filter { it.brand.contains("TP-Link") }
+            else -> presets
+        }
+    }
+
+    var selectedPreset by remember { mutableStateOf(presets.first()) }
+    var deviceName by remember { mutableStateOf(presets.first().shortName) }
     var ipAddress by remember { mutableStateOf("192.168.100.") }
-    var macAddress by remember { mutableStateOf("") }
+    var macAddress by remember { mutableStateOf(presets.first().defaultPrefix) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add AP Device", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "Enter the Ruijie/Reyee AP details to allowlist and track in network topology:",
-                    style = MaterialTheme.typography.bodySmall
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.AddModerator,
+                    contentDescription = null,
+                    tint = Color(0xFF10B981),
+                    modifier = Modifier.size(24.dp)
                 )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Add AP / Device to Topology", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // 1. Hardware Preview Card of currently selected model
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.White,
+                            shadowElevation = 2.dp,
+                            modifier = Modifier.size(56.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(4.dp)) {
+                                Image(
+                                    painter = painterResource(id = selectedPreset.imageResId),
+                                    contentDescription = selectedPreset.modelName,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = selectedPreset.modelName,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "${selectedPreset.brand} · ${selectedPreset.deviceType}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF059669),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                // 2. Category Filter Chips
+                Text("Select Hardware Model:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(categories) { cat ->
+                        FilterChip(
+                            selected = selectedCategory == cat,
+                            onClick = { selectedCategory = cat },
+                            label = { Text(cat, fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color(0xFF10B981),
+                                selectedLabelColor = Color.White
+                            )
+                        )
+                    }
+                }
+
+                // 3. Quick Preset Model Chips with Real Thumbnails
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(filteredPresets) { preset ->
+                        val isSelected = selectedPreset.id == preset.id
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) Color(0xFF10B981).copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
+                            border = androidx.compose.foundation.BorderStroke(
+                                if (isSelected) 2.dp else 1.dp,
+                                if (isSelected) Color(0xFF10B981) else MaterialTheme.colorScheme.outlineVariant
+                            ),
+                            modifier = Modifier
+                                .width(115.dp)
+                                .clickable {
+                                    selectedPreset = preset
+                                    deviceName = preset.shortName
+                                    if (macAddress.isBlank() || macAddress == "C0:A4:76:" || macAddress == "E8:48:B8:") {
+                                        macAddress = preset.defaultPrefix
+                                    }
+                                }
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(6.dp)
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color.White,
+                                    modifier = Modifier.size(42.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(2.dp)) {
+                                        Image(
+                                            painter = painterResource(id = preset.imageResId),
+                                            contentDescription = preset.shortName,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Fit
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = preset.shortName,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 4. Quick Fill from Active Connected Devices (if any)
+                if (activeUsers.isNotEmpty()) {
+                    Text("Or Auto-fill from Connected Device:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(activeUsers.take(8)) { u ->
+                            SuggestionChip(
+                                onClick = {
+                                    ipAddress = u.address
+                                    macAddress = u.macAddress
+                                    val detected = DeviceModelDetector.detectApOrClient(u.user, u.hostName, "", u.macAddress)
+                                    val matchedPreset = presets.find { it.modelName == detected.modelName }
+                                    if (matchedPreset != null) {
+                                        selectedPreset = matchedPreset
+                                        deviceName = matchedPreset.shortName
+                                    } else {
+                                        deviceName = u.hostName.ifBlank { u.user }
+                                    }
+                                },
+                                label = {
+                                    Text(
+                                        text = "${u.hostName.ifBlank { u.user }} (${u.address})",
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // 5. Input Fields
                 OutlinedTextField(
                     value = deviceName,
                     onValueChange = { deviceName = it },
@@ -730,6 +948,25 @@ fun AddDeviceDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                // Quick Vendor OUI Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    AssistChip(
+                        onClick = { macAddress = "C0:A4:76:" },
+                        label = { Text("Ruijie C0:A4:76", fontSize = 10.sp) }
+                    )
+                    AssistChip(
+                        onClick = { macAddress = "10:5F:02:" },
+                        label = { Text("Ruijie 10:5F:02", fontSize = 10.sp) }
+                    )
+                    AssistChip(
+                        onClick = { macAddress = "E8:48:B8:" },
+                        label = { Text("TP-Link E8:48:B8", fontSize = 10.sp) }
+                    )
+                }
             }
         },
         confirmButton = {
@@ -739,10 +976,12 @@ fun AddDeviceDialog(
                         onAdd(deviceName.trim(), ipAddress.trim(), macAddress.trim())
                     }
                 },
-                enabled = macAddress.isNotBlank(),
+                enabled = macAddress.isNotBlank() && macAddress.length >= 11,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
             ) {
-                Text("Allowlist Device", color = Color.White)
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Allowlist & Add to Topology", color = Color.White)
             }
         },
         dismissButton = {

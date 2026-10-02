@@ -1104,12 +1104,11 @@ class MikrotikClient {
         apiMutex.withLock {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext false
-                val onLoginScript = ":global hsUser \$user; /system script run voucher-activate;"
                 val params = mutableListOf(
                     "shared-users=$sharedUsers",
-                    "keepalive-timeout=00:02:00",
+                    "keepalive-timeout=none",
                     "status-autorefresh=00:01:00",
-                    "on-login=$onLoginScript"
+                    "on-login="
                 )
                 if (sessionTimeout.isNotBlank()) {
                     params.add("session-timeout=$sessionTimeout")
@@ -1184,7 +1183,6 @@ class MikrotikClient {
                 val profId = profs.firstOrNull { it["name"] == oldName }?.get(".id")
                 if (profId.isNullOrBlank()) return@withContext false
 
-                val onLoginScript = ":local u \$user; :local m \$\"mac-address\"; :do { /ip hotspot active remove [find user=\$u and mac-address!=\$m]; /ip hotspot cookie remove [find user=\$u and mac-address!=\$m] } on-error={}; :global hsUser \$user; :do { /system script run voucher-activate } on-error={}"
                 val targetName = if (newName.isNotBlank()) newName else oldName
                 val cleanRate = if (rateLimit.isNotBlank()) {
                     if (!rateLimit.contains("/")) "$rateLimit/$rateLimit" else rateLimit
@@ -1197,7 +1195,7 @@ class MikrotikClient {
                     "keepalive-timeout=none",
                     "idle-timeout=none",
                     "status-autorefresh=00:01:00",
-                    "on-login=$onLoginScript"
+                    "on-login="
                 )
                 if (sessionTimeout.isNotBlank()) {
                     params.add("session-timeout=$sessionTimeout")
@@ -1217,12 +1215,8 @@ class MikrotikClient {
                 if (targetName != oldName) {
                     userUpdates.add("profile=$targetName")
                 }
-                if (limitBytesTotal > 0L) {
-                    userUpdates.add("limit-bytes-total=$limitBytesTotal")
-                }
-                if (limitUptime.isNotBlank()) {
-                    userUpdates.add("limit-uptime=$limitUptime")
-                }
+                userUpdates.add(if (limitBytesTotal > 0L) "limit-bytes-total=$limitBytesTotal" else "limit-bytes-total=0")
+                userUpdates.add(if (limitUptime.isNotBlank()) "limit-uptime=$limitUptime" else "limit-uptime=0s")
 
                 if (userUpdates.isNotEmpty() && matchingUsers.isNotEmpty()) {
                     for (u in matchingUsers) {
