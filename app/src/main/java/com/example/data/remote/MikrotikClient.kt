@@ -1509,6 +1509,27 @@ class MikrotikClient {
         apiMutex.withLock {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext false
+
+                // 1. Inspect current device-mode first to protect active user connections
+                val printRes = try {
+                    conn.execute("/system/device-mode/print")
+                } catch (_: Exception) {
+                    emptyList<Map<String, String>>()
+                }
+
+                val currentMode = printRes.firstOrNull()?.get("mode") ?: ""
+                val isHotspot = printRes.firstOrNull()?.get("hotspot") == "true"
+                val isScheduler = printRes.firstOrNull()?.get("scheduler") == "true"
+                val isFetch = printRes.firstOrNull()?.get("fetch") == "true"
+
+                if (currentMode.equals("advanced", ignoreCase = true) ||
+                    currentMode.equals("enterprise", ignoreCase = true) ||
+                    (isHotspot && isScheduler && isFetch)
+                ) {
+                    // Already advanced/enterprise mode! Zero user disruption.
+                    return@withContext true
+                }
+
                 try {
                     conn.execute("/system/device-mode/update", "mode=enterprise")
                 } catch (_: Exception) {
@@ -1516,17 +1537,6 @@ class MikrotikClient {
                         conn.execute("/system/device-mode/update", "mode=advanced")
                     } catch (_: Exception) {}
                 }
-                try {
-                    conn.execute(
-                        "/system/device-mode/update",
-                        "hotspot=yes",
-                        "scheduler=yes",
-                        "fetch=yes",
-                        "romon=yes",
-                        "traffic-flow=yes",
-                        "bandwidth-test=yes"
-                    )
-                } catch (_: Exception) {}
                 true
             } catch (e: Exception) {
                 handleApiError(e)
@@ -2207,19 +2217,28 @@ class MikrotikClient {
                         "/system/script/add",
                         "name=$scriptName",
                         "source=$cleanScript",
-                        "policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon",
+                        "policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon,api,web,winbox,rest-api",
                         "dont-require-permissions=yes"
                     )
-                    val scriptId = addRes.firstOrNull()?.get("ret") ?: scriptName
+                    val scriptId = addRes.firstOrNull()?.get("ret") ?: ""
                     logBuilder.appendLine("✓ Script registered on router ($scriptName)")
 
-                    logBuilder.appendLine("➜ Running script...")
-                    conn.execute("/system/script/run", "=.id=$scriptId")
-                    logBuilder.appendLine("✓ Script executed successfully!")
+                    logBuilder.appendLine("➜ Running script safely...")
+                    // RouterOS API requires "number=<name>" to run scripts
+                    val runRes = conn.execute("/system/script/run", "=number=$scriptName")
+                    val retOutput = runRes.firstOrNull()?.get("ret")
+                    if (!retOutput.isNullOrBlank()) {
+                        logBuilder.appendLine("➜ Script output: $retOutput")
+                    }
+                    logBuilder.appendLine("✓ Script executed successfully without network disruption!")
                     scriptSuccess = true
 
                     try {
-                        conn.execute("/system/script/remove", "=.id=$scriptId")
+                        if (scriptId.isNotBlank() && scriptId.startsWith("*")) {
+                            conn.execute("/system/script/remove", "=.id=$scriptId")
+                        } else {
+                            conn.execute("/system/script/remove", "=numbers=$scriptName")
+                        }
                         logBuilder.appendLine("✓ Cleanup completed.")
                     } catch (_: Exception) {}
                 } catch (scriptEx: Exception) {

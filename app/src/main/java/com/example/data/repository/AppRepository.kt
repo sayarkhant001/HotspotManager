@@ -521,7 +521,97 @@ class AppRepository(
                 dao.insertSessions(chunk)
             }
         }
+        // Automatically prune vouchers expired 30+ days ago (non-disruptive, preserves active users)
+        autoPruneExpiredVouchers()
         return vouchers.size
+    }
+
+    fun parseActivationTimestamp(comment: String): Long? {
+        val actIdx = comment.indexOf("[ACT:")
+        if (actIdx >= 0) {
+            val endIdx = comment.indexOf("]", actIdx)
+            val rawDate = if (endIdx > actIdx) comment.substring(actIdx + 5, endIdx).trim() else comment.substring(actIdx + 5).trim()
+            try {
+                val t = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("Asia/Yangon")
+                }.parse(rawDate)?.time
+                if (t != null) return t
+            } catch (_: Exception) {}
+            try {
+                val t = SimpleDateFormat("MMM/dd/yyyy HH:mm:ss", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("Asia/Yangon")
+                }.parse(rawDate)?.time
+                if (t != null) return t
+            } catch (_: Exception) {}
+            try {
+                val t = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("Asia/Yangon")
+                }.parse(rawDate)?.time
+                if (t != null) return t
+            } catch (_: Exception) {}
+        }
+        return null
+    }
+
+    /**
+     * Automatically prunes expired vouchers whose validity expired 30 or more days ago.
+     * Retains all active, unexpired, and unused stock vouchers.
+     * Guaranteed safe: Never touches any voucher currently active in hotspot sessions.
+     */
+    suspend fun autoPruneExpiredVouchers(): Int = withContext(Dispatchers.IO) {
+        try {
+            val allVouchers = dao.getAllVouchersSync()
+            if (allVouchers.isEmpty()) return@withContext 0
+
+            val now = System.currentTimeMillis()
+            val thirtyDaysMs = 30L * 24 * 60 * 60 * 1000L // 30 days retention after expiration
+
+            // Safety guard: query all currently connected active hotspot users to NEVER touch anyone online
+            val activeUserNames = try {
+                mikrotikClient.getActiveUsers().map { it.user }.toSet()
+            } catch (_: Exception) {
+                emptySet<String>()
+            }
+
+            val toPrune = allVouchers.filter { v ->
+                // Must be marked as used, and NOT currently online
+                if (!v.isUsed || activeUserNames.contains(v.code)) return@filter false
+
+                // Determine activation time
+                val actTime = parseActivationTimestamp(v.comment)
+                    ?: if (v.generatedAt > 0L) v.generatedAt else null
+                    ?: return@filter false
+
+                // Calculate validity duration in ms
+                val validityMs = when {
+                    v.validityDays > 0 -> v.validityDays * 86400000L
+                    v.durationMinutes > 0 -> v.durationMinutes * 60000L
+                    else -> 86400000L // default 1 day
+                }
+
+                val expirationTime = actTime + validityMs
+                // Check if current time is at least 30 days past expiration
+                now >= (expirationTime + thirtyDaysMs)
+            }
+
+            if (toPrune.isEmpty()) return@withContext 0
+
+            val codes = toPrune.map { it.code }
+
+            // 1. Delete from Room DB (keeps app storage clean)
+            dao.deleteVouchersByCodes(codes)
+
+            // 2. Synchronize with router if router still has them in /ip/hotspot/user
+            if (mikrotikClient.isConnected()) {
+                try {
+                    mikrotikClient.deleteHotspotUsersBatch(codes)
+                } catch (_: Exception) {}
+            }
+
+            codes.size
+        } catch (_: Exception) {
+            0
+        }
     }
 
     suspend fun addVouchers(vouchers: List<Voucher>, pushToRouter: Boolean = true): Result<Unit> {

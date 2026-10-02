@@ -103,14 +103,12 @@
   :do { /interface list member set [find interface=hotspot-bridge] list=LAN } on-error={}
 }
 
-# Automatically add all Ethernet ports except ether1 (WAN) to hotspot-bridge
+# Automatically add all Ethernet ports except ether1 (WAN) to hotspot-bridge (preserves active forwarding)
 :foreach p in=[/interface find type="ether"] do={
   :local pName [/interface get $p name]
   :if ($pName != "ether1") do={
-    :do {
-      /interface bridge port add bridge=hotspot-bridge interface=$pName
-    } on-error={
-      :do { /interface bridge port set [find interface=$pName] bridge=hotspot-bridge } on-error={}
+    :if ([:len [/interface bridge port find interface=$pName and bridge=hotspot-bridge]] = 0) do={
+      :do { /interface bridge port add bridge=hotspot-bridge interface=$pName } on-error={}
     }
   }
 }
@@ -118,10 +116,8 @@
 # Automatically add all SFP ports (e.g. sfp1 on L009) to hotspot-bridge
 :foreach sfp in=[/interface find type="sfp"] do={
   :local sName [/interface get $sfp name]
-  :do {
-    /interface bridge port add bridge=hotspot-bridge interface=$sName
-  } on-error={
-    :do { /interface bridge port set [find interface=$sName] bridge=hotspot-bridge } on-error={}
+  :if ([:len [/interface bridge port find interface=$sName and bridge=hotspot-bridge]] = 0) do={
+    :do { /interface bridge port add bridge=hotspot-bridge interface=$sName } on-error={}
   }
 }
 
@@ -137,7 +133,7 @@
 :do {
   :local hStr "no"
   :if ($hideSsid = yes or $hideSsid = true or $hideSsid = "yes") do={ :set hStr "yes" }
-  :local wCmd (":foreach w in=[/interface wifi find] do={ :do { /interface wifi set \$w configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" configuration.hide-ssid=" . $hStr . " datapath.bridge=hotspot-bridge security.authentication-types=\"\" disabled=no } on-error={ /interface wifi set \$w mode=ap ssid=\"" . $wifiSsid . "\" disabled=no }; :local wName [/interface wifi get \$w name]; :do { /interface bridge port add bridge=hotspot-bridge interface=\$wName } on-error={ :do { /interface bridge port set [find interface=\$wName] bridge=hotspot-bridge } on-error={} } }")
+  :local wCmd (":foreach w in=[/interface wifi find] do={ :do { /interface wifi set \$w configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" configuration.hide-ssid=" . $hStr . " datapath.bridge=hotspot-bridge security.authentication-types=\"\" disabled=no } on-error={ /interface wifi set \$w mode=ap ssid=\"" . $wifiSsid . "\" disabled=no }; :local wName [/interface wifi get \$w name]; :if ([:len [/interface bridge port find interface=\$wName and bridge=hotspot-bridge]] = 0) do={ :do { /interface bridge port add bridge=hotspot-bridge interface=\$wName } on-error={} } }")
   [ :parse $wCmd ]
   :set wifiConfigured true
   :put ("  Configured Wi-Fi interface (v7, Hotspot AP, SSID: " . $wifiSsid . ", hide-ssid=" . $hStr . ").")
@@ -148,7 +144,7 @@
   :do {
     :local hStr "no"
     :if ($hideSsid = yes or $hideSsid = true or $hideSsid = "yes") do={ :set hStr "yes" }
-    :local wCmd2 ("/interface wifi set [find name=wifi1] configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" configuration.hide-ssid=" . $hStr . " datapath.bridge=hotspot-bridge disabled=no; :do { /interface bridge port add bridge=hotspot-bridge interface=wifi1 } on-error={ /interface bridge port set [find interface=wifi1] bridge=hotspot-bridge }")
+    :local wCmd2 ("/interface wifi set [find name=wifi1] configuration.mode=ap configuration.ssid=\"" . $wifiSsid . "\" configuration.hide-ssid=" . $hStr . " datapath.bridge=hotspot-bridge disabled=no; :if ([:len [/interface bridge port find interface=wifi1 and bridge=hotspot-bridge]] = 0) do={ :do { /interface bridge port add bridge=hotspot-bridge interface=wifi1 } on-error={} }")
     [ :parse $wCmd2 ]
     :set wifiConfigured true
     :put ("  Configured wifi1 interface (v7, Hotspot AP, SSID: " . $wifiSsid . ", hide-ssid=" . $hStr . ").")
@@ -160,7 +156,7 @@
   :do {
     :local hStr "no"
     :if ($hideSsid = yes or $hideSsid = true or $hideSsid = "yes") do={ :set hStr "yes" }
-    :local wlCmd ("/interface wireless set [find default-name=wlan1] ssid=\"" . $wifiSsid . "\" hide-ssid=" . $hStr . " mode=ap-bridge security-profile=default disabled=no; :do { /interface wireless security-profile set [find default=yes] authentication-types=\"\" mode=none } on-error={}; :do { /interface bridge port set [find interface=wlan1] bridge=hotspot-bridge } on-error={ /interface bridge port add bridge=hotspot-bridge interface=wlan1 }")
+    :local wlCmd ("/interface wireless set [find default-name=wlan1] ssid=\"" . $wifiSsid . "\" hide-ssid=" . $hStr . " mode=ap-bridge security-profile=default disabled=no; :do { /interface wireless security-profile set [find default=yes] authentication-types=\"\" mode=none } on-error={}; :if ([:len [/interface bridge port find interface=wlan1 and bridge=hotspot-bridge]] = 0) do={ :do { /interface bridge port add bridge=hotspot-bridge interface=wlan1 } on-error={} }")
     [ :parse $wlCmd ]
     :set wifiConfigured true
     :put ("  Configured wlan1 interface (legacy, Hotspot AP, SSID: " . $wifiSsid . ", hide-ssid=" . $hStr . ").")
@@ -173,22 +169,28 @@
 
 # ── STEP 4: IP Address, Pool & DHCP Server ────────────────────
 :put "=== Step 4: IP & DHCP ==="
-:do {
-  /ip address add address=($gwIp . "/23") network=10.10.10.0 interface=hotspot-bridge comment="Hotspot Gateway"
-} on-error={
-  :do { /ip address set [find interface=hotspot-bridge] address=($gwIp . "/23") } on-error={}
+:if ([:len [/ip address find interface=hotspot-bridge and address=($gwIp . "/23")]] = 0) do={
+  :do {
+    /ip address add address=($gwIp . "/23") network=10.10.10.0 interface=hotspot-bridge comment="Hotspot Gateway"
+  } on-error={
+    :do { /ip address set [find interface=hotspot-bridge] address=($gwIp . "/23") } on-error={}
+  }
 }
 
-:do {
-  /ip pool add name=hs-pool ranges=($poolStart . "-" . $poolEnd)
-} on-error={
-  :do { /ip pool set [find name=hs-pool] ranges=($poolStart . "-" . $poolEnd) } on-error={}
+:if ([:len [/ip pool find name=hs-pool]] = 0) do={
+  :do {
+    /ip pool add name=hs-pool ranges=($poolStart . "-" . $poolEnd)
+  } on-error={
+    :do { /ip pool set [find name=hs-pool] ranges=($poolStart . "-" . $poolEnd) } on-error={}
+  }
 }
 
-:do {
-  /ip dhcp-server add name=hs-dhcp interface=hotspot-bridge address-pool=hs-pool lease-time=2h authoritative=yes disabled=no
-} on-error={
-  :do { /ip dhcp-server set [find name=hs-dhcp] interface=hotspot-bridge address-pool=hs-pool lease-time=2h authoritative=yes disabled=no } on-error={}
+:if ([:len [/ip dhcp-server find name=hs-dhcp]] = 0) do={
+  :do {
+    /ip dhcp-server add name=hs-dhcp interface=hotspot-bridge address-pool=hs-pool lease-time=2h authoritative=yes disabled=no
+  } on-error={
+    :do { /ip dhcp-server set [find name=hs-dhcp] interface=hotspot-bridge address-pool=hs-pool lease-time=2h authoritative=yes disabled=no } on-error={}
+  }
 }
 
 :do {
