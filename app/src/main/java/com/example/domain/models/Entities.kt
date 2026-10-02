@@ -100,7 +100,13 @@ data class AccessPointDevice(
     val isWhitelisted: Boolean,
     val isOnline: Boolean,
     val bindingId: String? = null,
-    val vendor: String = "Ruijie / Reyee"
+    val vendor: String = "Ruijie / Reyee",
+    val interfaceName: String = "",
+    val connectedClientMacs: List<String> = emptyList(),
+    val currentRxBps: Long = 0L,
+    val currentTxBps: Long = 0L,
+    val dailyBytesIn: Long = 0L,
+    val dailyBytesOut: Long = 0L
 )
 
 data class NetworkTopologyData(

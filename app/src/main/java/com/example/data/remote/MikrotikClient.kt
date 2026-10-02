@@ -267,6 +267,13 @@ class MikrotikClient {
     private var currentRxBps: Long = 0L
     private var currentTxBps: Long = 0L
 
+    private data class ApTrafficSample(
+        val rxBytes: Long,
+        val txBytes: Long,
+        val timestamp: Long
+    )
+    private val apTrafficHistory = java.util.concurrent.ConcurrentHashMap<String, ApTrafficSample>()
+
     suspend fun connect(ip: String, user: String, pass: String): Result<Unit> = withContext(Dispatchers.IO) {
         apiMutex.withLock {
             try {
@@ -892,6 +899,88 @@ class MikrotikClient {
                     }
                 } catch (_: Exception) {}
 
+                // Query bridge hosts to map MACs to on-interface
+                val macToInterface = mutableMapOf<String, String>()
+                val interfaceToMacs = mutableMapOf<String, MutableList<String>>()
+                try {
+                    val bHosts = conn.execute("/interface/bridge/host/print", "=.proplist=mac-address,on-interface")
+                    bHosts.forEach { bh ->
+                        val m = (bh["mac-address"] ?: "").uppercase()
+                        val iface = bh["on-interface"] ?: ""
+                        if (m.isNotBlank() && iface.isNotBlank()) {
+                            macToInterface[m] = iface
+                            interfaceToMacs.getOrPut(iface) { mutableListOf() }.add(m)
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // Query interface byte counters for throughput
+                val ifaceBytesMap = mutableMapOf<String, Pair<Long, Long>>()
+                try {
+                    val ifaces = conn.execute("/interface/print", "=.proplist=name,rx-byte,tx-byte")
+                    ifaces.forEach { iface ->
+                        val name = iface["name"] ?: ""
+                        val rx = iface["rx-byte"]?.toLongOrNull() ?: 0L
+                        val tx = iface["tx-byte"]?.toLongOrNull() ?: 0L
+                        if (name.isNotBlank()) {
+                            ifaceBytesMap[name] = Pair(rx, tx)
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                fun createApDevice(
+                    mac: String,
+                    displayName: String,
+                    modelName: String,
+                    ip: String,
+                    isWhitelisted: Boolean,
+                    isOnline: Boolean,
+                    bindingId: String?,
+                    brand: String,
+                    interfaceHint: String = ""
+                ): AccessPointDevice {
+                    val apIface = interfaceHint.ifBlank { macToInterface[mac] ?: "" }
+                    val connectedMacs = if (apIface.isNotBlank()) {
+                        interfaceToMacs[apIface]?.filter { it != mac } ?: emptyList()
+                    } else emptyList()
+
+                    val (rxRaw, txRaw) = if (apIface.isNotBlank()) {
+                        ifaceBytesMap[apIface] ?: Pair(0L, 0L)
+                    } else Pair(0L, 0L)
+
+                    val now = System.currentTimeMillis()
+                    val prev = apTrafficHistory[mac]
+                    var rxBps = 0L
+                    var txBps = 0L
+                    if (prev != null && now > prev.timestamp) {
+                        val dt = (now - prev.timestamp) / 1000.0
+                        if (dt >= 0.5) {
+                            val dRx = if (rxRaw >= prev.rxBytes) rxRaw - prev.rxBytes else 0L
+                            val dTx = if (txRaw >= prev.txBytes) txRaw - prev.txBytes else 0L
+                            rxBps = (dRx * 8.0 / dt).toLong()
+                            txBps = (dTx * 8.0 / dt).toLong()
+                        }
+                    }
+                    apTrafficHistory[mac] = ApTrafficSample(rxRaw, txRaw, now)
+
+                    return AccessPointDevice(
+                        name = displayName,
+                        model = modelName,
+                        ipAddress = ip,
+                        macAddress = mac,
+                        isWhitelisted = isWhitelisted,
+                        isOnline = isOnline,
+                        bindingId = bindingId,
+                        vendor = brand,
+                        interfaceName = apIface,
+                        connectedClientMacs = connectedMacs,
+                        currentRxBps = rxBps,
+                        currentTxBps = txBps,
+                        dailyBytesIn = rxRaw,
+                        dailyBytesOut = txRaw
+                    )
+                }
+
                 val apMap = mutableMapOf<String, AccessPointDevice>()
 
                 // 1. Check DHCP leases for Ruijie / Reyee and TP-Link APs & Bridges
@@ -922,15 +1011,15 @@ class MikrotikClient {
                                 else -> "${detected.brand}-${mac.takeLast(5).replace(":", "")}"
                             }
 
-                            apMap[mac] = AccessPointDevice(
-                                name = displayName,
-                                model = detected.modelName,
-                                ipAddress = ip,
-                                macAddress = mac,
+                            apMap[mac] = createApDevice(
+                                mac = mac,
+                                displayName = displayName,
+                                modelName = detected.modelName,
+                                ip = ip,
                                 isWhitelisted = isWhitelisted,
                                 isOnline = isOnline,
                                 bindingId = binding?.id,
-                                vendor = detected.brand
+                                brand = detected.brand
                             )
                         }
                     }
@@ -944,6 +1033,7 @@ class MikrotikClient {
                         val platform = n["platform"] ?: ""
                         val mac = (n["mac-address"] ?: "").uppercase()
                         val ip = n["address"] ?: ""
+                        val ifaceHint = n["interface"] ?: ""
 
                         val detected = com.example.utils.DeviceModelDetector.detectApOrClient(
                             name = identity,
@@ -957,15 +1047,16 @@ class MikrotikClient {
                             val isWhitelisted = binding?.type == "bypassed" && !binding.disabled
                             val displayName = identity.ifBlank { "${detected.brand}-${mac.takeLast(5)}" }
 
-                            apMap[mac] = AccessPointDevice(
-                                name = displayName,
-                                model = detected.modelName,
-                                ipAddress = ip.ifBlank { apMap[mac]?.ipAddress ?: "" },
-                                macAddress = mac,
+                            apMap[mac] = createApDevice(
+                                mac = mac,
+                                displayName = displayName,
+                                modelName = detected.modelName,
+                                ip = ip.ifBlank { apMap[mac]?.ipAddress ?: "" },
                                 isWhitelisted = isWhitelisted,
                                 isOnline = true,
                                 bindingId = binding?.id,
-                                vendor = detected.brand
+                                brand = detected.brand,
+                                interfaceHint = ifaceHint
                             )
                         }
                     }
@@ -988,15 +1079,15 @@ class MikrotikClient {
                             if (detected.isApOrBridge) {
                                 val binding = bindingsMap[mac]
                                 val isWhitelisted = binding?.type == "bypassed" && !binding.disabled
-                                apMap[mac] = AccessPointDevice(
-                                    name = comment.ifBlank { "${detected.brand}-${mac.takeLast(5).replace(":", "")}" },
-                                    model = detected.modelName,
-                                    ipAddress = ip,
-                                    macAddress = mac,
+                                apMap[mac] = createApDevice(
+                                    mac = mac,
+                                    displayName = comment.ifBlank { "${detected.brand}-${mac.takeLast(5).replace(":", "")}" },
+                                    modelName = detected.modelName,
+                                    ip = ip,
                                     isWhitelisted = isWhitelisted,
                                     isOnline = true,
                                     bindingId = binding?.id,
-                                    vendor = detected.brand
+                                    brand = detected.brand
                                 )
                             }
                         }
@@ -1013,15 +1104,15 @@ class MikrotikClient {
                             comment = b.comment,
                             macAddress = b.macAddress
                         )
-                        apMap[b.macAddress] = AccessPointDevice(
-                            name = b.comment.ifBlank { "${detected.brand}-${b.macAddress.takeLast(5)}" },
-                            model = detected.modelName,
-                            ipAddress = b.address,
-                            macAddress = b.macAddress,
+                        apMap[b.macAddress] = createApDevice(
+                            mac = b.macAddress,
+                            displayName = b.comment.ifBlank { "${detected.brand}-${b.macAddress.takeLast(5)}" },
+                            modelName = detected.modelName,
+                            ip = b.address,
                             isWhitelisted = b.type == "bypassed" && !b.disabled,
                             isOnline = true,
                             bindingId = b.id,
-                            vendor = detected.brand
+                            brand = detected.brand
                         )
                     }
                 }

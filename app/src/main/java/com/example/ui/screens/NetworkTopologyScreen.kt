@@ -40,8 +40,39 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.domain.models.AccessPointDevice
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import com.example.domain.models.ActiveUser
+import com.example.domain.models.IpBinding
+import com.example.domain.models.RouterSessionLog
+import com.example.domain.models.NetworkTopologyData
 import com.example.ui.components.GlassCard
 import com.example.utils.LanguageManager
+
+private fun formatSpeed(bps: Long): String {
+    return when {
+        bps >= 1_000_000_000L -> String.format(Locale.US, "%.1f Gbps", bps / 1_000_000_000.0)
+        bps >= 1_000_000L -> String.format(Locale.US, "%.1f Mbps", bps / 1_000_000.0)
+        bps >= 1_000L -> String.format(Locale.US, "%.0f kbps", bps / 1_000.0)
+        bps > 0L -> "$bps bps"
+        else -> "0 kbps"
+    }
+}
+
+private fun formatDataBytes(bytes: Long): String {
+    val gb = bytes / (1024.0 * 1024.0 * 1024.0)
+    val mb = bytes / (1024.0 * 1024.0)
+    return when {
+        gb >= 1.0 -> String.format(Locale.US, "%.2f GB", gb)
+        mb >= 1.0 -> String.format(Locale.US, "%.1f MB", mb)
+        bytes > 0L -> "${bytes / 1024} KB"
+        else -> "0 MB"
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,18 +83,34 @@ fun NetworkTopologyScreen(
     val topology by viewModel.networkTopology.collectAsStateWithLifecycle()
     val isLoading by viewModel.isTopologyLoading.collectAsStateWithLifecycle()
     val activeUsers by viewModel.activeUsers.collectAsStateWithLifecycle()
+    val allSessions by viewModel.allSessions.collectAsStateWithLifecycle()
+    val ipBindings by viewModel.ipBindings.collectAsStateWithLifecycle()
     val strings = LanguageManager.strings
 
     var apToAllowlist by remember { mutableStateOf<AccessPointDevice?>(null) }
     var apToUndo by remember { mutableStateOf<AccessPointDevice?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
+    var selectedApForDetails by remember { mutableStateOf<AccessPointDevice?>(null) }
+
+    val todayKey = remember {
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Yangon")
+        }.format(Date())
+    }
+    val todaySessions = remember(allSessions, todayKey) {
+        allSessions.filter { it.dateKey == todayKey }
+    }
 
     // Zoom state
     var scale by remember { mutableFloatStateOf(1f) }
 
     LaunchedEffect(Unit) {
-        viewModel.fetchNetworkTopology()
-        viewModel.fetchIpBindings()
+        while (isActive) {
+            viewModel.fetchNetworkTopology()
+            viewModel.fetchIpBindings()
+            viewModel.fetchRouterData()
+            delay(3500L)
+        }
     }
 
     Scaffold(
@@ -288,9 +335,26 @@ fun NetworkTopologyScreen(
                             verticalAlignment = Alignment.Top
                         ) {
                             aps.forEach { ap ->
+                                val clientCount = remember(activeUsers, ap, topology) {
+                                    if (topology.accessPoints.size <= 1) {
+                                        activeUsers.size
+                                    } else {
+                                        val macSet = ap.connectedClientMacs.map { it.uppercase() }.toSet()
+                                        val count = activeUsers.count { u ->
+                                            val mac = u.macAddress.uppercase()
+                                            (macSet.isNotEmpty() && mac in macSet) ||
+                                            (ap.ipAddress.isNotBlank() && u.address.substringBeforeLast(".") == ap.ipAddress.substringBeforeLast(".") && u.macAddress != ap.macAddress) ||
+                                            u.user.contains(ap.name, ignoreCase = true) ||
+                                            u.comment.contains(ap.name, ignoreCase = true)
+                                        }
+                                        if (count > 0) count else if (ap.connectedClientMacs.isEmpty()) activeUsers.size else 0
+                                    }
+                                }
                                 ApDeviceNode(
                                     ap = ap,
+                                    clientCount = clientCount,
                                     strings = strings,
+                                    onClick = { selectedApForDetails = ap },
                                     onAllowlist = { apToAllowlist = ap },
                                     onUndo = { apToUndo = ap }
                                 )
@@ -313,9 +377,26 @@ fun NetworkTopologyScreen(
                                     verticalAlignment = Alignment.Top
                                 ) {
                                     rowAps.forEach { ap ->
+                                        val clientCount = remember(activeUsers, ap, topology) {
+                                            if (topology.accessPoints.size <= 1) {
+                                                activeUsers.size
+                                            } else {
+                                                val macSet = ap.connectedClientMacs.map { it.uppercase() }.toSet()
+                                                val count = activeUsers.count { u ->
+                                                    val mac = u.macAddress.uppercase()
+                                                    (macSet.isNotEmpty() && mac in macSet) ||
+                                                    (ap.ipAddress.isNotBlank() && u.address.substringBeforeLast(".") == ap.ipAddress.substringBeforeLast(".") && u.macAddress != ap.macAddress) ||
+                                                    u.user.contains(ap.name, ignoreCase = true) ||
+                                                    u.comment.contains(ap.name, ignoreCase = true)
+                                                }
+                                                if (count > 0) count else if (ap.connectedClientMacs.isEmpty()) activeUsers.size else 0
+                                            }
+                                        }
                                         ApDeviceNode(
                                             ap = ap,
+                                            clientCount = clientCount,
                                             strings = strings,
+                                            onClick = { selectedApForDetails = ap },
                                             onAllowlist = { apToAllowlist = ap },
                                             onUndo = { apToUndo = ap }
                                         )
@@ -487,13 +568,43 @@ fun NetworkTopologyScreen(
                 }
             )
         }
+
+        // AP Details Bottom Sheet (Real-time speed, today's data, client list with kick/ban/whitelist)
+        if (selectedApForDetails != null) {
+            ApDetailsBottomSheet(
+                ap = selectedApForDetails!!,
+                activeUsers = activeUsers,
+                todaySessions = todaySessions,
+                topology = topology,
+                ipBindings = ipBindings,
+                strings = strings,
+                onDismiss = { selectedApForDetails = null },
+                onAllowlistAp = {
+                    val ap = selectedApForDetails!!
+                    viewModel.whitelistDevice(ap.macAddress, ap.ipAddress, "AP: ${ap.name}")
+                    selectedApForDetails = null
+                },
+                onUndoApAllowlist = {
+                    val ap = selectedApForDetails!!
+                    ap.bindingId?.let { id -> viewModel.removeIpBinding(id, ap.macAddress) }
+                    selectedApForDetails = null
+                },
+                onKickUser = { sessionId -> viewModel.kickUser(sessionId) },
+                onBanUser = { mac -> viewModel.banMac(mac) },
+                onUnbanUser = { mac, bindingId -> viewModel.unbanMac(mac, bindingId) },
+                onWhitelistClient = { mac, ip, comment -> viewModel.whitelistDevice(mac, ip, comment) },
+                onUndoClientWhitelist = { bindingId, mac -> viewModel.removeIpBinding(bindingId, mac) }
+            )
+        }
     }
 }
 
 @Composable
 fun ApDeviceNode(
     ap: AccessPointDevice,
+    clientCount: Int = 0,
     strings: com.example.utils.AppStrings,
+    onClick: () -> Unit,
     onAllowlist: () -> Unit,
     onUndo: () -> Unit
 ) {
@@ -510,6 +621,8 @@ fun ApDeviceNode(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(160.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { onClick() }
             .padding(4.dp)
     ) {
         // Circular Real Hardware Photo with online / allowlist beacon dot (as shown in user photo!)
@@ -558,7 +671,7 @@ fun ApDeviceNode(
             )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         // Device Title
         Text(
@@ -589,17 +702,52 @@ fun ApDeviceNode(
             textAlign = TextAlign.Center
         )
 
+        // Speed & Client count badges
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(top = 3.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0xFF10B981).copy(alpha = 0.15f)
+            ) {
+                Text(
+                    text = "👥 $clientCount",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF059669),
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                )
+            }
+            if (ap.currentRxBps > 0L || ap.currentTxBps > 0L) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFF0284C7).copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = "↓ ${formatSpeed(ap.currentRxBps)}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0284C7),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
+
         // IP Address and MAC Address
         Text(
             text = "${ap.ipAddress.ifBlank { "DHCP" }} · ${ap.macAddress.take(8)}...",
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 2.dp)
         )
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         // Allowlist Action Button or Whitelisted Status
         if (!ap.isWhitelisted) {
@@ -610,7 +758,7 @@ fun ApDeviceNode(
                 ),
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                modifier = Modifier.height(28.dp)
+                modifier = Modifier.height(26.dp)
             ) {
                 Text(
                     text = strings.allowlistAction,
@@ -638,9 +786,9 @@ fun ApDeviceNode(
                     Spacer(modifier = Modifier.width(3.dp))
                     Text(
                         text = strings.allowedBadge,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF10B981)
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = Color(0xFF10B981),
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -988,4 +1136,461 @@ fun AddDeviceDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ApDetailsBottomSheet(
+    ap: AccessPointDevice,
+    activeUsers: List<ActiveUser>,
+    todaySessions: List<RouterSessionLog>,
+    topology: NetworkTopologyData,
+    ipBindings: List<IpBinding>,
+    strings: com.example.utils.AppStrings,
+    onDismiss: () -> Unit,
+    onAllowlistAp: () -> Unit,
+    onUndoApAllowlist: () -> Unit,
+    onKickUser: (sessionId: String) -> Unit,
+    onBanUser: (mac: String) -> Unit,
+    onUnbanUser: (mac: String, bindingId: String) -> Unit,
+    onWhitelistClient: (mac: String, ip: String, comment: String) -> Unit,
+    onUndoClientWhitelist: (bindingId: String, mac: String) -> Unit
+) {
+    val modelInfo = remember(ap) {
+        DeviceModelDetector.detectApOrClient(ap.name, ap.name, ap.model, ap.macAddress)
+    }
+
+    val apClients = remember(activeUsers, ap, topology) {
+        if (topology.accessPoints.size <= 1) {
+            activeUsers
+        } else {
+            val macSet = ap.connectedClientMacs.map { it.uppercase() }.toSet()
+            val matched = activeUsers.filter { u ->
+                val mac = u.macAddress.uppercase()
+                (macSet.isNotEmpty() && mac in macSet) ||
+                (ap.ipAddress.isNotBlank() && u.address.substringBeforeLast(".") == ap.ipAddress.substringBeforeLast(".") && u.macAddress != ap.macAddress) ||
+                u.user.contains(ap.name, ignoreCase = true) ||
+                u.comment.contains(ap.name, ignoreCase = true)
+            }
+            if (matched.isNotEmpty()) matched else if (ap.connectedClientMacs.isEmpty()) activeUsers else emptyList()
+        }
+    }
+
+    // Live real-time speeds
+    val speedDown = remember(ap.currentRxBps, apClients) {
+        if (ap.currentRxBps > 0L) ap.currentRxBps else apClients.sumOf { (it.bytesIn.toLongOrNull() ?: 0L) * 8 / 3 }
+    }
+    val speedUp = remember(ap.currentTxBps, apClients) {
+        if (ap.currentTxBps > 0L) ap.currentTxBps else apClients.sumOf { (it.bytesOut.toLongOrNull() ?: 0L) * 8 / 3 }
+    }
+
+    // Daily consumption (Reset at 12:00 AM midnight)
+    val apClientMacs = remember(apClients, ap) {
+        (apClients.map { it.macAddress.uppercase() } + ap.macAddress.uppercase() + ap.connectedClientMacs.map { it.uppercase() }).toSet()
+    }
+    val todayHistoryBytes = remember(todaySessions, apClientMacs) {
+        todaySessions.filter { s -> s.macAddress.uppercase() in apClientMacs }.sumOf { it.bytesIn + it.bytesOut }
+    }
+    val currentActiveBytes = remember(apClients) {
+        apClients.sumOf { (it.bytesIn.toLongOrNull() ?: 0L) + (it.bytesOut.toLongOrNull() ?: 0L) }
+    }
+    val totalTodayBytes = maxOf(todayHistoryBytes + currentActiveBytes, ap.dailyBytesIn + ap.dailyBytesOut)
+
+    var userToKick by remember { mutableStateOf<ActiveUser?>(null) }
+    var userToBan by remember { mutableStateOf<ActiveUser?>(null) }
+    var userToWhitelist by remember { mutableStateOf<ActiveUser?>(null) }
+    var userToUndoWhitelist by remember { mutableStateOf<ActiveUser?>(null) }
+
+    val bindingsMap = remember(ipBindings) {
+        ipBindings.associateBy { it.macAddress.uppercase() }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            // Header: Model Photo & Info
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color.White,
+                    shadowElevation = 3.dp,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.4f)),
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(4.dp)) {
+                        if (modelInfo.imageResId != 0) {
+                            Image(
+                                painter = painterResource(id = modelInfo.imageResId),
+                                contentDescription = modelInfo.modelName,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        } else {
+                            Icon(Icons.Default.Wifi, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(32.dp))
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = ap.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${modelInfo.brand} · ${modelInfo.modelName}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF059669)
+                    )
+                    Text(
+                        text = "IP: ${ap.ipAddress.ifBlank { "DHCP" }} · MAC: ${ap.macAddress}",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Real-Time Speed & Daily Usage Dashboard
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Download Speed Card
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF10B981).copy(alpha = 0.12f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.3f)),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.ArrowDownward, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Download", style = MaterialTheme.typography.labelSmall, color = Color(0xFF059669), fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = formatSpeed(speedDown),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF047857)
+                        )
+                        Text("Live passing speed", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
+                // Upload Speed Card
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF0284C7).copy(alpha = 0.12f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF0284C7).copy(alpha = 0.3f)),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.ArrowUpward, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Upload", style = MaterialTheme.typography.labelSmall, color = Color(0xFF0284C7), fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = formatSpeed(speedUp),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF0369A1)
+                        )
+                        Text("Live passing speed", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Daily Data Consumed Banner (12:00 AM Reset)
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF8B5CF6).copy(alpha = 0.12f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.3f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = CircleShape, color = Color(0xFF8B5CF6).copy(alpha = 0.2f), modifier = Modifier.size(36.dp)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.DataUsage, contentDescription = null, tint = Color(0xFF7C3AED), modifier = Modifier.size(20.dp))
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text("Data Consumed Today", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color(0xFF6D28D9))
+                            Text("Starts at 12:00 AM • Resets daily at 12:00 AM", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Text(
+                        text = formatDataBytes(totalTodayBytes),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF6D28D9)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Connected Clients Section Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Connected Clients (${apClients.size})",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                if (!ap.isWhitelisted) {
+                    TextButton(onClick = onAllowlistAp) {
+                        Text("Allowlist this AP", color = Color(0xFF10B981), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                } else {
+                    TextButton(onClick = onUndoApAllowlist) {
+                        Text("Remove AP Whitelist", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                    }
+                }
+            }
+
+            if (apClients.isEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(20.dp)
+                    ) {
+                        Icon(Icons.Default.Devices, contentDescription = null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(32.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("No Clients Currently Active", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        Text("Users who connect to this AP's Wi-Fi will appear here with kick, ban, and whitelist controls.", style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 20.dp)) {
+                    apClients.forEach { client ->
+                        val clientMac = client.macAddress.uppercase()
+                        val binding = bindingsMap[clientMac]
+                        val isWhitelisted = binding?.type == "bypassed" && !binding.disabled
+                        val isBanned = binding?.type == "blocked"
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = client.hostName.ifBlank { client.user },
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "IP: ${client.address} · MAC: ${client.macAddress}",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = "⏱️ ${client.uptime}  •  💾 ${client.quotaUsedMb} MB used",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                            color = Color(0xFF0284C7),
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+
+                                    if (isWhitelisted) {
+                                        AssistChip(
+                                            onClick = { userToUndoWhitelist = client },
+                                            label = { Text("Whitelisted", fontSize = 10.sp, color = Color(0xFF059669)) },
+                                            leadingIcon = { Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(14.dp)) }
+                                        )
+                                    } else if (isBanned) {
+                                        AssistChip(
+                                            onClick = { onUnbanUser(client.macAddress, binding?.id ?: "") },
+                                            label = { Text("Banned", fontSize = 10.sp, color = MaterialTheme.colorScheme.error) },
+                                            leadingIcon = { Icon(Icons.Default.Block, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(14.dp)) }
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Action Buttons: Whitelist, Kick, Ban
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (!isWhitelisted) {
+                                        Button(
+                                            onClick = { userToWhitelist = client },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                            modifier = Modifier.weight(1f).height(32.dp)
+                                        ) {
+                                            Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Whitelist", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
+                                    } else {
+                                        OutlinedButton(
+                                            onClick = { userToUndoWhitelist = client },
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                            modifier = Modifier.weight(1f).height(32.dp)
+                                        ) {
+                                            Text("Undo Whitelist", fontSize = 11.sp)
+                                        }
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = { userToKick = client },
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                        modifier = Modifier.weight(1f).height(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.PersonRemove, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.error)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Kick", fontSize = 11.sp, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                                    }
+
+                                    Button(
+                                        onClick = { userToBan = client },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                        modifier = Modifier.weight(1f).height(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Block, contentDescription = null, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Ban", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+
+        // Kick Dialog
+        if (userToKick != null) {
+            val u = userToKick!!
+            AlertDialog(
+                onDismissRequest = { userToKick = null },
+                title = { Text("Kick Active User") },
+                text = { Text("Disconnect \"${u.user}\" (${u.address}) from network?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onKickUser(u.id)
+                            userToKick = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Kick User") }
+                },
+                dismissButton = { TextButton(onClick = { userToKick = null }) { Text("Cancel") } }
+            )
+        }
+
+        // Ban Dialog
+        if (userToBan != null) {
+            val u = userToBan!!
+            AlertDialog(
+                onDismissRequest = { userToBan = null },
+                title = { Text("Ban Client Device") },
+                text = { Text("Ban MAC address \"${u.macAddress}\" (${u.hostName.ifBlank { u.user }}) from network?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onBanUser(u.macAddress)
+                            userToBan = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Ban Device") }
+                },
+                dismissButton = { TextButton(onClick = { userToBan = null }) { Text("Cancel") } }
+            )
+        }
+
+        // Whitelist Dialog
+        if (userToWhitelist != null) {
+            val u = userToWhitelist!!
+            AlertDialog(
+                onDismissRequest = { userToWhitelist = null },
+                title = { Text("Allowlist Device") },
+                text = { Text("Allow \"${u.hostName.ifBlank { u.user }}\" (${u.address}) to bypass captive portal without voucher?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onWhitelistClient(u.macAddress, u.address, "AP: ${ap.name} - ${u.hostName.ifBlank { u.user }}")
+                            userToWhitelist = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                    ) { Text("Allowlist Device", color = Color.White) }
+                },
+                dismissButton = { TextButton(onClick = { userToWhitelist = null }) { Text("Cancel") } }
+            )
+        }
+
+        // Undo Whitelist Dialog
+        if (userToUndoWhitelist != null) {
+            val u = userToUndoWhitelist!!
+            val binding = bindingsMap[u.macAddress.uppercase()]
+            AlertDialog(
+                onDismissRequest = { userToUndoWhitelist = null },
+                title = { Text("Remove Allowlist") },
+                text = { Text("Remove allowlist for \"${u.macAddress}\"? They will be required to authenticate via captive portal.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            binding?.let { onUndoClientWhitelist(it.id, u.macAddress) }
+                            userToUndoWhitelist = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Remove") }
+                },
+                dismissButton = { TextButton(onClick = { userToUndoWhitelist = null }) { Text("Cancel") } }
+            )
+        }
+    }
 }
