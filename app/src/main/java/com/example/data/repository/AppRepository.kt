@@ -253,6 +253,12 @@ class AppRepository(
         if (mb != null) {
             return Triple(300.0, mb, 1)
         }
+        val hrMatch = Regex("(\\d+)\\s*(?:HOUR|HR|H)").find(upper)
+        val hr = hrMatch?.groupValues?.get(1)?.toIntOrNull()
+        if (hr != null) {
+            val price = (hr * 300.0).coerceAtLeast(300.0)
+            return Triple(price, 0, 1)
+        }
         return when {
             upper.contains("30D") -> Triple(10000.0, 30720, 30)
             upper.contains("UNLIM") && upper.contains("30") -> Triple(20000.0, 0, 30)
@@ -424,10 +430,25 @@ class AppRepository(
         val sessionLogs = mutableListOf<com.example.domain.models.RouterSessionLog>()
 
         val vouchers = routerUsers.map { u ->
-            val prof = profileMap[u.profile]
+            var prof = profileMap[u.profile]
+                ?: profilesList.firstOrNull { it.name.equals(u.profile, ignoreCase = true) }
+            if (prof == null) {
+                val commentClean = u.comment.replace(" ", "").lowercase()
+                prof = profilesList.firstOrNull { p ->
+                    val pNameClean = p.name.replace(" ", "").lowercase()
+                    pNameClean.isNotBlank() && (commentClean.contains(pNameClean) || pNameClean.contains(commentClean))
+                }
+            }
+
             val isAcc = u.password.isNotBlank() && u.password != u.name
             val totalBytes = u.limitBytesTotal
-            val mb = if (totalBytes > 0) (totalBytes / (1024 * 1024)).toInt() else (prof?.dataLimitMb ?: 0)
+            val defaults = getDefaultProfilePriceAndQuota(if (prof != null) prof.name else if (u.profile != "default") u.profile else u.comment)
+            val mb = when {
+                totalBytes > 0 -> (totalBytes / (1024 * 1024)).toInt()
+                prof != null && prof.dataLimitMb > 0 -> prof.dataLimitMb
+                defaults.second > 0 -> defaults.second
+                else -> 0
+            }
             val isUsed = (u.uptime != "0s" && u.uptime.isNotBlank()) || u.bytesOut > 0
             val isPrinted = u.comment.contains("PRINTED", ignoreCase = true)
 
@@ -461,6 +482,14 @@ class AppRepository(
                 )
             }
 
+            val price = when {
+                existing != null && existing.price > 0.0 -> existing.price
+                prof != null && prof.sellingPrice > 0 -> prof.sellingPrice
+                prof != null && prof.price > 0 -> prof.price
+                defaults.first > 0 -> defaults.first
+                else -> 0.0
+            }
+
             Voucher(
                 code = u.name,
                 username = u.name,
@@ -471,9 +500,9 @@ class AppRepository(
                 downloadLimitMbps = prof?.downloadLimitMbps ?: 0,
                 uploadLimitMbps = prof?.uploadLimitMbps ?: 0,
                 dataLimitMb = mb,
-                durationMinutes = prof?.durationMinutes ?: 0,
-                validityDays = prof?.validityDays ?: 1,
-                price = if (prof != null && prof.sellingPrice > 0) prof.sellingPrice else (prof?.price ?: 0.0),
+                durationMinutes = prof?.durationMinutes ?: (defaults.third * 1440),
+                validityDays = prof?.validityDays ?: defaults.third,
+                price = price,
                 generatedAt = generatedAt,
                 isUsed = isUsed,
                 isPrinted = isPrinted,
@@ -592,6 +621,24 @@ class AppRepository(
         }
         dao.banSessionMac(macAddress, false)
         return Result.success(Unit)
+    }
+
+    suspend fun releaseVoucherFromDevice(username: String, macAddress: String): Result<Unit> {
+        return withContext(Dispatchers.IO) {
+            try {
+                if (!mikrotikClient.isConnected()) {
+                    mikrotikClient.ensureConnected()
+                }
+                val ok = mikrotikClient.releaseVoucherFromDevice(username, macAddress)
+                if (ok) {
+                    Result.success(Unit)
+                } else {
+                    Result.failure(Exception("Failed to release voucher from device on router"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
     }
 
     suspend fun kickSession(sessionId: String): Result<Unit> {

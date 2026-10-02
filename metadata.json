@@ -1,6 +1,6 @@
 {
   "name": "Hotspot Manager",
-  "description": "MikroTik router hotspot management application with Mikhmon-like features.",
+  "description": "MikroTik router hotspot management application.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

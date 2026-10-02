@@ -749,6 +749,81 @@ class MikrotikClient {
         }
     }
 
+    suspend fun releaseVoucherFromDevice(user: String, mac: String): Boolean = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withContext false
+                val cleanUser = user.trim()
+                val cleanMac = mac.trim().uppercase()
+
+                // 1. Terminate active hotspot session immediately
+                try {
+                    val active = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,user,mac-address")
+                    active.forEach {
+                        val aUser = it["user"] ?: ""
+                        val aMac = (it["mac-address"] ?: "").uppercase()
+                        if ((cleanUser.isNotBlank() && aUser.equals(cleanUser, ignoreCase = true)) ||
+                            (cleanMac.isNotBlank() && aMac.equals(cleanMac, ignoreCase = true))) {
+                            val id = it[".id"]
+                            if (!id.isNullOrBlank()) {
+                                try { conn.execute("/ip/hotspot/active/remove", ".id=$id") } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // 2. Clear MAC address binding on the Hotspot User to make voucher ownerless
+                try {
+                    if (cleanUser.isNotBlank()) {
+                        val users = conn.execute("/ip/hotspot/user/print", "=.proplist=.id,name")
+                        users.filter { (it["name"] ?: "").equals(cleanUser, ignoreCase = true) }.forEach {
+                            val uId = it[".id"]
+                            if (!uId.isNullOrBlank()) {
+                                try {
+                                    conn.execute("/ip/hotspot/user/set", ".id=$uId", "mac-address=00:00:00:00:00:00")
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // 3. Remove login cookies so original device cannot auto-reconnect with this voucher
+                try {
+                    val cookies = conn.execute("/ip/hotspot/cookie/print", "=.proplist=.id,mac-address,user")
+                    cookies.forEach {
+                        val cUser = it["user"] ?: ""
+                        val cMac = (it["mac-address"] ?: "").uppercase()
+                        if ((cleanUser.isNotBlank() && cUser.equals(cleanUser, ignoreCase = true)) ||
+                            (cleanMac.isNotBlank() && cMac.equals(cleanMac, ignoreCase = true))) {
+                            val cId = it[".id"]
+                            if (!cId.isNullOrBlank()) {
+                                try { conn.execute("/ip/hotspot/cookie/remove", ".id=$cId") } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // 4. Remove host table entry so router challenges device with captive portal again
+                try {
+                    if (cleanMac.isNotBlank()) {
+                        val hosts = conn.execute("/ip/hotspot/host/print", "=.proplist=.id,mac-address")
+                        hosts.filter { (it["mac-address"] ?: "").equals(cleanMac, ignoreCase = true) }.forEach {
+                            val hId = it[".id"]
+                            if (!hId.isNullOrBlank()) {
+                                try { conn.execute("/ip/hotspot/host/remove", ".id=$hId") } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                true
+            } catch (e: Exception) {
+                handleApiError(e)
+                false
+            }
+        }
+    }
+
     suspend fun unbanAllMacAddresses(): Boolean = withContext(Dispatchers.IO) {
         apiMutex.withLock {
             try {
@@ -849,25 +924,38 @@ class MikrotikClient {
                     }
                 } catch (_: Exception) {}
 
-                // 3. Convert dynamic DHCP lease to static if present
+                // 3. Convert dynamic DHCP lease to static if present and bind to address-list
                 try {
                     val leases = conn.execute("/ip/dhcp-server/lease/print", "=.proplist=.id,mac-address,dynamic")
-                    leases.filter { it["mac-address"].equals(cleanMac, ignoreCase = true) && it["dynamic"] == "true" }.forEach {
+                    leases.filter { it["mac-address"].equals(cleanMac, ignoreCase = true) }.forEach {
                         val lId = it[".id"]
                         if (!lId.isNullOrBlank()) {
-                            try { conn.execute("/ip/dhcp-server/lease/make-static", "=.id=$lId") } catch (_: Exception) {}
+                            if (it["dynamic"] == "true") {
+                                try { conn.execute("/ip/dhcp-server/lease/make-static", "=.id=$lId") } catch (_: Exception) {}
+                            }
+                            try { conn.execute("/ip/dhcp-server/lease/set", ".id=$lId", "address-lists=whitelisted-devices") } catch (_: Exception) {}
                         }
                     }
                 } catch (_: Exception) {}
 
-                // 4. Ensure firewall forward accept rule exists before the drop rule
+                // 4. Ensure firewall forward accept rules exist before the drop rule
                 try {
-                    val filterRules = conn.execute("/ip/firewall/filter/print", "=.proplist=.id,chain,action,src-address-list,comment")
+                    val filterRules = conn.execute("/ip/firewall/filter/print", "=.proplist=.id,chain,action,src-mac-address,src-address-list,comment")
                     val hasWhitelistAccept = filterRules.any {
                         it["chain"] == "forward" &&
                         it["action"] == "accept" &&
                         it["src-address-list"] == "whitelisted-devices"
                     }
+                    val dropRule = filterRules.firstOrNull {
+                        it["chain"] == "forward" &&
+                        it["action"] == "drop" &&
+                        (it["comment"]?.contains("unauthorized", ignoreCase = true) == true ||
+                         it["comment"]?.contains("ether1", ignoreCase = true) == true ||
+                         it["comment"]?.contains("wan", ignoreCase = true) == true ||
+                         it["comment"]?.contains("hotspot", ignoreCase = true) == true)
+                    }
+                    val dropId = dropRule?.get(".id")
+
                     if (!hasWhitelistAccept) {
                         val addRes = conn.execute(
                             "/ip/firewall/filter/add",
@@ -878,17 +966,29 @@ class MikrotikClient {
                             "comment=Accept Whitelisted Devices"
                         )
                         val newRuleId = addRes.firstOrNull()?.get("ret")
-                        val dropRule = filterRules.firstOrNull {
-                            it["chain"] == "forward" &&
-                            it["action"] == "drop" &&
-                            (it["comment"]?.contains("unauthorized", ignoreCase = true) == true ||
-                             it["comment"]?.contains("hotspot", ignoreCase = true) == true)
+                        if (newRuleId != null && !dropId.isNullOrBlank()) {
+                            try { conn.execute("/ip/firewall/filter/move", "numbers=$newRuleId", "destination=$dropId") } catch (_: Exception) {}
                         }
-                        if (newRuleId != null && dropRule != null) {
-                            val dropId = dropRule[".id"]
-                            if (!dropId.isNullOrBlank()) {
-                                conn.execute("/ip/firewall/filter/move", "numbers=$newRuleId", "destination=$dropId")
-                            }
+                    }
+
+                    // Direct MAC accept rule guarantees immediate internet access without depending on IP resolution
+                    val hasMacRule = filterRules.any {
+                        it["chain"] == "forward" &&
+                        it["action"] == "accept" &&
+                        it["src-mac-address"].equals(cleanMac, ignoreCase = true)
+                    }
+                    if (!hasMacRule) {
+                        val addMacRes = conn.execute(
+                            "/ip/firewall/filter/add",
+                            "chain=forward",
+                            "action=accept",
+                            "src-mac-address=$cleanMac",
+                            "in-interface=hotspot-bridge",
+                            "comment=Whitelisted MAC: $cleanMac"
+                        )
+                        val newMacRuleId = addMacRes.firstOrNull()?.get("ret")
+                        if (newMacRuleId != null && !dropId.isNullOrBlank()) {
+                            try { conn.execute("/ip/firewall/filter/move", "numbers=$newMacRuleId", "destination=$dropId") } catch (_: Exception) {}
                         }
                     }
                 } catch (_: Exception) {}
@@ -897,8 +997,9 @@ class MikrotikClient {
                 try {
                     var deviceIp = ip.trim()
                     if (deviceIp.isBlank() || deviceIp == "0.0.0.0") {
-                        val leases = conn.execute("/ip/dhcp-server/lease/print", "=.proplist=mac-address,address")
-                        deviceIp = leases.firstOrNull { it["mac-address"].equals(cleanMac, ignoreCase = true) }?.get("address") ?: ""
+                        val leases = conn.execute("/ip/dhcp-server/lease/print", "=.proplist=mac-address,address,active-address")
+                        val matchedLease = leases.firstOrNull { it["mac-address"].equals(cleanMac, ignoreCase = true) }
+                        deviceIp = matchedLease?.get("active-address") ?: matchedLease?.get("address") ?: ""
                     }
                     if (deviceIp.isBlank()) {
                         val arps = conn.execute("/ip/arp/print", "=.proplist=mac-address,address")
@@ -912,12 +1013,14 @@ class MikrotikClient {
                         val addrList = conn.execute("/ip/firewall/address-list/print", "=.proplist=.id,list,address")
                         val existingEntry = addrList.firstOrNull { it["list"] == "whitelisted-devices" && it["address"] == deviceIp }
                         if (existingEntry == null) {
-                            conn.execute(
-                                "/ip/firewall/address-list/add",
-                                "list=whitelisted-devices",
-                                "address=$deviceIp",
-                                "comment=$comment"
-                            )
+                            try {
+                                conn.execute(
+                                    "/ip/firewall/address-list/add",
+                                    "list=whitelisted-devices",
+                                    "address=$deviceIp",
+                                    "comment=$comment"
+                                )
+                            } catch (_: Exception) {}
                         }
                     }
                 } catch (_: Exception) {}
@@ -993,22 +1096,51 @@ class MikrotikClient {
                     }
                 }
 
-                // Remove device IP from /ip/firewall/address-list (list=whitelisted-devices)
-                try {
-                    if (removedMac.isNotBlank()) {
-                        val leases = conn.execute("/ip/dhcp-server/lease/print", "=.proplist=mac-address,address")
-                        val targetIp = leases.firstOrNull { it["mac-address"].equals(removedMac, ignoreCase = true) }?.get("address") ?: ""
-                        if (targetIp.isNotBlank()) {
-                            val addrList = conn.execute("/ip/firewall/address-list/print", "=.proplist=.id,list,address")
-                            addrList.filter { it["list"] == "whitelisted-devices" && it["address"] == targetIp }.forEach {
-                                val aId = it[".id"]
-                                if (!aId.isNullOrBlank()) {
-                                    try { conn.execute("/ip/firewall/address-list/remove", ".id=$aId") } catch (_: Exception) {}
+                if (removedMac.isNotBlank()) {
+                    // 1. Remove firewall MAC filter rule
+                    try {
+                        val filters = conn.execute("/ip/firewall/filter/print", "=.proplist=.id,chain,src-mac-address")
+                        filters.filter { it["chain"] == "forward" && it["src-mac-address"].equals(removedMac, ignoreCase = true) }.forEach {
+                            val fId = it[".id"]
+                            if (!fId.isNullOrBlank()) {
+                                try { conn.execute("/ip/firewall/filter/remove", ".id=$fId") } catch (_: Exception) {}
+                            }
+                        }
+                    } catch (_: Exception) {}
+
+                    // 2. Clear address-lists on DHCP lease and remove from address-list
+                    try {
+                        val leases = conn.execute("/ip/dhcp-server/lease/print", "=.proplist=.id,mac-address,address,active-address")
+                        val matchedLeases = leases.filter { it["mac-address"].equals(removedMac, ignoreCase = true) }
+                        matchedLeases.forEach {
+                            val lId = it[".id"]
+                            if (!lId.isNullOrBlank()) {
+                                try { conn.execute("/ip/dhcp-server/lease/set", ".id=$lId", "address-lists=") } catch (_: Exception) {}
+                            }
+                            val targetIp = it["active-address"] ?: it["address"] ?: ""
+                            if (targetIp.isNotBlank()) {
+                                val addrList = conn.execute("/ip/firewall/address-list/print", "=.proplist=.id,list,address")
+                                addrList.filter { a -> a["list"] == "whitelisted-devices" && a["address"] == targetIp }.forEach { a ->
+                                    val aId = a[".id"]
+                                    if (!aId.isNullOrBlank()) {
+                                        try { conn.execute("/ip/firewall/address-list/remove", ".id=$aId") } catch (_: Exception) {}
+                                    }
                                 }
                             }
                         }
-                    }
-                } catch (_: Exception) {}
+                    } catch (_: Exception) {}
+
+                    // 3. Drop host entry so RouterOS challenges device with captive portal again
+                    try {
+                        val hosts = conn.execute("/ip/hotspot/host/print", "=.proplist=.id,mac-address")
+                        hosts.filter { it["mac-address"].equals(removedMac, ignoreCase = true) }.forEach {
+                            val hId = it[".id"]
+                            if (!hId.isNullOrBlank()) {
+                                try { conn.execute("/ip/hotspot/host/remove", ".id=$hId") } catch (_: Exception) {}
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
 
                 true
             } catch (e: Exception) {

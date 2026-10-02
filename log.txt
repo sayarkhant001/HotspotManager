@@ -1,6 +1,6 @@
 [2026-09-05 13:16] Initial analysis of HotspotManager repository.
 [2026-09-05 13:20] Diagnosed RouterOS firewall dropping port 8728 from hotspot-bridge; added accept rule *3B on input chain. Verified TCP 8728 is open.
-[2026-09-05 13:25] Implemented real-time hardware monitoring, live traffic speedometers, Room session logging with date filters, active sessions kick/ban controls, user profiles sync/add, and Mikhmon voucher generator with multi-format printing (58mm, 80mm, A4).
+[2026-09-05 13:25] Implemented real-time hardware monitoring, live traffic speedometers, Room session logging with date filters, active sessions kick/ban controls, user profiles sync/add, and Hotspot voucher generator with multi-format printing (58mm, 80mm, A4).
 [2026-09-05 13:30] Configured local Android SDK build-tools 36.0.0 and platforms; compiled app-debug.apk.
 [2026-09-05 13:33] Uninstalled old incompatible signature and installed new APK on REDMI Turbo 4 Pro (7ae68fcd) via ADB. Verified live app running.
 [2026-09-05 13:45] Investigated user feedback regarding profile duplication, missing existing vouchers, and traffic accuracy.

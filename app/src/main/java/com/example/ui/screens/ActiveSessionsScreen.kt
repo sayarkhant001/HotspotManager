@@ -33,16 +33,14 @@ import com.example.utils.LanguageManager
 fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController) {
     val users by viewModel.activeUsers.collectAsStateWithLifecycle()
     val whitelisted by viewModel.whitelistedClients.collectAsStateWithLifecycle()
-    val banned by viewModel.bannedClients.collectAsStateWithLifecycle()
     val strings = LanguageManager.strings
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
-    var userToBan by remember { mutableStateOf<ActiveUser?>(null) }
+    var userToRelease by remember { mutableStateOf<ActiveUser?>(null) }
     var userToKick by remember { mutableStateOf<ActiveUser?>(null) }
     var userToWhitelist by remember { mutableStateOf<ActiveUser?>(null) }
     var clientToUndoWhitelist by remember { mutableStateOf<IpBinding?>(null) }
-    var clientToUnban by remember { mutableStateOf<IpBinding?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.fetchIpBindings()
@@ -65,15 +63,6 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
     val filteredWhitelisted = remember(whitelisted, searchQuery) {
         if (searchQuery.isBlank()) whitelisted
         else whitelisted.filter {
-            it.comment.contains(searchQuery, ignoreCase = true) ||
-            it.address.contains(searchQuery, ignoreCase = true) ||
-            it.macAddress.contains(searchQuery, ignoreCase = true)
-        }
-    }
-
-    val filteredBanned = remember(banned, searchQuery) {
-        if (searchQuery.isBlank()) banned
-        else banned.filter {
             it.comment.contains(searchQuery, ignoreCase = true) ||
             it.address.contains(searchQuery, ignoreCase = true) ||
             it.macAddress.contains(searchQuery, ignoreCase = true)
@@ -108,7 +97,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
-            // Tabs: Active, Whitelisted, Banned
+            // Tabs: Active, Whitelisted
             PrimaryTabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = Color.Transparent,
@@ -123,11 +112,6 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
                     text = { Text("${strings.whitelistedClients} (${whitelisted.size})", fontWeight = FontWeight.Bold, maxLines = 1) }
-                )
-                Tab(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    text = { Text("${strings.bannedClients} (${banned.size})", fontWeight = FontWeight.Bold, maxLines = 1) }
                 )
             }
 
@@ -213,7 +197,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                                 strings = strings,
                                 onWhitelist = { userToWhitelist = user },
                                 onKick = { userToKick = user },
-                                onBan = { userToBan = user }
+                                onReleaseMac = { userToRelease = user }
                             )
                         }
                         if (filteredUsers.isEmpty()) {
@@ -257,37 +241,6 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                                 ) {
                                     Text(
                                         text = "No whitelisted clients found.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                2 -> {
-                    // Banned Clients Tab
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(vertical = 6.dp)
-                    ) {
-                        items(filteredBanned, key = { it.id.ifBlank { it.macAddress } }) { item ->
-                            BannedUserCard(
-                                item = item,
-                                strings = strings,
-                                onUnban = { clientToUnban = item }
-                            )
-                        }
-                        if (filteredBanned.isEmpty()) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 40.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "No banned clients.",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -439,32 +392,6 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
             )
         }
 
-        // Undo Ban / Unban Dialog
-        if (clientToUnban != null) {
-            val item = clientToUnban!!
-            AlertDialog(
-                onDismissRequest = { clientToUnban = null },
-                title = { Text(strings.undoAction) },
-                text = {
-                    Text("Unban MAC \"${item.macAddress}\" and allow connecting to network again?")
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            viewModel.unbanMac(item.macAddress, item.id)
-                            clientToUnban = null
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
-                    ) {
-                        Text("Unban", color = Color.White)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { clientToUnban = null }) { Text(strings.cancel) }
-                }
-            )
-        }
-
         // Kick Confirmation Dialog
         if (userToKick != null) {
             AlertDialog(
@@ -488,27 +415,72 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
             )
         }
 
-        // Ban MAC Confirmation Dialog
-        if (userToBan != null) {
+        // Release Device from Voucher Confirmation Dialog (Ownerless Voucher)
+        if (userToRelease != null) {
+            val u = userToRelease!!
             AlertDialog(
-                onDismissRequest = { userToBan = null },
-                title = { Text(strings.banConfirmTitle) },
+                onDismissRequest = { userToRelease = null },
+                icon = {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.RemoveCircleOutline,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                },
+                title = { Text(strings.releaseVoucherTitle, fontWeight = FontWeight.Bold) },
                 text = {
-                    Text("MAC: \"${userToBan?.macAddress}\"\n\n${strings.banConfirmMsg}")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = strings.releaseVoucherMsg,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = "Voucher: ${u.user}",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "MAC: ${u.macAddress}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Text(
+                                    text = "IP: ${u.address}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
                 },
                 confirmButton = {
                     Button(
                         onClick = {
-                            userToBan?.macAddress?.let { viewModel.banMac(it) }
-                            userToBan = null
+                            viewModel.releaseVoucherFromDevice(u.user, u.macAddress)
+                            userToRelease = null
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Text(strings.banAction)
+                        Text(strings.releaseAction, color = Color.White)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { userToBan = null }) { Text(strings.cancel) }
+                    TextButton(onClick = { userToRelease = null }) { Text(strings.cancel) }
                 }
             )
         }
@@ -521,7 +493,7 @@ fun ActiveUserCard(
     strings: com.example.utils.AppStrings,
     onWhitelist: () -> Unit,
     onKick: () -> Unit,
-    onBan: () -> Unit
+    onReleaseMac: () -> Unit
 ) {
     val modelInfo = remember(user.macAddress, user.hostName, user.user) {
         DeviceModelDetector.detectApOrClient(
@@ -686,14 +658,21 @@ fun ActiveUserCard(
                             modifier = Modifier.size(18.dp)
                         )
                     }
-                    // Ban MAC button
-                    IconButton(onClick = onBan, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            Icons.Default.Block,
-                            contentDescription = strings.banMac,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    // Release Device / Remove MAC from Voucher (Red circle button)
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        IconButton(onClick = onReleaseMac, modifier = Modifier.fillMaxSize()) {
+                            Icon(
+                                Icons.Default.RemoveCircleOutline,
+                                contentDescription = strings.releaseAction,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -899,69 +878,6 @@ fun WhitelistedUserCard(
                     text = strings.undoAction,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun BannedUserCard(
-    item: IpBinding,
-    strings: com.example.utils.AppStrings,
-    onUnban: () -> Unit
-) {
-    GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.Block,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(10.dp))
-                Column {
-                    Text(
-                        text = item.comment.ifBlank { "Banned Device" },
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
-                    Text(
-                        text = "MAC: ${item.macAddress}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-            Button(
-                onClick = onUnban,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF10B981)
-                ),
-                shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = "Unban",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
                 )
             }
         }

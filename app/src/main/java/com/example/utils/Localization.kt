@@ -105,6 +105,8 @@ data class AppStrings(
     val searchVouchersHint: String,
     val filterAll: String,
     val filterUsed: String,
+    val filterUsing: String,
+    val filterExpired: String,
     val filterUnprinted: String,
     val filterPrinted: String,
     val printerSetupBtn: String,
@@ -196,7 +198,10 @@ data class AppStrings(
     val deviceRemovedFromWhitelist: String,
     val unbanSuccess: String,
     val allowedBadge: String,
-    val allowlistAction: String
+    val allowlistAction: String,
+    val releaseVoucherTitle: String,
+    val releaseVoucherMsg: String,
+    val releaseAction: String
 )
 
 val MyanmarStrings = AppStrings(
@@ -250,7 +255,7 @@ val MyanmarStrings = AppStrings(
     activeSessionsTitle = "လက်ရှိ အသုံးပြုနေသူများ",
     activeSessionsSubtitle = "ဦး အွန်လိုင်း",
     vouchersAccountsTitle = "ဘောင်ချာနှင့် အကောင့်များ",
-    vouchersAccountsSubtitle = "Mikhmon ဘောင်ချာ • ပရင့်ထုတ်ခြင်း",
+    vouchersAccountsSubtitle = "Hotspot ဘောင်ချာ • ပရင့်ထုတ်ခြင်း",
     userProfilesTitle = "အသုံးပြုသူ ပရိုဖိုင်များ",
     userProfilesSubtitle = "အမြန်နှုန်း • သက်တမ်း • ဈေးနှုန်း",
 
@@ -293,6 +298,8 @@ val MyanmarStrings = AppStrings(
     searchVouchersHint = "ကုဒ် သို့မဟုတ် ပရိုဖိုင်ဖြင့် ရှာပါ...",
     filterAll = "အားလုံး",
     filterUsed = "သုံးပြီး",
+    filterUsing = "လက်ရှိသုံးနေဆဲ",
+    filterExpired = "သက်တမ်းကုန်",
     filterUnprinted = "မထုတ်သေး",
     filterPrinted = "ထုတ်ပြီး",
     printerSetupBtn = "ပရင်တာ စနစ်",
@@ -384,7 +391,10 @@ val MyanmarStrings = AppStrings(
     deviceRemovedFromWhitelist = "Whitelist မှ အောင်မြင်စွာ ပြန်လည် ဖယ်ရှားပြီးပါပြီ!",
     unbanSuccess = "ပိတ်ပင်ထားခြင်းမှ အောင်မြင်စွာ ပြန်လည် ဖွင့်ပေးပြီးပါပြီ!",
     allowedBadge = "ခွင့်ပြုပြီး",
-    allowlistAction = "ခွင့်ပြုမည်"
+    allowlistAction = "ခွင့်ပြုမည်",
+    releaseVoucherTitle = "ဘောင်ချာမှ စက်ဖယ်ရှားမည်",
+    releaseVoucherMsg = "ဤဘောင်ချာမှ လက်ရှိစက်ချိတ်ဆက်မှုကို ဖြုတ်မည်လား?\n\nဘောင်ချာသည် မည်သည့်စက်နှင့်မျှ ချိတ်ဆက်မထားတော့ဘဲ တခြားဖုန်းတွင် ဆက်လက် ထည့်သွင်း အသုံးပြုနိုင်မည် ဖြစ်ပါသည်။",
+    releaseAction = "စက်ဖယ်ရှားမည်"
 )
 
 val EnglishStrings = AppStrings(
@@ -438,7 +448,7 @@ val EnglishStrings = AppStrings(
     activeSessionsTitle = "Active Sessions",
     activeSessionsSubtitle = "clients online • Kick / Ban MAC",
     vouchersAccountsTitle = "Vouchers & Accounts",
-    vouchersAccountsSubtitle = "Generate Mikhmon codes • 58/80mm & A4 Print",
+    vouchersAccountsSubtitle = "Generate Hotspot codes • 58/80mm & A4 Print",
     userProfilesTitle = "User Profiles",
     userProfilesSubtitle = "Bandwidth limits (Rate-limit) • Validity • Prices",
 
@@ -481,6 +491,8 @@ val EnglishStrings = AppStrings(
     searchVouchersHint = "Search vouchers by code or profile...",
     filterAll = "All",
     filterUsed = "Used",
+    filterUsing = "Using",
+    filterExpired = "Expired",
     filterUnprinted = "Unprinted",
     filterPrinted = "Printed",
     printerSetupBtn = "Printer Connect & Test Print",
@@ -572,7 +584,10 @@ val EnglishStrings = AppStrings(
     deviceRemovedFromWhitelist = "Device removed from Whitelist!",
     unbanSuccess = "Device successfully unbanned!",
     allowedBadge = "Allowed",
-    allowlistAction = "Allowlist"
+    allowlistAction = "Allowlist",
+    releaseVoucherTitle = "Release Device from Voucher",
+    releaseVoucherMsg = "Release device from this voucher?\n\nThis unbinds the voucher so it has no owner and can be inserted into another phone or re-used with remaining quota and time.",
+    releaseAction = "Release Device"
 )
 
 object LanguageManager {

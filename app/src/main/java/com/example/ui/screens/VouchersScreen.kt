@@ -95,9 +95,11 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
     var showDeleteAllUsedDialog by remember { mutableStateOf(false) }
     var showDeleteSelectedDialog by remember { mutableStateOf(false) }
 
-    val usedCount = vouchers.count { it.isUsed }
-    val unprintedCount = vouchers.count { !it.isPrinted && !it.isUsed }
-    val printedCount = vouchers.count { it.isPrinted && !it.isUsed }
+    val usingCount = vouchers.count { it.isCurrentlyUsing() }
+    val expiredCount = vouchers.count { it.isExpired() }
+    val usedCount = vouchers.count { it.isUsed || it.isExpired() }
+    val unprintedCount = vouchers.count { !it.isPrinted && !it.isUsed && !it.isExpired() }
+    val printedCount = vouchers.count { it.isPrinted && !it.isUsed && !it.isExpired() }
 
     val filteredVouchers = remember(vouchers, searchQuery, selectedProfileFilter, printFilterMode) {
         vouchers.filter { v ->
@@ -106,9 +108,11 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                 v.profileName.contains(searchQuery, ignoreCase = true)
             val matchesProfile = selectedProfileFilter == null || v.profileName == selectedProfileFilter
             val matchesPrint = when (printFilterMode) {
-                "USED" -> v.isUsed
-                "UNPRINTED" -> !v.isPrinted && !v.isUsed
-                "PRINTED" -> v.isPrinted && !v.isUsed
+                "USING" -> v.isCurrentlyUsing()
+                "EXPIRED" -> v.isExpired()
+                "USED" -> v.isUsed || v.isExpired()
+                "UNPRINTED" -> !v.isPrinted && !v.isUsed && !v.isExpired()
+                "PRINTED" -> v.isPrinted && !v.isUsed && !v.isExpired()
                 else -> true
             }
             matchesSearch && matchesProfile && matchesPrint
@@ -218,14 +222,27 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                 }
                 item {
                     FilterChip(
-                        selected = printFilterMode == "USED",
+                        selected = printFilterMode == "USING",
                         onClick = {
-                            printFilterMode = if (printFilterMode == "USED") "ALL" else "USED"
+                            printFilterMode = if (printFilterMode == "USING") "ALL" else "USING"
                         },
-                        label = { Text("${strings.filterUsed} ($usedCount)") },
+                        label = { Text("${strings.filterUsing} ($usingCount)") },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Color(0xFFFF9800).copy(alpha = 0.2f),
-                            selectedLabelColor = Color(0xFFE65100)
+                            selectedContainerColor = Color(0xFF0284C7).copy(alpha = 0.2f),
+                            selectedLabelColor = Color(0xFF0284C7)
+                        )
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = printFilterMode == "EXPIRED",
+                        onClick = {
+                            printFilterMode = if (printFilterMode == "EXPIRED") "ALL" else "EXPIRED"
+                        },
+                        label = { Text("${strings.filterExpired} ($expiredCount)") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFFDC2626).copy(alpha = 0.2f),
+                            selectedLabelColor = Color(0xFFDC2626)
                         )
                     )
                 }
@@ -288,44 +305,46 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                 }
             }
 
-            if (printFilterMode == "USED" && usedCount > 0) {
+            if ((printFilterMode == "EXPIRED" || printFilterMode == "USED") && (expiredCount > 0 || usedCount > 0)) {
+                val bannerCount = if (printFilterMode == "EXPIRED") expiredCount else usedCount
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "${strings.usedVouchersBanner} ($usedCount)",
+                            text = "${if (printFilterMode == "EXPIRED") strings.filterExpired else strings.usedVouchersBanner} ($bannerCount)",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f, fill = false),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = 1
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             Button(
                                 onClick = { showRenewAllUsedDialog = true },
+                                modifier = Modifier.weight(1f),
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
                             ) {
                                 Icon(Icons.Default.Autorenew, contentDescription = null, modifier = Modifier.size(15.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text(strings.renewAll, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                                Text(strings.renewAll, style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
                             }
                             Button(
                                 onClick = { showDeleteAllUsedDialog = true },
+                                modifier = Modifier.weight(1f),
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                             ) {
                                 Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(15.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text(strings.deleteAll, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                                Text(strings.deleteAll, style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
                             }
                         }
                     }
@@ -440,9 +459,9 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
             }
         }
 
-        // Mikhmon Bulk Generator Dialog (Efficient & Error-Free)
+        // Bulk Generator Dialog (Efficient & Error-Free)
         if (showGenerateDialog) {
-            MikhmonGenerateVouchersDialog(
+            BulkGenerateVouchersDialog(
                 profiles = profiles,
                 onDismiss = { showGenerateDialog = false },
                 onGenerate = { profile, qty, length, mode, isAccount, prefix, andPrint ->
@@ -700,11 +719,15 @@ fun VoucherItemCard(
                     Spacer(modifier = Modifier.width(4.dp))
 
                     val badgeColor = when {
+                        voucher.isExpired() -> Color(0xFFDC2626)
+                        voucher.isCurrentlyUsing() -> Color(0xFF0284C7)
                         voucher.isUsed -> Color(0xFFE65100)
                         voucher.isPrinted -> Color(0xFF2E7D32)
                         else -> MaterialTheme.colorScheme.outline
                     }
                     val badgeText = when {
+                        voucher.isExpired() -> strings.filterExpired
+                        voucher.isCurrentlyUsing() -> strings.filterUsing
                         voucher.isUsed -> strings.statusUsed
                         voucher.isPrinted -> strings.statusPrinted
                         else -> strings.statusUnprinted
@@ -798,17 +821,23 @@ fun VoucherItemCard(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = if (limitMb > 0) "Data Used: $usedMb MB / $limitMb MB" else "Data Used: $usedMb MB",
+                                    text = if (limitMb > 0) "$usedMb / $limitMb MB" else "$usedMb MB",
                                     fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFE65100)
+                                    color = Color(0xFFE65100),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                                 if (voucher.uptime.isNotBlank() && voucher.uptime != "0s") {
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = "⏱ ${voucher.uptime}",
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -861,9 +890,32 @@ fun VoucherItemCard(
     }
 }
 
+fun parseRouterOsUptimeMinutes(uptime: String): Int {
+    if (uptime.isBlank() || uptime == "0s") return 0
+    val w = Regex("(\\d+)\\s*w").find(uptime)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    val d = Regex("(\\d+)\\s*d").find(uptime)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    val h = Regex("(\\d+)\\s*h").find(uptime)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    val m = Regex("(\\d+)\\s*m").find(uptime)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    val s = Regex("(\\d+)\\s*s").find(uptime)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    return (w * 7 * 24 * 60) + (d * 24 * 60) + (h * 60) + m + (if (s > 30) 1 else 0)
+}
+
+fun Voucher.isExpired(): Boolean {
+    val totalUsedMb = (bytesIn + bytesOut) / (1024.0 * 1024.0)
+    if (dataLimitMb > 0 && totalUsedMb >= dataLimitMb) return true
+    if (durationMinutes > 0 && parseRouterOsUptimeMinutes(uptime) >= durationMinutes) return true
+    if (comment.contains("expired", ignoreCase = true)) return true
+    return false
+}
+
+fun Voucher.isCurrentlyUsing(): Boolean {
+    val hasStarted = isUsed || (uptime.isNotBlank() && uptime != "0s") || bytesOut > 0 || bytesIn > 0
+    return hasStarted && !isExpired()
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MikhmonGenerateVouchersDialog(
+fun BulkGenerateVouchersDialog(
     profiles: List<UserProfile>,
     onDismiss: () -> Unit,
     onGenerate: (UserProfile, Int, Int, String, Boolean, String, Boolean) -> Unit
@@ -951,7 +1003,7 @@ fun MikhmonGenerateVouchersDialog(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                "Mikhmon POS Engine",
+                                "Hotspot Voucher Engine",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

@@ -189,9 +189,21 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
             if (result.isSuccess) {
                 authState.value = AuthState.Success
                 startPolling()
-                syncProfiles()
-                syncVouchers()
                 fetchHotspotNetworkInfo()
+                // Sequential sync to ensure Profiles + prices are in Room DB BEFORE vouchers map them, and APs topology is auto-loaded
+                viewModelScope.launch {
+                    try {
+                        isSyncingVouchers.value = true
+                        repository.syncProfilesFromRouter()
+                        repository.syncVouchersFromRouter()
+                        val topo = repository.getNetworkTopology()
+                        networkTopology.value = topo
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    } finally {
+                        isSyncingVouchers.value = false
+                    }
+                }
             } else {
                 val errorMsg = result.exceptionOrNull()?.message ?: "Failed to connect. Check IP, user, password or network."
                 authState.value = AuthState.Error(errorMsg)
@@ -251,6 +263,7 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     }
 
     private var isFetchingRouterData = false
+    private var pollCycleCount = 0
 
     fun checkForAppUpdate(manual: Boolean = false) {
         viewModelScope.launch(exceptionHandler) {
@@ -339,6 +352,15 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                     val bindings = repository.getIpBindings()
                     ipBindings.value = bindings
                 } catch (_: Exception) {}
+
+                // Periodic AP & Topology auto-sync without needing to open the tab (every 3 cycles ~36s or initial load)
+                pollCycleCount++
+                if (pollCycleCount % 3 == 0 || networkTopology.value.accessPoints.isEmpty()) {
+                    try {
+                        val topo = repository.getNetworkTopology()
+                        networkTopology.value = topo
+                    } catch (_: Exception) {}
+                }
             } catch (t: Throwable) {
                 t.printStackTrace()
             } finally {
@@ -371,6 +393,7 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     fun syncProfiles() {
         viewModelScope.launch {
             repository.syncProfilesFromRouter()
+            repository.syncVouchersFromRouter()
             userMessage.value = "✓ Profiles synchronized with router successfully!"
         }
     }
@@ -639,6 +662,19 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 userMessage.value = "✗ Failed to block MAC on router"
             }
             fetchRouterData()
+        }
+    }
+
+    fun releaseVoucherFromDevice(username: String, macAddress: String) {
+        viewModelScope.launch {
+            val res = repository.releaseVoucherFromDevice(username, macAddress)
+            if (res.isSuccess) {
+                userMessage.value = "✓ Released device from voucher $username! Voucher is now unassigned."
+                fetchRouterData()
+                syncVouchers()
+            } else {
+                userMessage.value = "✗ Failed to release device from voucher: ${res.exceptionOrNull()?.message}"
+            }
         }
     }
 
