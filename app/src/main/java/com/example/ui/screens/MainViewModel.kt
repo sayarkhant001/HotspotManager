@@ -219,7 +219,7 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 if (repository.mikrotikClient.isConnected() || repository.mikrotikClient.ensureConnected()) {
                     fetchRouterData()
                 }
-                delay(6000) // Poll every 6 seconds to keep router CPU low and socket clear for immediate commands
+                delay(12000) // Poll every 12 seconds to keep router CPU low and socket clear for immediate commands
             }
         }
     }
@@ -388,7 +388,6 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
             val res = repository.deleteProfile(profileName)
             if (res.isSuccess) {
                 userMessage.value = "✓ Profile '$profileName' deleted from router!"
-                repository.syncProfilesFromRouter()
             } else {
                 userMessage.value = "✗ Router Error: ${res.exceptionOrNull()?.message ?: "Failed to delete profile"}"
             }
@@ -400,8 +399,6 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
             val res = repository.updateProfile(oldName, profile)
             if (res.isSuccess) {
                 userMessage.value = "✓ Profile '${profile.name}' updated on router!"
-                repository.syncProfilesFromRouter()
-                fetchRouterData()
             } else {
                 userMessage.value = "✗ Router Error: ${res.exceptionOrNull()?.message ?: "Failed to update profile"}"
             }
@@ -509,7 +506,6 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
             )
             if (res.isSuccess) {
                 userMessage.value = "✓ Profile '$name' created on router successfully!"
-                repository.syncProfilesFromRouter()
             } else {
                 userMessage.value = "✗ Router Error: ${res.exceptionOrNull()?.message ?: "Failed to create profile"}"
             }

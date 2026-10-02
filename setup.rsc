@@ -573,62 +573,14 @@
   };
 }
 
-# Run expiration check on login to clean up any expired sessions
-:do {
-  /system script run voucher-expire-check
-} on-error={};
 }
 :put "  Script 'voucher-activate' registered."
 
-# Script 2: voucher-expire-check
-# Periodic garbage collection and fail-safe enforcer:
-# 1. Purges orphaned schedulers whose users have already been deleted.
-# 2. Immediately kicks any active session whose user voucher is no longer present.
+# Script 2: voucher-expire-check (removed to preserve low CPU usage)
 :do {
   /system script remove [find name="voucher-expire-check"]
-} on-error={}
-
-/system script add name="voucher-expire-check" comment="Garbage collector and instant cutoff enforcer for expired vouchers" source={
-  # 1. Clean up orphaned continuous timer schedulers
-  :foreach s in=[/system scheduler find comment~"Voucher continuous timer"] do={
-    :local sName [/system scheduler get $s name];
-    :if ([:len [/ip hotspot user find name=$sName]] = 0) do={
-      :do {
-        /ip hotspot active remove [find user=$sName];
-        /ip hotspot cookie remove [find user=$sName];
-        /system scheduler remove $s;
-      } on-error={};
-    }
-  }
-
-  # 2. Forcibly kick any active session if the voucher user entry was removed
-  :foreach a in=[/ip hotspot active find] do={
-    :local aUser [/ip hotspot active get $a user];
-    :if ($aUser != "admin" and $aUser != "default-trial") do={
-      :if ([:len [/ip hotspot user find name=$aUser]] = 0) do={
-        :do {
-          /ip hotspot active remove $a;
-          /ip hotspot cookie remove [find user=$aUser];
-        } on-error={};
-      }
-    }
-  }
-}
-:put "  Script 'voucher-expire-check' registered."
-
-# Scheduler: hs-continuous-expire-monitor (runs every 1 minute)
-:do {
   /system scheduler remove [find name="hs-continuous-expire-monitor"]
 } on-error={}
-
-:do {
-  /system scheduler add name="hs-continuous-expire-monitor" interval=1m start-time=startup \
-    on-event="/system script run voucher-expire-check" comment="Hotspot continuous expiration monitor (every 1m)"
-  :put "  Scheduler 'hs-continuous-expire-monitor' enabled (1m interval)."
-} on-error={
-  :put "  Notice: Scheduler restricted by RouterOS device-mode (skipping background scheduler)."
-  :put "          (To enable: run '/system/device-mode/update scheduler=yes' and confirm on router)."
-}
 
 # ── STEP 8: RouterOS API Service & App User Accounts ──────────
 :put "=== Step 8: API Service & User Accounts for HotspotManager ==="

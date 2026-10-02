@@ -99,12 +99,10 @@ class RawRouterOSConnection {
         val out = outStream ?: throw IllegalStateException("Not connected to router")
         val inS = inStream ?: throw IllegalStateException("Not connected to router")
 
-        val tag = (++tagCounter).toString()
         writeWord(out, command)
-        writeWord(out, ".tag=$tag")
         for (p in params) {
             val trimmed = p.trim()
-            if (trimmed.startsWith("=")) {
+            if (trimmed.startsWith("=") || trimmed.startsWith("?") || trimmed.startsWith(".")) {
                 writeWord(out, trimmed)
             } else {
                 writeWord(out, "=$trimmed")
@@ -134,6 +132,18 @@ class RawRouterOSConnection {
                     while (true) {
                         val rest = readWord(inS)
                         if (rest.isNullOrEmpty()) break
+                        if (rest.startsWith("=")) {
+                            val eq = rest.indexOf('=', 1)
+                            if (eq > 0) {
+                                val k = rest.substring(1, eq)
+                                val v = rest.substring(eq + 1)
+                                if (current == null) current = mutableMapOf()
+                                current[k] = v
+                            }
+                        }
+                    }
+                    if (current != null) {
+                        results.add(current)
                     }
                     return results
                 }
@@ -143,14 +153,16 @@ class RawRouterOSConnection {
                 word == "!trap" -> {
                     var errorMsg = "Router error: !trap"
                     while (true) {
-                        val rest = readWord(inS) ?: throw IllegalStateException("Router closed connection during trap")
+                        val rest = readWord(inS) ?: break
                         if (rest.isEmpty()) break
                         if (rest.startsWith("=message=")) {
                             errorMsg = rest.substring(9)
                         }
                     }
-                    // Drain the terminating !done sentence for this command so socket stream stays in sync
+                    // For trap sentences, RouterOS sends a following !done sentence
                     try {
+                        val oldTimeout = socket?.soTimeout ?: 15000
+                        socket?.soTimeout = 800 // short timeout for draining !done
                         while (true) {
                             val nextWord = readWord(inS) ?: break
                             if (nextWord == "!done") {
@@ -162,9 +174,9 @@ class RawRouterOSConnection {
                             }
                             if (nextWord.isEmpty()) continue
                         }
-                    } catch (drainErr: Exception) {
-                        close()
-                        throw drainErr
+                        socket?.soTimeout = oldTimeout
+                    } catch (_: Exception) {
+                        // In case RouterOS closed without !done or already drained
                     }
                     throw RouterApiTrapException(errorMsg)
                 }
@@ -532,7 +544,7 @@ class MikrotikClient {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext emptyList()
                 val now = System.currentTimeMillis()
-                if (now - lastLeaseTime > 60_000L || cachedLeasesMap.isEmpty()) {
+                if (now - lastLeaseTime > 300_000L && cachedLeasesMap.isNotEmpty()) {
                     try {
                         val leases = conn.execute("/ip/dhcp-server/lease/print", "=.proplist=address,mac-address,host-name")
                         val newMap = mutableMapOf<String, String>()
@@ -1166,7 +1178,10 @@ class MikrotikClient {
 
                 // 1. Check DHCP leases for Ruijie / Reyee and TP-Link APs & Bridges
                 try {
-                    val leases = conn.execute("/ip/dhcp-server/lease/print")
+                    val leases = conn.execute(
+                        "/ip/dhcp-server/lease/print",
+                        "=.proplist=host-name,mac-address,address,status,comment"
+                    )
                     leases.forEach { l ->
                         val host = l["host-name"] ?: ""
                         val mac = (l["mac-address"] ?: "").uppercase()
@@ -1208,7 +1223,10 @@ class MikrotikClient {
 
                 // 2. Check CDP / LLDP / MNDP neighbors
                 try {
-                    val neighbors = conn.execute("/ip/neighbor/print")
+                    val neighbors = conn.execute(
+                        "/ip/neighbor/print",
+                        "=.proplist=identity,platform,mac-address,address,interface"
+                    )
                     neighbors.forEach { n ->
                         val identity = n["identity"] ?: ""
                         val platform = n["platform"] ?: ""
@@ -1462,15 +1480,13 @@ class MikrotikClient {
                 if (profId.isNullOrBlank()) {
                     return@withContext true
                 }
-                // First reassign any users using this profile to default so RouterOS does not reject with 'profile is in use by user'
+                // First reassign any users using this profile to default in bulk so RouterOS does not reject with 'profile is in use'
                 try {
-                    val usersWithProfile = conn.execute("/ip/hotspot/user/print", "=.proplist=.id", "?profile=$profileName")
-                    for (u in usersWithProfile) {
-                        val uid = u[".id"]
-                        if (!uid.isNullOrBlank()) {
-                            try { conn.execute("/ip/hotspot/user/set", ".id=$uid", "profile=default") } catch (_: Exception) {}
-                        }
-                    }
+                    val scriptName = "tmp_del_${System.currentTimeMillis() % 10000}"
+                    val scriptSrc = "/ip hotspot user set [find profile=\"$profileName\"] profile=\"default\""
+                    conn.execute("/system/script/add", "name=$scriptName", "source=$scriptSrc")
+                    conn.execute("/system/script/run", "number=$scriptName")
+                    conn.execute("/system/script/remove", "numbers=$scriptName")
                 } catch (_: Exception) {}
 
                 conn.execute("/ip/hotspot/user/profile/remove", ".id=$profId")
@@ -1566,22 +1582,6 @@ class MikrotikClient {
                             }
                         }
 
-                        if (cleanRate.isNotBlank()) {
-                            val queues = conn.execute("/queue/simple/print", "=.proplist=.id,name,target")
-                            for (active in activeRes) {
-                                val u = active["user"] ?: ""
-                                val ip = active["address"] ?: ""
-                                val q = queues.firstOrNull { 
-                                    (u.isNotBlank() && it["name"]?.contains(u) == true) || 
-                                    (ip.isNotBlank() && it["target"]?.contains(ip) == true) 
-                                }
-                                q?.get(".id")?.let { qId ->
-                                    try {
-                                        conn.execute("/queue/simple/set", ".id=$qId", "max-limit=$cleanRate")
-                                    } catch (_: Exception) {}
-                                }
-                            }
-                        }
                     }
                 } catch (_: Exception) {}
 
