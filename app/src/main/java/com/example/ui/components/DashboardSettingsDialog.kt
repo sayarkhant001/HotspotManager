@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
@@ -60,6 +61,9 @@ fun DashboardSettingsDialog(
     val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsState()
     val isDownloadingUpdate by viewModel.isDownloadingUpdate.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
+    val isExecutingScript by viewModel.isExecutingScript.collectAsState()
+    val scriptExecutionOutput by viewModel.scriptExecutionOutput.collectAsState()
+    var customRscInput by remember { mutableStateOf("") }
 
     // -------------------------------------------------------------
     // PRINTER STATE
@@ -232,6 +236,17 @@ fun DashboardSettingsDialog(
                                 Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(15.dp))
                                 Spacer(Modifier.width(5.dp))
                                 Text("Advance Mode", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+                        }
+                    )
+                    Tab(
+                        selected = selectedTab == 4,
+                        onClick = { selectedTab = 4 },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Spacer(Modifier.width(5.dp))
+                                Text(strings.routerScriptsTab, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
                             }
                         }
                     )
@@ -1129,6 +1144,64 @@ fun DashboardSettingsDialog(
                                                 Text("Download & Install Update", fontWeight = FontWeight.Bold)
                                             }
                                         }
+
+                                        if (info.hasRouterScript) {
+                                            Spacer(Modifier.height(10.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = Color(0xFFE3F2FD),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2196F3)),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Column(modifier = Modifier.padding(12.dp)) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Icon(Icons.Default.Terminal, contentDescription = null, tint = Color(0xFF1565C0), modifier = Modifier.size(20.dp))
+                                                        Spacer(Modifier.width(8.dp))
+                                                        Text(strings.routerUpdateAvailable, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = Color(0xFF0D47A1))
+                                                    }
+                                                    Spacer(Modifier.height(6.dp))
+                                                    Text(
+                                                        if (!info.routerScriptUrl.isNullOrBlank()) "Remote script: ${info.routerScriptUrl}" else "Embedded RouterOS update script included in release",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = Color(0xFF1E88E5)
+                                                    )
+                                                    Spacer(Modifier.height(8.dp))
+                                                    Button(
+                                                        onClick = { viewModel.runUpdateRouterScript() },
+                                                        enabled = !isExecutingScript,
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) {
+                                                        if (isExecutingScript) {
+                                                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
+                                                            Spacer(Modifier.width(8.dp))
+                                                            Text("Executing on Router...", color = Color.White)
+                                                        } else {
+                                                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                            Spacer(Modifier.width(6.dp))
+                                                            Text(strings.runUpdateScriptBtn, fontWeight = FontWeight.Bold, color = Color.White)
+                                                        }
+                                                    }
+                                                    if (!scriptExecutionOutput.isNullOrBlank()) {
+                                                        Spacer(Modifier.height(8.dp))
+                                                        Surface(
+                                                            shape = RoundedCornerShape(6.dp),
+                                                            color = Color.Black.copy(alpha = 0.85f),
+                                                            modifier = Modifier.fillMaxWidth().heightIn(max = 120.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = scriptExecutionOutput ?: "",
+                                                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                                fontSize = 10.sp,
+                                                                color = Color(0xFF69F0AE),
+                                                                modifier = Modifier.padding(8.dp).verticalScroll(rememberScrollState())
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             } else {
@@ -1220,6 +1293,287 @@ fun DashboardSettingsDialog(
                                     Icon(Icons.Default.Upgrade, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(strings.switchRouterAdvanceMode, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    } else if (selectedTab == 4) {
+                        // ============================================================
+                        // TAB 4: RSC & COMMANDS RUNNER (GITHUB SCRIPT INTEGRATION)
+                        // ============================================================
+                        val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+                        // 1. GitHub Master Provisioning Scripts Card
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.CloudSync,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            "GitHub Master Setup Scripts",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            "Official repository provisioning scripts",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    "Fetch and run master .rsc scripts directly from the official GitHub repository. These configure Hotspot, Walled Garden for GitHub, API permissions, and provisioning.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                // Button: setup.rsc
+                                Button(
+                                    onClick = {
+                                        viewModel.fetchAndRunRemoteScript("https://raw.githubusercontent.com/sayarkhant001/HotspotManager/main/setup.rsc")
+                                    },
+                                    enabled = !isExecutingScript,
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    if (isExecutingScript) {
+                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Executing Script...", fontWeight = FontWeight.Bold)
+                                    } else {
+                                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(strings.runGitHubSetup, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Button: universal captive portal setup.rsc
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.fetchAndRunRemoteScript("https://raw.githubusercontent.com/sayarkhant001/HotspotManager/main/mkcaptivePortal/setup.rsc")
+                                    },
+                                    enabled = !isExecutingScript,
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Hub, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Run Universal mkcaptivePortal setup.rsc", fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+
+                        // 2. Custom Command / RSC Script Editor
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Terminal,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.secondary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            "Custom Commands & RSC Script",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            "Direct RouterOS CLI & RSC Execution",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.secondary
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Quick Template Chips
+                                Text("Quick Command Templates:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    SuggestionChip(
+                                        onClick = {
+                                            customRscInput = "/ip hotspot walled-garden add dst-host=\"*github*\" comment=\"Allow GitHub\"\n/ip hotspot walled-garden add dst-host=\"*raw.githubusercontent.com*\" comment=\"Allow GitHub Raw\""
+                                        },
+                                        label = { Text("Allow GitHub", fontSize = 11.sp) }
+                                    )
+                                    SuggestionChip(
+                                        onClick = { customRscInput = "/ip dns cache flush" },
+                                        label = { Text("Flush DNS", fontSize = 11.sp) }
+                                    )
+                                    SuggestionChip(
+                                        onClick = { customRscInput = "/system device-mode update mode=enterprise" },
+                                        label = { Text("Advance Mode", fontSize = 11.sp) }
+                                    )
+                                    SuggestionChip(
+                                        onClick = { customRscInput = "/ip hotspot active print\n/system resource print" },
+                                        label = { Text("Print Status", fontSize = 11.sp) }
+                                    )
+                                    SuggestionChip(
+                                        onClick = { customRscInput = "/ping address=8.8.8.8 count=4" },
+                                        label = { Text("Ping 8.8.8.8", fontSize = 11.sp) }
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                OutlinedTextField(
+                                    value = customRscInput,
+                                    onValueChange = { customRscInput = it },
+                                    placeholder = {
+                                        Text(
+                                            strings.customCommandsHint,
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                            )
+                                        )
+                                    },
+                                    textStyle = MaterialTheme.typography.bodySmall.copy(
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 100.dp, max = 220.dp),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { customRscInput = "" },
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Clear")
+                                    }
+                                    Button(
+                                        onClick = {
+                                            if (customRscInput.isNotBlank()) {
+                                                viewModel.executeRscScript(customRscInput)
+                                            }
+                                        },
+                                        enabled = !isExecutingScript && customRscInput.isNotBlank(),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(2f)
+                                    ) {
+                                        if (isExecutingScript) {
+                                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Executing...", fontWeight = FontWeight.Bold)
+                                        } else {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(strings.runScriptOnRouter, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 3. Live Dark Monospace Terminal Console Card
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0xFF1E1E1E),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(10.dp)
+                                                .background(
+                                                    if (isExecutingScript) Color(0xFFFFB300) else Color(0xFF00E676),
+                                                    CircleShape
+                                                )
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            strings.routerScriptOutput,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.titleSmall
+                                        )
+                                    }
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        IconButton(
+                                            onClick = {
+                                                val log = scriptExecutionOutput
+                                                if (!log.isNullOrBlank()) {
+                                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(log))
+                                                    Toast.makeText(context, "Log copied to clipboard", Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            modifier = Modifier.size(30.dp)
+                                        ) {
+                                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                                        }
+                                        IconButton(
+                                            onClick = { viewModel.clearScriptExecutionOutput() },
+                                            modifier = Modifier.size(30.dp)
+                                        ) {
+                                            Icon(Icons.Default.DeleteSweep, contentDescription = "Clear", tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFF121212),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 120.dp, max = 260.dp)
+                                ) {
+                                    val textToShow = if (scriptExecutionOutput.isNullOrBlank()) {
+                                        "> Ready for RouterOS commands...\n> Tap 'Fetch & Run' or enter custom commands above."
+                                    } else {
+                                        scriptExecutionOutput ?: ""
+                                    }
+                                    Text(
+                                        text = textToShow,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                        fontSize = 11.sp,
+                                        color = if (isExecutingScript) Color(0xFFFFD54F) else Color(0xFF69F0AE),
+                                        modifier = Modifier
+                                            .padding(10.dp)
+                                            .verticalScroll(rememberScrollState())
+                                    )
                                 }
                             }
                         }

@@ -584,13 +584,13 @@
 
 # ── STEP 8: RouterOS API Service & App User Accounts ──────────
 :put "=== Step 8: API Service & User Accounts for HotspotManager ==="
-# Enable RouterOS API on standard port 8728 and 8729 without IP restriction
+# Enable RouterOS API on standard port 8728 and 8729 with 30 max sessions
 :do {
-  /ip service set [find name="api"] disabled=no port=8728
+  /ip service set [find name="api"] disabled=no port=8728 max-sessions=30
   /ip service enable [find name="api"]
 } on-error={}
 :do {
-  /ip service set [find name="api-ssl"] disabled=no port=8729
+  /ip service set [find name="api-ssl"] disabled=no port=8729 max-sessions=30
   /ip service enable [find name="api-ssl"]
 } on-error={}
 :do {
@@ -601,7 +601,7 @@
   /ip service set [find name="www"] disabled=no port=8080
   /ip service enable [find name="www"]
 } on-error={}
-:put "  RouterOS API service enabled on port 8728 (WebFig moved to port 8080 to prevent Hotspot collision)."
+:put "  RouterOS API service enabled on port 8728 (Max sessions: 30, WebFig moved to port 8080)."
 
 # Set admin password to Khant1234@ (default in HotspotManager app)
 :do {
@@ -611,12 +611,12 @@
   :put "  Could not update admin password (may require current password)."
 }
 
-# Create full management group for mobile app
+# Create full management group for mobile app with complete policies
 :do {
-  /user group add name=flutter_api_group policy=local,telnet,ssh,ftp,reboot,read,write,policy,test,winbox,password,web,sniff,sensitive,api,romon
+  /user group add name=flutter_api_group policy=local,telnet,ssh,ftp,reboot,read,write,policy,test,winbox,password,web,sniff,sensitive,api,romon,rest-api
 } on-error={
   :do {
-    /user group set [find name=flutter_api_group] policy=local,telnet,ssh,ftp,reboot,read,write,policy,test,winbox,password,web,sniff,sensitive,api,romon
+    /user group set [find name=flutter_api_group] policy=local,telnet,ssh,ftp,reboot,read,write,policy,test,winbox,password,web,sniff,sensitive,api,romon,rest-api
   } on-error={}
 }
 
@@ -628,10 +628,22 @@
     /user set [find name=flutter_app] password=$apiPass group=flutter_api_group
   } on-error={}
 }
-:put "  User flutter_app configured."
+:put "  User flutter_app configured with full script & API execution rights."
 
-# ── STEP 9: Walled Garden for HotspotManager API & DNS ────────
-:put "=== Step 9: Hotspot Walled Garden for API & DNS ==="
+# Built-in Remote Script & GitHub RSC Update Runner
+:do {
+  /system script add name="github-rsc-fetch-run" dont-require-permissions=yes policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon \
+    source=":global remoteRscUrl; :if ([:len \$remoteRscUrl] > 0) do={ :log info (\"HotspotManager: Fetching RSC from \" . \$remoteRscUrl); /tool fetch url=\$remoteRscUrl dst-path=\"remote_update.rsc\" mode=https check-certificate=no; :delay 2s; /import file-name=\"remote_update.rsc\"; :delay 1s; /file remove [find name=\"remote_update.rsc\"]; :log info \"HotspotManager: Remote RSC script executed successfully!\"; }" \
+    comment="Remote GitHub RSC runner"
+} on-error={
+  :do {
+    /system script set [find name="github-rsc-fetch-run"] dont-require-permissions=yes policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon \
+      source=":global remoteRscUrl; :if ([:len \$remoteRscUrl] > 0) do={ :log info (\"HotspotManager: Fetching RSC from \" . \$remoteRscUrl); /tool fetch url=\$remoteRscUrl dst-path=\"remote_update.rsc\" mode=https check-certificate=no; :delay 2s; /import file-name=\"remote_update.rsc\"; :delay 1s; /file remove [find name=\"remote_update.rsc\"]; :log info \"HotspotManager: Remote RSC script executed successfully!\"; }"
+  } on-error={}
+}
+
+# ── STEP 9: Walled Garden for HotspotManager API, DNS & GitHub ────────
+:put "=== Step 9: Hotspot Walled Garden for API, DNS & GitHub ==="
 # Remove any conflicting walled-garden IP rules
 :foreach w in=[/ip hotspot walled-garden ip find] do={
   :do { /ip hotspot walled-garden ip remove $w } on-error={}
@@ -650,12 +662,19 @@
   /ip hotspot walled-garden ip add dst-address=$gwIp dst-port=8729 protocol=tcp action=accept comment="HotspotManager API-SSL"
 } on-error={}
 
+# 3. Allow GitHub domains for OTA app updates and remote .rsc scripts without voucher
+:do { /ip hotspot walled-garden add dst-host="api.github.com" action=allow comment="GitHub API for Updates" } on-error={}
+:do { /ip hotspot walled-garden add dst-host="raw.githubusercontent.com" action=allow comment="GitHub Raw for RSC Scripts" } on-error={}
+:do { /ip hotspot walled-garden add dst-host="objects.githubusercontent.com" action=allow comment="GitHub Assets" } on-error={}
+:do { /ip hotspot walled-garden add dst-host="*.github.com" action=allow comment="GitHub Domain Wildcard" } on-error={}
+:do { /ip hotspot walled-garden add dst-host="github.com" action=allow comment="GitHub Main Site" } on-error={}
+
 :if ([:len $dnsName] > 0) do={
   :do {
     /ip hotspot walled-garden add dst-host=$dnsName action=allow comment="Hotspot Portal DNS"
   } on-error={}
 }
-:put "  Walled Garden API & DNS access configured."
+:put "  Walled Garden API, DNS & GitHub access configured."
 
 # ── STEP 10: MAC Bypass for Admin Devices ─────────────────────
 :put "=== Step 10: Admin MAC Bypass ==="

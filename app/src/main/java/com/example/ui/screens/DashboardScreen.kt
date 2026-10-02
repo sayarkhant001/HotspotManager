@@ -51,6 +51,8 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsStateWithLifecycle()
     val isDownloadingUpdate by viewModel.isDownloadingUpdate.collectAsStateWithLifecycle()
     val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
+    val isExecutingScript by viewModel.isExecutingScript.collectAsStateWithLifecycle()
+    val scriptExecutionOutput by viewModel.scriptExecutionOutput.collectAsStateWithLifecycle()
     val showUpdateDialog by viewModel.showUpdateDialog.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -596,6 +598,75 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                 modifier = Modifier.padding(12.dp),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+
+                        if (update.hasRouterScript) {
+                            Spacer(Modifier.height(12.dp))
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.Terminal,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            strings.routerUpdateAvailable,
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        if (!update.routerScriptUrl.isNullOrBlank()) "Remote script: ${update.routerScriptUrl}"
+                                        else "Embedded RouterOS update script included in release",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    Button(
+                                        onClick = { viewModel.runUpdateRouterScript() },
+                                        enabled = !isExecutingScript,
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        if (isExecutingScript) {
+                                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("Executing on Router...", style = MaterialTheme.typography.labelMedium)
+                                        } else {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(strings.runUpdateScriptBtn, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                    if (!scriptExecutionOutput.isNullOrBlank()) {
+                                        Spacer(Modifier.height(8.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = Color.Black.copy(alpha = 0.85f),
+                                            modifier = Modifier.fillMaxWidth().heightIn(max = 120.dp)
+                                        ) {
+                                            Text(
+                                                text = scriptExecutionOutput ?: "",
+                                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                fontSize = 10.sp,
+                                                color = Color(0xFF69F0AE),
+                                                modifier = Modifier.padding(8.dp).verticalScroll(rememberScrollState())
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         if (isDownloadingUpdate) {

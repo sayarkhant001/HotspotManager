@@ -201,7 +201,16 @@ data class AppStrings(
     val allowlistAction: String,
     val releaseVoucherTitle: String,
     val releaseVoucherMsg: String,
-    val releaseAction: String
+    val releaseAction: String,
+    val routerScriptsTab: String,
+    val runGitHubSetup: String,
+    val runScriptOnRouter: String,
+    val routerScriptOutput: String,
+    val customCommandsHint: String,
+    val routerScriptSuccess: String,
+    val routerScriptFailed: String,
+    val routerUpdateAvailable: String,
+    val runUpdateScriptBtn: String
 )
 
 val MyanmarStrings = AppStrings(
@@ -394,7 +403,16 @@ val MyanmarStrings = AppStrings(
     allowlistAction = "ခွင့်ပြုမည်",
     releaseVoucherTitle = "ဘောင်ချာမှ စက်ဖယ်ရှားမည်",
     releaseVoucherMsg = "ဤဘောင်ချာမှ လက်ရှိစက်ချိတ်ဆက်မှုကို ဖြုတ်မည်လား?\n\nဘောင်ချာသည် မည်သည့်စက်နှင့်မျှ ချိတ်ဆက်မထားတော့ဘဲ တခြားဖုန်းတွင် ဆက်လက် ထည့်သွင်း အသုံးပြုနိုင်မည် ဖြစ်ပါသည်။",
-    releaseAction = "စက်ဖယ်ရှားမည်"
+    releaseAction = "စက်ဖယ်ရှားမည်",
+    routerScriptsTab = "Router ညွှန်ကြားချက်များ",
+    runGitHubSetup = "setup.rsc ကို GitHub မှ တိုက်ရိုက် run မည်",
+    runScriptOnRouter = "Router တွင် Run မည်",
+    routerScriptOutput = "လုပ်ဆောင်မှု မှတ်တမ်း",
+    customCommandsHint = "RouterOS command များ သို့မဟုတ် .rsc ကုဒ်များ ရိုက်ထည့်ပါ...",
+    routerScriptSuccess = "Router တွင် အောင်မြင်စွာ Run ပြီးပါပြီ!",
+    routerScriptFailed = "Router တွင် Run ရာတွင် အမှားဖြစ်ပေါ်ပါသည်",
+    routerUpdateAvailable = "Update တွင် Router ညွှန်ကြားချက်များ ပါဝင်ပါသည်",
+    runUpdateScriptBtn = "Router Script ကို Run မည်"
 )
 
 val EnglishStrings = AppStrings(
@@ -587,7 +605,16 @@ val EnglishStrings = AppStrings(
     allowlistAction = "Allowlist",
     releaseVoucherTitle = "Release Device from Voucher",
     releaseVoucherMsg = "Release device from this voucher?\n\nThis unbinds the voucher so it has no owner and can be inserted into another phone or re-used with remaining quota and time.",
-    releaseAction = "Release Device"
+    releaseAction = "Release Device",
+    routerScriptsTab = "RSC & Commands",
+    runGitHubSetup = "Fetch & Run setup.rsc from GitHub",
+    runScriptOnRouter = "Execute on Router",
+    routerScriptOutput = "Execution Output",
+    customCommandsHint = "Enter RouterOS commands or paste .rsc script here...",
+    routerScriptSuccess = "Script executed successfully on router!",
+    routerScriptFailed = "Failed to execute script on router",
+    routerUpdateAvailable = "Router Script Available in Update",
+    runUpdateScriptBtn = "Run Router Script Now"
 )
 
 object LanguageManager {

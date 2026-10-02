@@ -60,6 +60,13 @@ data class RouterHotspotUser(
     val disabled: Boolean
 )
 
+data class ScriptExecutionResult(
+    val success: Boolean,
+    val outputLog: String,
+    val executionTimeMs: Long,
+    val commandsCount: Int = 0
+)
+
 /**
  * Pure, high-performance RouterOS API connection.
  * Fully compatible with RouterOS v6 and RouterOS v7 (!empty word support).
@@ -2166,6 +2173,155 @@ class MikrotikClient {
                 handleApiError(e)
                 false
             }
+        }
+    }
+
+    /**
+     * Executes any RouterOS .rsc script content, multi-line script, or CLI commands.
+     * Supports:
+     * 1. Multi-line RouterOS scripts containing :if, :foreach, :global, /import, etc. via /system/script runner.
+     * 2. Direct .rsc file upload and /import file-name=... for large batch configurations.
+     * 3. Line-by-line CLI command execution with detailed output and error tracking.
+     */
+    suspend fun executeRscScript(scriptContent: String): ScriptExecutionResult = withContext(Dispatchers.IO) {
+        val startTime = System.currentTimeMillis()
+        val logBuilder = StringBuilder()
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal()
+                    ?: return@withContext ScriptExecutionResult(false, "Router is not connected.", 0)
+
+                val cleanScript = scriptContent.trim()
+                if (cleanScript.isBlank()) {
+                    return@withContext ScriptExecutionResult(false, "Script is empty.", 0)
+                }
+
+                val lineCount = cleanScript.lines().size
+                logBuilder.appendLine("➜ Initializing execution of $lineCount lines on router...")
+
+                // Strategy 1: /system/script runner (fastest & native syntax support)
+                val scriptName = "app_exec_${System.currentTimeMillis() % 100000}"
+                var scriptSuccess = false
+                try {
+                    val addRes = conn.execute(
+                        "/system/script/add",
+                        "name=$scriptName",
+                        "source=$cleanScript",
+                        "policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon",
+                        "dont-require-permissions=yes"
+                    )
+                    val scriptId = addRes.firstOrNull()?.get("ret") ?: scriptName
+                    logBuilder.appendLine("✓ Script registered on router ($scriptName)")
+
+                    logBuilder.appendLine("➜ Running script...")
+                    conn.execute("/system/script/run", "=.id=$scriptId")
+                    logBuilder.appendLine("✓ Script executed successfully!")
+                    scriptSuccess = true
+
+                    try {
+                        conn.execute("/system/script/remove", "=.id=$scriptId")
+                        logBuilder.appendLine("✓ Cleanup completed.")
+                    } catch (_: Exception) {}
+                } catch (scriptEx: Exception) {
+                    logBuilder.appendLine("⚠ Script engine notice: ${scriptEx.message}. Trying file import engine...")
+                }
+
+                if (!scriptSuccess) {
+                    // Strategy 2: File Import Engine via /file/add & /import
+                    val fileName = "app_update_${System.currentTimeMillis() % 10000}.rsc"
+                    try {
+                        conn.execute("/file/add", "name=$fileName", "contents=$cleanScript")
+                        logBuilder.appendLine("✓ Uploaded $fileName to router storage")
+
+                        logBuilder.appendLine("➜ Executing /import file-name=$fileName...")
+                        conn.execute("/import", "=file-name=$fileName")
+                        logBuilder.appendLine("✓ /import file-name=$fileName finished.")
+                        scriptSuccess = true
+
+                        try {
+                            conn.execute("/file/remove", "=.id=$fileName")
+                        } catch (_: Exception) {}
+                    } catch (importEx: Exception) {
+                        logBuilder.appendLine("✗ Import engine notice: ${importEx.message}")
+                    }
+                }
+
+                if (!scriptSuccess) {
+                    // Strategy 3: Command-by-command sentence execution
+                    logBuilder.appendLine("➜ Trying line-by-line CLI command execution...")
+                    var successCount = 0
+                    var failCount = 0
+                    cleanScript.lineSequence()
+                        .map { it.trim() }
+                        .filter { it.isNotBlank() && !it.startsWith("#") }
+                        .forEach { line ->
+                            try {
+                                val parts = line.split("\\s+".toRegex())
+                                val cmd = parts.firstOrNull() ?: ""
+                                val params = parts.drop(1).toTypedArray()
+                                if (cmd.startsWith("/")) {
+                                    conn.execute(cmd, *params)
+                                    logBuilder.appendLine("✓ $line")
+                                    successCount++
+                                }
+                            } catch (e: Exception) {
+                                logBuilder.appendLine("✗ $line (${e.message})")
+                                failCount++
+                            }
+                        }
+                    scriptSuccess = successCount > 0
+                    logBuilder.appendLine(if (scriptSuccess) "✓ Line execution finished: $successCount succeeded, $failCount failed." else "✗ All execution strategies failed.")
+                }
+
+                val duration = System.currentTimeMillis() - startTime
+                logBuilder.appendLine("➜ Total duration: ${duration}ms")
+                ScriptExecutionResult(scriptSuccess, logBuilder.toString(), duration, lineCount)
+            } catch (t: Throwable) {
+                val duration = System.currentTimeMillis() - startTime
+                logBuilder.appendLine("✗ Fatal execution error: ${t.message}")
+                ScriptExecutionResult(false, logBuilder.toString(), duration)
+            }
+        }
+    }
+
+    suspend fun executeSingleCommand(commandLine: String): Result<String> = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withContext Result.failure(Exception("Router is not connected."))
+                val clean = commandLine.trim()
+                if (clean.isBlank()) return@withContext Result.failure(Exception("Command is empty."))
+
+                val parts = clean.split("\\s+".toRegex())
+                val cmd = parts.firstOrNull() ?: ""
+                val params = parts.drop(1).toTypedArray()
+
+                val res = conn.execute(cmd, *params)
+                val out = if (res.isEmpty()) "OK (!done)" else res.joinToString("\n") { map ->
+                    map.entries.joinToString(" ") { "${it.key}=${it.value}" }
+                }
+                Result.success(out)
+            } catch (e: Exception) {
+                handleApiError(e)
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun fetchAndRunRemoteScript(url: String): ScriptExecutionResult = withContext(Dispatchers.IO) {
+        try {
+            val u = java.net.URL(url)
+            val httpConn = u.openConnection() as java.net.HttpURLConnection
+            httpConn.connectTimeout = 10000
+            httpConn.readTimeout = 15000
+            httpConn.requestMethod = "GET"
+            httpConn.setRequestProperty("User-Agent", "HotspotManager-Android")
+            val scriptContent = httpConn.inputStream.bufferedReader().use { it.readText() }
+            if (scriptContent.isBlank()) {
+                return@withContext ScriptExecutionResult(false, "Remote script fetched from $url was empty.", 0)
+            }
+            executeRscScript(scriptContent)
+        } catch (e: Exception) {
+            ScriptExecutionResult(false, "Failed to download remote script from $url: ${e.message}", 0)
         }
     }
 

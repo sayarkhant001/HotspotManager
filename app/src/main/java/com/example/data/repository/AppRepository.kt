@@ -641,6 +641,33 @@ class AppRepository(
         }
     }
 
+    suspend fun executeRscScript(scriptContent: String): com.example.data.remote.ScriptExecutionResult {
+        return withContext(Dispatchers.IO) {
+            if (!mikrotikClient.isConnected()) {
+                mikrotikClient.ensureConnected()
+            }
+            mikrotikClient.executeRscScript(scriptContent)
+        }
+    }
+
+    suspend fun executeSingleCommand(commandLine: String): Result<String> {
+        return withContext(Dispatchers.IO) {
+            if (!mikrotikClient.isConnected()) {
+                mikrotikClient.ensureConnected()
+            }
+            mikrotikClient.executeSingleCommand(commandLine)
+        }
+    }
+
+    suspend fun fetchAndRunRemoteScript(url: String): com.example.data.remote.ScriptExecutionResult {
+        return withContext(Dispatchers.IO) {
+            if (!mikrotikClient.isConnected()) {
+                mikrotikClient.ensureConnected()
+            }
+            mikrotikClient.fetchAndRunRemoteScript(url)
+        }
+    }
+
     suspend fun kickSession(sessionId: String): Result<Unit> {
         if (!mikrotikClient.isConnected()) {
             mikrotikClient.ensureConnected()

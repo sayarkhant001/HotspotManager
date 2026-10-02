@@ -22,7 +22,10 @@ data class AppReleaseInfo(
     val releaseNotes: String,
     val downloadUrl: String,
     val apkSize: Long = 0L,
-    val isNewer: Boolean = false
+    val isNewer: Boolean = false,
+    val routerScriptUrl: String? = null,
+    val routerScriptContent: String? = null,
+    val hasRouterScript: Boolean = false
 )
 
 object GitHubUpdateManager {
@@ -55,9 +58,10 @@ object GitHubUpdateManager {
                     val title = json.optString("name", tagName)
                     val body = json.optString("body", "No release notes provided.")
 
-                    // Search for .apk asset
+                    // Search for .apk and .rsc assets
                     var apkUrl = ""
                     var apkSize = 0L
+                    var rscUrl: String? = null
                     val assets = json.optJSONArray("assets") ?: JSONArray()
                     for (i in 0 until assets.length()) {
                         val asset = assets.getJSONObject(i)
@@ -65,7 +69,8 @@ object GitHubUpdateManager {
                         if (assetName.endsWith(".apk", ignoreCase = true)) {
                             apkUrl = asset.optString("browser_download_url", "")
                             apkSize = asset.optLong("size", 0L)
-                            break
+                        } else if (assetName.endsWith(".rsc", ignoreCase = true) || assetName.endsWith(".txt", ignoreCase = true) && assetName.contains("script", ignoreCase = true)) {
+                            rscUrl = asset.optString("browser_download_url", "")
                         }
                     }
 
@@ -74,8 +79,27 @@ object GitHubUpdateManager {
                         apkUrl = json.optString("html_url", "")
                     }
 
+                    // Extract embedded RouterOS script from release notes ```rsc ... ```
+                    val rscRegex = Regex("```(?:rsc|routeros|mikrotik|script)?\\s*([\\s\\S]*?)```", RegexOption.IGNORE_CASE)
+                    val match = rscRegex.find(body)
+                    var embeddedRsc = match?.groupValues?.get(1)?.trim()
+
+                    // If release attached an .rsc file asset, fetch its content
+                    if (embeddedRsc.isNullOrBlank() && !rscUrl.isNullOrBlank()) {
+                        try {
+                            val rscConn = URL(rscUrl).openConnection() as HttpURLConnection
+                            rscConn.connectTimeout = 5000
+                            rscConn.readTimeout = 5000
+                            rscConn.requestMethod = "GET"
+                            if (rscConn.responseCode == 200) {
+                                embeddedRsc = rscConn.inputStream.bufferedReader().use { it.readText() }
+                            }
+                        } catch (_: Exception) {}
+                    }
+
                     val currentVersion = BuildConfig.VERSION_NAME.removePrefix("v").removePrefix("V").trim()
                     val isNewer = isVersionNewer(cleanVersion, currentVersion)
+                    val hasRouterScript = !embeddedRsc.isNullOrBlank() || !rscUrl.isNullOrBlank()
 
                     return@withContext AppReleaseInfo(
                         versionName = cleanVersion.ifBlank { tagName },
@@ -83,7 +107,10 @@ object GitHubUpdateManager {
                         releaseNotes = body,
                         downloadUrl = apkUrl,
                         apkSize = apkSize,
-                        isNewer = isNewer
+                        isNewer = isNewer,
+                        routerScriptUrl = rscUrl,
+                        routerScriptContent = embeddedRsc,
+                        hasRouterScript = hasRouterScript
                     )
                 }
             } catch (e: Exception) {

@@ -45,6 +45,8 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     val isDownloadingUpdate = MutableStateFlow(false)
     val downloadProgress = MutableStateFlow(0f)
     val showUpdateDialog = MutableStateFlow(false)
+    val isExecutingScript = MutableStateFlow(false)
+    val scriptExecutionOutput = MutableStateFlow<String?>(null)
 
     init {
         // Quietly check for update from GitHub on start
@@ -313,6 +315,101 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 isDownloadingUpdate.value = false
             }
         }
+    }
+
+    fun executeRscScript(scriptContent: String, onFinished: ((Boolean, String) -> Unit)? = null) {
+        viewModelScope.launch {
+            isExecutingScript.value = true
+            try {
+                userMessage.value = "Executing script on router..."
+                val res = repository.executeRscScript(scriptContent)
+                scriptExecutionOutput.value = res.outputLog
+                if (res.success) {
+                    userMessage.value = "✓ Script executed successfully! (${res.executionTimeMs}ms)"
+                    onFinished?.invoke(true, res.outputLog)
+                } else {
+                    userMessage.value = "✗ Script execution failed"
+                    onFinished?.invoke(false, res.outputLog)
+                }
+                fetchRouterData()
+            } catch (t: Throwable) {
+                val err = "Error executing script: ${t.message}"
+                scriptExecutionOutput.value = err
+                userMessage.value = "✗ $err"
+                onFinished?.invoke(false, err)
+            } finally {
+                isExecutingScript.value = false
+            }
+        }
+    }
+
+    fun executeSingleCommand(commandLine: String, onFinished: ((Boolean, String) -> Unit)? = null) {
+        viewModelScope.launch {
+            isExecutingScript.value = true
+            try {
+                val res = repository.executeSingleCommand(commandLine)
+                if (res.isSuccess) {
+                    val out = res.getOrDefault("OK")
+                    scriptExecutionOutput.value = out
+                    userMessage.value = "✓ Command executed successfully"
+                    onFinished?.invoke(true, out)
+                } else {
+                    val err = "Failed: ${res.exceptionOrNull()?.message}"
+                    scriptExecutionOutput.value = err
+                    userMessage.value = "✗ $err"
+                    onFinished?.invoke(false, err)
+                }
+                fetchRouterData()
+            } catch (t: Throwable) {
+                val err = "Error: ${t.message}"
+                scriptExecutionOutput.value = err
+                userMessage.value = "✗ $err"
+                onFinished?.invoke(false, err)
+            } finally {
+                isExecutingScript.value = false
+            }
+        }
+    }
+
+    fun fetchAndRunRemoteScript(url: String, onFinished: ((Boolean, String) -> Unit)? = null) {
+        viewModelScope.launch {
+            isExecutingScript.value = true
+            try {
+                userMessage.value = "Fetching and executing script from GitHub..."
+                val res = repository.fetchAndRunRemoteScript(url)
+                scriptExecutionOutput.value = res.outputLog
+                if (res.success) {
+                    userMessage.value = "✓ Remote script executed successfully from GitHub!"
+                    onFinished?.invoke(true, res.outputLog)
+                } else {
+                    userMessage.value = "✗ Remote script execution failed"
+                    onFinished?.invoke(false, res.outputLog)
+                }
+                fetchRouterData()
+            } catch (t: Throwable) {
+                val err = "Error running remote script: ${t.message}"
+                scriptExecutionOutput.value = err
+                userMessage.value = "✗ $err"
+                onFinished?.invoke(false, err)
+            } finally {
+                isExecutingScript.value = false
+            }
+        }
+    }
+
+    fun runUpdateRouterScript(onFinished: ((Boolean, String) -> Unit)? = null) {
+        val info = appUpdateInfo.value ?: return
+        val content = info.routerScriptContent
+        val url = info.routerScriptUrl
+        when {
+            !content.isNullOrBlank() -> executeRscScript(content, onFinished)
+            !url.isNullOrBlank() -> fetchAndRunRemoteScript(url, onFinished)
+            else -> userMessage.value = "No router script found in this update."
+        }
+    }
+
+    fun clearScriptExecutionOutput() {
+        scriptExecutionOutput.value = null
     }
 
     fun fetchRouterData() {
