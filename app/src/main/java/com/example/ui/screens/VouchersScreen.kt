@@ -1575,7 +1575,7 @@ fun MikhmonGenerateVouchersDialog(
                                     }
                                     OutlinedTextField(
                                         value = quantity,
-                                        onValueChange = { input -> if (input.all { it.isDigit() }) quantity = input },
+                                        onValueChange = { input -> quantity = cleanNumberInput(input) },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
                                         modifier = Modifier.width(72.dp),
                                         shape = RoundedCornerShape(8.dp),

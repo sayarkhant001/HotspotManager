@@ -35,6 +35,25 @@ import com.example.ui.components.GlassCard
 import com.example.utils.AppLanguage
 import com.example.utils.LanguageManager
 
+fun cleanNumberInput(raw: String): String {
+    return raw.map { ch ->
+        when (ch) {
+            '၀' -> '0'
+            '၁' -> '1'
+            '၂' -> '2'
+            '၃' -> '3'
+            '၄' -> '4'
+            '၅' -> '5'
+            '၆' -> '6'
+            '၇' -> '7'
+            '၈' -> '8'
+            '၉' -> '9'
+            in '0'..'9' -> ch
+            else -> null
+        }
+    }.filterNotNull().joinToString("")
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfilesScreen(viewModel: MainViewModel, navController: NavController) {
@@ -736,7 +755,7 @@ fun AddProfileDialog(
                         ) {
                             OutlinedTextField(
                                 value = speedVal,
-                                onValueChange = { input -> if (input.all { it.isDigit() }) speedVal = input },
+                                onValueChange = { input -> speedVal = cleanNumberInput(input) },
                                 label = { Text("Speed (Mbps)") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
                                 modifier = Modifier.weight(1.2f),
@@ -862,7 +881,7 @@ fun AddProfileDialog(
 
                         OutlinedTextField(
                             value = validityVal,
-                            onValueChange = { input -> if (input.all { it.isDigit() }) validityVal = input },
+                            onValueChange = { input -> validityVal = cleanNumberInput(input) },
                             label = { Text("Duration ($validityUnit)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
                             modifier = Modifier.fillMaxWidth(),
@@ -981,7 +1000,7 @@ fun AddProfileDialog(
 
                             OutlinedTextField(
                                 value = dataVal,
-                                onValueChange = { input -> if (input.all { it.isDigit() }) dataVal = input },
+                                onValueChange = { input -> dataVal = cleanNumberInput(input) },
                                 label = { Text("Quota ($quotaUnit)") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
                                 modifier = Modifier.fillMaxWidth(),
@@ -1018,7 +1037,7 @@ fun AddProfileDialog(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
                                 value = price,
-                                onValueChange = { input -> if (input.all { it.isDigit() }) price = input },
+                                onValueChange = { input -> price = cleanNumberInput(input) },
                                 label = { Text(strings.originalPrice + " (Ks)") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
                                 modifier = Modifier.weight(1.2f),
@@ -1027,7 +1046,7 @@ fun AddProfileDialog(
                             )
                             OutlinedTextField(
                                 value = sharedUsers,
-                                onValueChange = { input -> if (input.all { it.isDigit() }) sharedUsers = input },
+                                onValueChange = { input -> sharedUsers = cleanNumberInput(input) },
                                 label = { Text("Devices") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
                                 modifier = Modifier.weight(0.8f),
@@ -1276,7 +1295,7 @@ fun EditProfileDialog(
                         Spacer(Modifier.height(6.dp))
                         OutlinedTextField(
                             value = speedVal,
-                            onValueChange = { input -> if (input.all { it.isDigit() }) speedVal = input },
+                            onValueChange = { input -> speedVal = cleanNumberInput(input) },
                             label = { Text("Speed (Mbps)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
                             modifier = Modifier.fillMaxWidth(),
@@ -1385,7 +1404,7 @@ fun EditProfileDialog(
 
                         OutlinedTextField(
                             value = validityVal,
-                            onValueChange = { input -> if (input.all { it.isDigit() }) validityVal = input },
+                            onValueChange = { input -> validityVal = cleanNumberInput(input) },
                             label = { Text("Duration ($validityUnit)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
                             modifier = Modifier.fillMaxWidth(),
@@ -1504,7 +1523,7 @@ fun EditProfileDialog(
 
                             OutlinedTextField(
                                 value = dataVal,
-                                onValueChange = { input -> if (input.all { it.isDigit() }) dataVal = input },
+                                onValueChange = { input -> dataVal = cleanNumberInput(input) },
                                 label = { Text("Quota ($quotaUnit)") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
                                 modifier = Modifier.fillMaxWidth(),
@@ -1541,7 +1560,7 @@ fun EditProfileDialog(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
                                 value = price,
-                                onValueChange = { input -> if (input.all { it.isDigit() }) price = input },
+                                onValueChange = { input -> price = cleanNumberInput(input) },
                                 label = { Text(strings.originalPrice + " (Ks)") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
                                 modifier = Modifier.weight(1.2f),
@@ -1550,7 +1569,7 @@ fun EditProfileDialog(
                             )
                             OutlinedTextField(
                                 value = sharedUsers,
-                                onValueChange = { input -> if (input.all { it.isDigit() }) sharedUsers = input },
+                                onValueChange = { input -> sharedUsers = cleanNumberInput(input) },
                                 label = { Text("Devices") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, autoCorrectEnabled = false),
                                 modifier = Modifier.weight(0.8f),

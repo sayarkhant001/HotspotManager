@@ -91,6 +91,7 @@ fun NetworkTopologyScreen(
     var apToUndo by remember { mutableStateOf<AccessPointDevice?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedApForDetails by remember { mutableStateOf<AccessPointDevice?>(null) }
+    var isListView by remember { mutableStateOf(false) }
 
     val todayKey = remember {
         SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
@@ -133,6 +134,13 @@ fun NetworkTopologyScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { isListView = !isListView }) {
+                        Icon(
+                            imageVector = if (isListView) Icons.Default.AccountTree else Icons.Default.ViewAgenda,
+                            contentDescription = "Toggle View",
+                            tint = Color(0xFF10B981)
+                        )
+                    }
                     IconButton(onClick = {
                         viewModel.fetchNetworkTopology()
                         viewModel.fetchIpBindings()
@@ -321,59 +329,115 @@ fun NetworkTopologyScreen(
                     }
                 }
 
-                // 3. Branching Lines down to Connected APs
+                // 3. Connected Access Points Section Header & View Switcher
                 val aps = topology.accessPoints
 
                 if (aps.isNotEmpty()) {
-                    BranchingLines(apCount = aps.size)
-
-                    if (aps.size <= 2) {
-                        // Connected APs Single Row
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                    ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.Top
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            aps.forEach { ap ->
-                                val clientCount = remember(activeUsers, ap, topology) {
-                                    if (topology.accessPoints.size <= 1) {
-                                        activeUsers.size
-                                    } else {
-                                        val macSet = ap.connectedClientMacs.map { it.uppercase() }.toSet()
-                                        val count = activeUsers.count { u ->
-                                            val mac = u.macAddress.uppercase()
-                                            (macSet.isNotEmpty() && mac in macSet) ||
-                                            (ap.ipAddress.isNotBlank() && u.address.substringBeforeLast(".") == ap.ipAddress.substringBeforeLast(".") && u.macAddress != ap.macAddress) ||
-                                            u.user.contains(ap.name, ignoreCase = true) ||
-                                            u.comment.contains(ap.name, ignoreCase = true)
-                                        }
-                                        if (count > 0) count else if (ap.connectedClientMacs.isEmpty()) activeUsers.size else 0
-                                    }
-                                }
-                                ApDeviceNode(
-                                    ap = ap,
-                                    clientCount = clientCount,
-                                    strings = strings,
-                                    onClick = { selectedApForDetails = ap },
-                                    onAllowlist = { apToAllowlist = ap },
-                                    onUndo = { apToUndo = ap }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF10B981))
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "${aps.size} Devices Detected",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
+                            Row(
+                                modifier = Modifier
+                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+                                    .padding(2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Surface(
+                                    onClick = { isListView = false },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (!isListView) Color(0xFF10B981) else Color.Transparent
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.AccountTree,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp),
+                                            tint = if (!isListView) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.width(3.dp))
+                                        Text(
+                                            "Tree",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = if (!isListView) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (!isListView) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Surface(
+                                    onClick = { isListView = true },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (isListView) Color(0xFF10B981) else Color.Transparent
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.ViewAgenda,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp),
+                                            tint = if (isListView) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.width(3.dp))
+                                        Text(
+                                            "Cards",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = if (isListView) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isListView) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
                         }
-                    } else {
-                        // Multi-device Grid Layout (2 per row with connecting branch)
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    if (!isListView) {
+                        // VISUAL TREE VIEW
+                        BranchingLines(apCount = aps.size)
+
                         val chunkedAps = aps.chunked(2)
                         Column(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             chunkedAps.forEachIndexed { rowIndex, rowAps ->
                                 if (rowIndex > 0) {
-                                    ConnectingVerticalLine(dots = 2, color = Color(0xFF94A3B8))
+                                    ConnectingVerticalLine(dots = 2, color = Color(0xFF10B981))
                                 }
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     verticalAlignment = Alignment.Top
                                 ) {
                                     rowAps.forEach { ap ->
@@ -392,19 +456,56 @@ fun NetworkTopologyScreen(
                                                 if (count > 0) count else if (ap.connectedClientMacs.isEmpty()) activeUsers.size else 0
                                             }
                                         }
-                                        ApDeviceNode(
-                                            ap = ap,
-                                            clientCount = clientCount,
-                                            strings = strings,
-                                            onClick = { selectedApForDetails = ap },
-                                            onAllowlist = { apToAllowlist = ap },
-                                            onUndo = { apToUndo = ap }
-                                        )
+                                        Box(
+                                            modifier = Modifier.weight(1f),
+                                            contentAlignment = Alignment.TopCenter
+                                        ) {
+                                            ApDeviceNode(
+                                                ap = ap,
+                                                clientCount = clientCount,
+                                                strings = strings,
+                                                onClick = { selectedApForDetails = ap },
+                                                onAllowlist = { apToAllowlist = ap },
+                                                onUndo = { apToUndo = ap }
+                                            )
+                                        }
                                     }
                                     if (rowAps.size == 1) {
-                                        Spacer(modifier = Modifier.width(160.dp))
+                                        Spacer(modifier = Modifier.weight(1f))
                                     }
                                 }
+                            }
+                        }
+                    } else {
+                        // DETAILED CARD LIST VIEW (shows every AP clearly in cards)
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            aps.forEach { ap ->
+                                val clientCount = remember(activeUsers, ap, topology) {
+                                    if (topology.accessPoints.size <= 1) {
+                                        activeUsers.size
+                                    } else {
+                                        val macSet = ap.connectedClientMacs.map { it.uppercase() }.toSet()
+                                        val count = activeUsers.count { u ->
+                                            val mac = u.macAddress.uppercase()
+                                            (macSet.isNotEmpty() && mac in macSet) ||
+                                            (ap.ipAddress.isNotBlank() && u.address.substringBeforeLast(".") == ap.ipAddress.substringBeforeLast(".") && u.macAddress != ap.macAddress) ||
+                                            u.user.contains(ap.name, ignoreCase = true) ||
+                                            u.comment.contains(ap.name, ignoreCase = true)
+                                        }
+                                        if (count > 0) count else if (ap.connectedClientMacs.isEmpty()) activeUsers.size else 0
+                                    }
+                                }
+                                ApListCard(
+                                    ap = ap,
+                                    clientCount = clientCount,
+                                    strings = strings,
+                                    onClick = { selectedApForDetails = ap },
+                                    onAllowlist = { apToAllowlist = ap },
+                                    onUndo = { apToUndo = ap }
+                                )
                             }
                         }
                     }
@@ -620,7 +721,7 @@ fun ApDeviceNode(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .width(160.dp)
+            .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .clickable { onClick() }
             .padding(4.dp)
@@ -743,6 +844,7 @@ fun ApDeviceNode(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 2.dp)
         )
@@ -764,7 +866,9 @@ fun ApDeviceNode(
                     text = strings.allowlistAction,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = Color.White,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         } else {
@@ -775,7 +879,7 @@ fun ApDeviceNode(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,
@@ -788,8 +892,180 @@ fun ApDeviceNode(
                         text = strings.allowedBadge,
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                         color = Color(0xFF10B981),
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ApListCard(
+    ap: AccessPointDevice,
+    clientCount: Int,
+    strings: com.example.utils.AppStrings,
+    onClick: () -> Unit,
+    onAllowlist: () -> Unit,
+    onUndo: () -> Unit
+) {
+    val modelInfo = remember(ap) {
+        DeviceModelDetector.detectApOrClient(
+            name = ap.name,
+            hostName = ap.name,
+            comment = ap.model,
+            macAddress = ap.macAddress
+        )
+    }
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Thumbnail with Online/Allowlist Badge
+            Box(contentAlignment = Alignment.TopEnd) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color.White,
+                    shadowElevation = 2.dp,
+                    border = androidx.compose.foundation.BorderStroke(
+                        2.dp,
+                        if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444)
+                    ),
+                    modifier = Modifier.size(54.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(4.dp)) {
+                        if (modelInfo.imageResId != 0) {
+                            Image(
+                                painter = painterResource(id = modelInfo.imageResId),
+                                contentDescription = modelInfo.modelName,
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Fit
+                            )
+                        } else {
+                            Icon(Icons.Default.Wifi, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(28.dp))
+                        }
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(if (ap.isWhitelisted) Color(0xFF10B981) else Color(0xFFEF4444))
+                        .border(1.5.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            // Details Column
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = ap.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFF10B981).copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = modelInfo.modelName,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF059669),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = "${ap.ipAddress.ifBlank { "DHCP" }} • ${ap.macAddress}",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                    ) {
+                        Text(
+                            text = "👥 $clientCount clients",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
+                    if (ap.currentRxBps > 0L || ap.currentTxBps > 0L) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF0284C7).copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "↓ ${formatSpeed(ap.currentRxBps)}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0284C7),
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            // Action Button
+            if (!ap.isWhitelisted) {
+                Button(
+                    onClick = onAllowlist,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Text(strings.allowlistAction, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF10B981).copy(alpha = 0.15f),
+                    modifier = Modifier.clickable { onUndo() }
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(3.dp))
+                        Text(strings.allowedBadge, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
+                    }
                 }
             }
         }

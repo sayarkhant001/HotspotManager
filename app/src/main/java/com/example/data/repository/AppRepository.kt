@@ -13,6 +13,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import org.json.JSONObject
 
 class AppRepository(
     private val dao: RouterDao,
@@ -48,6 +49,59 @@ class AppRepository(
         }
     }
 
+    data class ProfileSyncMeta(
+        val price: Double = 0.0,
+        val sellingPrice: Double = 0.0,
+        val validityDays: Int = 1,
+        val dataLimitMb: Int = 0,
+        val durationMinutes: Int = 0
+    )
+
+    private fun parseMetadataJson(rawJson: String?): Map<String, ProfileSyncMeta> {
+        if (rawJson.isNullOrBlank()) return emptyMap()
+        val result = mutableMapOf<String, ProfileSyncMeta>()
+        try {
+            val root = JSONObject(rawJson)
+            val keys = root.keys()
+            while (keys.hasNext()) {
+                val name = keys.next()
+                val item = root.optJSONObject(name)
+                if (item != null) {
+                    val p = item.optDouble("price", 0.0)
+                    result[name] = ProfileSyncMeta(
+                        price = p,
+                        sellingPrice = item.optDouble("sellingPrice", p),
+                        validityDays = item.optInt("validityDays", 1),
+                        dataLimitMb = item.optInt("dataLimitMb", 0),
+                        durationMinutes = item.optInt("durationMinutes", 0)
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+        return result
+    }
+
+    suspend fun syncMetadataToRouter(profilesList: List<UserProfile>) {
+        if (!mikrotikClient.isConnected()) return
+        try {
+            val root = JSONObject()
+            profilesList.forEach { p ->
+                val obj = JSONObject()
+                obj.put("price", p.price)
+                obj.put("sellingPrice", p.sellingPrice)
+                obj.put("validityDays", p.validityDays)
+                obj.put("dataLimitMb", p.dataLimitMb)
+                obj.put("durationMinutes", p.durationMinutes)
+                root.put(p.name, obj)
+            }
+            mikrotikClient.saveRouterScriptSource(
+                scriptName = "wexz_profiles_meta",
+                source = root.toString(),
+                comment = "HotspotManager Profiles & Price Tags"
+            )
+        } catch (_: Exception) {}
+    }
+
     suspend fun addProfile(profile: UserProfile): Result<Unit> {
         if (!mikrotikClient.isConnected()) {
             mikrotikClient.ensureConnected()
@@ -61,6 +115,7 @@ class AppRepository(
             return Result.failure(Exception("Router rejected creating profile '${profile.name}'."))
         }
         dao.insertProfile(profile)
+        syncMetadataToRouter(dao.getAllProfilesSync())
         return Result.success(Unit)
     }
 
@@ -68,12 +123,42 @@ class AppRepository(
         if (mikrotikClient.isConnected()) {
             val routerProfiles = mikrotikClient.getRouterProfiles()
             val existingProfiles = dao.getAllProfilesSync().associateBy { it.name }
+
+            // 1. Fetch persistent profiles metadata from RouterOS /system/script
+            val routerMetaRaw = mikrotikClient.getRouterScriptSource("wexz_profiles_meta")
+            val routerMeta = parseMetadataJson(routerMetaRaw)
+
             val list = routerProfiles.map { rp ->
                 val existing = existingProfiles[rp.name]
+                val meta = routerMeta[rp.name]
                 val defaults = getDefaultProfilePriceAndQuota(rp.name)
-                val price = if (existing != null && existing.price > 0) existing.price else defaults.first
-                val quota = if (existing != null && existing.dataLimitMb > 0) existing.dataLimitMb else defaults.second
-                val validity = if (existing != null && existing.validityDays > 0) existing.validityDays else defaults.third
+
+                val price = when {
+                    meta != null && meta.price > 0.0 -> meta.price
+                    existing != null && existing.price > 0.0 -> existing.price
+                    else -> defaults.first
+                }
+                val sellingPrice = when {
+                    meta != null && meta.sellingPrice > 0.0 -> meta.sellingPrice
+                    existing != null && existing.sellingPrice > 0.0 -> existing.sellingPrice
+                    else -> price
+                }
+                val quota = when {
+                    meta != null && meta.dataLimitMb > 0 -> meta.dataLimitMb
+                    existing != null && existing.dataLimitMb > 0 -> existing.dataLimitMb
+                    else -> defaults.second
+                }
+                val validity = when {
+                    meta != null && meta.validityDays > 0 -> meta.validityDays
+                    existing != null && existing.validityDays > 0 -> existing.validityDays
+                    else -> defaults.third
+                }
+                val duration = when {
+                    meta != null && meta.durationMinutes > 0 -> meta.durationMinutes
+                    existing != null && existing.durationMinutes > 0 -> existing.durationMinutes
+                    else -> 0
+                }
+
                 UserProfile(
                     name = rp.name,
                     rateLimit = rp.rateLimit,
@@ -81,14 +166,19 @@ class AppRepository(
                     downloadLimitMbps = parseRateLimitMbps(rp.rateLimit),
                     uploadLimitMbps = parseRateLimitMbps(rp.rateLimit),
                     dataLimitMb = quota,
-                    durationMinutes = existing?.durationMinutes ?: 0,
+                    durationMinutes = duration,
                     price = price,
-                    sellingPrice = price,
+                    sellingPrice = sellingPrice,
                     validityDays = validity
                 )
             }
             dao.clearProfiles()
             dao.insertProfiles(list)
+
+            // If router metadata was missing or incomplete, push consolidated metadata to router
+            if (routerMeta.size < list.size || list.any { it.price > 0.0 && routerMeta[it.name]?.price != it.price }) {
+                syncMetadataToRouter(list)
+            }
         }
     }
 
@@ -134,6 +224,7 @@ class AppRepository(
         }
         dao.deleteProfileByName(profileName)
         dao.deleteVouchersByProfile(profileName)
+        syncMetadataToRouter(dao.getAllProfilesSync())
         return Result.success(Unit)
     }
 
@@ -172,6 +263,7 @@ class AppRepository(
             validityDays = profile.validityDays,
             price = profile.price
         )
+        syncMetadataToRouter(dao.getAllProfilesSync())
         return Result.success(Unit)
     }
 

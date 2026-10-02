@@ -1376,6 +1376,49 @@ class MikrotikClient {
         }
     }
 
+    suspend fun getRouterScriptSource(scriptName: String): String? = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withContext null
+                val res = conn.execute("/system/script/print", "=.proplist=.id,name,source", "?name=$scriptName")
+                res.firstOrNull { it["name"] == scriptName }?.get("source")
+            } catch (e: Exception) {
+                handleApiError(e)
+                null
+            }
+        }
+    }
+
+    suspend fun saveRouterScriptSource(scriptName: String, source: String, comment: String = ""): Boolean = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withContext false
+                val scripts = conn.execute("/system/script/print", "=.proplist=.id,name", "?name=$scriptName")
+                val existing = scripts.firstOrNull { it["name"] == scriptName }
+                val scriptId = existing?.get(".id")
+                if (!scriptId.isNullOrBlank()) {
+                    conn.execute(
+                        "/system/script/set",
+                        ".id=$scriptId",
+                        "source=$source",
+                        "comment=${if (comment.isNotBlank()) comment else "HotspotManager Sync Data"}"
+                    )
+                } else {
+                    conn.execute(
+                        "/system/script/add",
+                        "name=$scriptName",
+                        "source=$source",
+                        "comment=${if (comment.isNotBlank()) comment else "HotspotManager Sync Data"}"
+                    )
+                }
+                true
+            } catch (e: Exception) {
+                handleApiError(e)
+                false
+            }
+        }
+    }
+
     suspend fun addHotspotUser(
         name: String,
         password: String,
