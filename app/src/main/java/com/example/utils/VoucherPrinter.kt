@@ -435,14 +435,28 @@ object VoucherPrinter {
                 val rightCenter = splitX + (x + width - splitX) / 2f
                 val rightMaxW = (x + width - splitX) - 4f
                 val profLabel = voucher.profileName
-                val profileText = if (voucher.price > 0) "$profLabel • ${"%,d".format(java.util.Locale.US, voucher.price.toLong())} Ks" else profLabel
-                var pSize = if (is80) 14f else 11f
-                textPaint.textSize = pSize
-                while (textPaint.measureText(profileText) > rightMaxW && pSize > 7f) {
-                    pSize -= 0.5f
-                    textPaint.textSize = pSize
+                val effPrice = resolveVoucherPrice(voucher)
+                val priceStr = if (effPrice > 0) "${"%,d".format(java.util.Locale.US, effPrice.toLong())} Ks" else "Free"
+                val quotaStr = formatQuotaString(voucher.dataLimitMb)
+
+                // Row 1: Profile Name (Bold)
+                var profSize = if (is80) 12f else 9f
+                titlePaint.textSize = profSize
+                while (titlePaint.measureText(profLabel) > rightMaxW && profSize > 6.5f) {
+                    profSize -= 0.5f
+                    titlePaint.textSize = profSize
                 }
-                canvas.drawText(profileText, rightCenter, y + (height / 2f) + (pSize * 0.35f), textPaint)
+                canvas.drawText(profLabel, rightCenter, y + (height * 0.35f) + (profSize * 0.32f), titlePaint)
+
+                // Row 2: Data Quota & Price (e.g. 2GB • 1,000 Ks or 500MB • 500 Ks)
+                val detailText = "$quotaStr • $priceStr"
+                var detSize = if (is80) 11f else 8.5f
+                textPaint.textSize = detSize
+                while (textPaint.measureText(detailText) > rightMaxW && detSize > 6f) {
+                    detSize -= 0.5f
+                    textPaint.textSize = detSize
+                }
+                canvas.drawText(detailText, rightCenter, y + (height * 0.74f) + (detSize * 0.32f), textPaint)
             }
             3 -> {
                 // Style 3: 3-Tier Full-Width Stacked Excel Table (Giant Code, Replaces QR)
@@ -521,7 +535,8 @@ object VoucherPrinter {
                 canvas.drawText(valStr, x + col1W * 1.5f, botMidY, textPaint)
 
                 pricePaint.textSize = subSize + 0.5f
-                val prText = if (voucher.price > 0) "${"%,d".format(java.util.Locale.US, voucher.price.toLong())} Ks" else "Free"
+                val effPrice = resolveVoucherPrice(voucher)
+                val prText = if (effPrice > 0) "${"%,d".format(java.util.Locale.US, effPrice.toLong())} Ks" else "Free"
                 while (pricePaint.measureText(prText) > subCellMaxW && pricePaint.textSize > 7f) {
                     pricePaint.textSize -= 0.5f
                 }
@@ -647,7 +662,8 @@ object VoucherPrinter {
                 )
 
                 // Row 3: Price
-                val priceStr = if (voucher.price > 0) "${"%,d".format(java.util.Locale.US, voucher.price.toLong())} Ks" else "Free"
+                val effPrice = resolveVoucherPrice(voucher)
+                val priceStr = if (effPrice > 0) "${"%,d".format(java.util.Locale.US, effPrice.toLong())} Ks" else "Free"
                 var prSize = (rowH * 0.60f).coerceIn(9f, if (is80) 18f else 14f)
                 pricePaint.textSize = prSize
                 while (pricePaint.measureText(priceStr) > rightMaxW && prSize > 8f) {
@@ -701,6 +717,61 @@ object VoucherPrinter {
             validityDays > 0 -> "${validityDays}D"
             else -> "1D"
         }
+    }
+
+    /**
+     * Resolves the true monetary price in Ks (Kyats).
+     * Prevents the bug where data quota in MB was mistakenly shown as currency or MMK/Ks.
+     */
+    fun resolveVoucherPrice(voucher: Voucher): Double {
+        // 1. Check profile name for explicit currency amounts (e.g. "1000Ks", "500Ks", "1000MMK")
+        val nameMatch = Regex("(\\d+)\\s*(?:KS|MMK|KYAT)", RegexOption.IGNORE_CASE).find(voucher.profileName)
+        if (nameMatch != null) {
+            val p = nameMatch.groupValues[1].toDoubleOrNull()
+            if (p != null && p > 0.0) return p
+        }
+
+        // 2. Check comment for explicit currency amounts
+        val commMatch = Regex("(\\d+)\\s*(?:KS|MMK|KYAT)", RegexOption.IGNORE_CASE).find(voucher.comment)
+        if (commMatch != null) {
+            val p = commMatch.groupValues[1].toDoubleOrNull()
+            if (p != null && p > 0.0) return p
+        }
+
+        // 3. Catch data quota MB values incorrectly assigned to price (e.g. 1700 Ks for 1700MB plan)
+        if (voucher.price > 0.0 && voucher.dataLimitMb > 0 && voucher.price.toLong() == voucher.dataLimitMb.toLong()) {
+            val upperProf = voucher.profileName.uppercase()
+            return when {
+                upperProf.contains("1000") -> 1000.0
+                upperProf.contains("500") -> 500.0
+                upperProf.contains("2GB") -> 1000.0
+                upperProf.contains("5GB") -> 2000.0
+                upperProf.contains("1GB") -> 500.0
+                upperProf.contains("3GB") -> 1000.0
+                upperProf.contains("7GB") -> 3000.0
+                upperProf.contains("30D") || upperProf.contains("30DAY") -> 20000.0
+                voucher.dataLimitMb >= 1024 -> ((voucher.dataLimitMb / 1024.0) * 500.0).coerceAtLeast(500.0)
+                else -> 300.0
+            }
+        }
+
+        // 4. If voucher price is 0, estimate from profileName if recognizable
+        if (voucher.price <= 0.0) {
+            val upperProf = voucher.profileName.uppercase()
+            return when {
+                upperProf.contains("1000") -> 1000.0
+                upperProf.contains("500") -> 500.0
+                upperProf.contains("2GB") -> 1000.0
+                upperProf.contains("5GB") -> 2000.0
+                upperProf.contains("1GB") -> 500.0
+                upperProf.contains("3GB") -> 1000.0
+                upperProf.contains("7GB") -> 3000.0
+                upperProf.contains("30D") || upperProf.contains("30DAY") -> 20000.0
+                else -> 0.0
+            }
+        }
+
+        return voucher.price
     }
 }
 

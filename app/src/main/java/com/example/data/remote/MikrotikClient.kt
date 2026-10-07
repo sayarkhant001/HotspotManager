@@ -491,22 +491,24 @@ class MikrotikClient {
                     val r = it["rx-byte"]?.toLongOrNull() ?: 0L
                     val t = it["tx-byte"]?.toLongOrNull() ?: 0L
 
+                    // ether1 is the primary Starlink WAN uplink
                     if (name == "ether1") {
                         rxBytes = r
                         txBytes = t
-                    }
-                    if (name == "hotspot-bridge" || name == "ether1") {
-                        if (r > rxTotal) rxTotal = r
-                        if (t > txTotal) txTotal = t
+                        rxTotal = r
+                        txTotal = t
                     }
                 }
 
-                if (rxBytes == 0L && txBytes == 0L) {
+                // Fallback only if ether1 is not present
+                if (rxTotal == 0L && txTotal == 0L) {
                     res.forEach {
                         val name = it["name"] ?: ""
                         if (name == "hotspot-bridge") {
                             rxBytes = it["tx-byte"]?.toLongOrNull() ?: 0L
                             txBytes = it["rx-byte"]?.toLongOrNull() ?: 0L
+                            rxTotal = rxBytes
+                            txTotal = txBytes
                         }
                     }
                 }
@@ -552,7 +554,7 @@ class MikrotikClient {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext emptyList()
                 val now = System.currentTimeMillis()
-                if (now - lastLeaseTime > 300_000L && cachedLeasesMap.isNotEmpty()) {
+                if (cachedLeasesMap.isEmpty() || now - lastLeaseTime > 30_000L) {
                     try {
                         val leases = conn.execute("/ip/dhcp-server/lease/print", "=.proplist=address,mac-address,host-name")
                         val newMap = mutableMapOf<String, String>()
@@ -938,7 +940,7 @@ class MikrotikClient {
                         val lId = it[".id"]
                         if (!lId.isNullOrBlank()) {
                             if (it["dynamic"] == "true") {
-                                try { conn.execute("/ip/dhcp-server/lease/make-static", "=.id=$lId") } catch (_: Exception) {}
+                                try { conn.execute("/ip/dhcp-server/lease/make-static", "=numbers=$lId") } catch (_: Exception) {}
                             }
                             try { conn.execute("/ip/dhcp-server/lease/set", ".id=$lId", "address-lists=whitelisted-devices") } catch (_: Exception) {}
                         }
@@ -1062,6 +1064,10 @@ class MikrotikClient {
                     if (!bId.isNullOrBlank()) {
                         conn.execute("/ip/hotspot/ip-binding/set", ".id=$bId", "comment=$apComment")
                     }
+                } else {
+                    try {
+                        conn.execute("/ip/hotspot/ip-binding/add", "mac-address=$cleanMac", "type=bypassed", "server=all", "comment=$apComment")
+                    } catch (_: Exception) {}
                 }
 
                 // 2. Update DHCP lease comment
@@ -1341,9 +1347,13 @@ class MikrotikClient {
                             val isWhitelisted = binding?.type == "bypassed" && !binding.disabled
                             val isOnline = (mac in onlineArpMacs) || (ip.isNotBlank() && ip in onlineArpIps) || status == "bound"
 
+                            val cleanBindingComment = (binding?.comment ?: "").replace(Regex("(?i)^(ruijie\\s+)?ap:\\s*"), "").trim()
+                            val cleanLeaseComment = comment.replace(Regex("(?i)^(ruijie\\s+)?ap:\\s*"), "").trim()
+
                             val displayName = when {
+                                cleanBindingComment.isNotBlank() -> cleanBindingComment
+                                cleanLeaseComment.isNotBlank() -> cleanLeaseComment
                                 host.isNotBlank() -> host
-                                comment.isNotBlank() -> comment
                                 else -> "${detected.brand}-${mac.takeLast(5).replace(":", "")}"
                             }
 
@@ -1384,7 +1394,8 @@ class MikrotikClient {
                         if (detected.isApOrBridge && mac.isNotBlank()) {
                             val binding = bindingsMap[mac]
                             val isWhitelisted = binding?.type == "bypassed" && !binding.disabled
-                            val displayName = identity.ifBlank { "${detected.brand}-${mac.takeLast(5)}" }
+                            val cleanBindingComment = (binding?.comment ?: "").replace(Regex("(?i)^(ruijie\\s+)?ap:\\s*"), "").trim()
+                            val displayName = cleanBindingComment.ifBlank { identity.ifBlank { "${detected.brand}-${mac.takeLast(5)}" } }
                             val isOnline = (mac in onlineArpMacs) || (ip.isNotBlank() && ip in onlineArpIps) || true
 
                             apMap[mac] = createApDevice(
@@ -1458,7 +1469,9 @@ class MikrotikClient {
 
                     if (existingAp != null) {
                         // Merge binding info into existing AP instead of creating duplicate
+                        val cleanBindingName = b.comment.replace(Regex("(?i)^(ruijie\\s+)?ap:\\s*"), "").trim()
                         val updated = existingAp.copy(
+                            name = if (cleanBindingName.isNotBlank()) cleanBindingName else existingAp.name,
                             isWhitelisted = existingAp.isWhitelisted || (b.type == "bypassed" && !b.disabled),
                             isOnline = existingAp.isOnline || isOnline,
                             bindingId = b.id.ifBlank { existingAp.bindingId },
@@ -1581,6 +1594,8 @@ class MikrotikClient {
                 val standardOnLogin = """:local u ${'$'}user; :local m ${'$'}"mac-address"; :do { /ip hotspot active remove [find user=${'$'}u and mac-address!=${'$'}m]; /ip hotspot cookie remove [find user=${'$'}u and mac-address!=${'$'}m] } on-error={}; :global hsUser ${'$'}user; :do { /system script run voucher-activate } on-error={}"""
                 val params = mutableListOf(
                     "shared-users=$sharedUsers",
+                    "add-mac-cookie=yes",
+                    "mac-cookie-timeout=30d",
                     "keepalive-timeout=none",
                     "idle-timeout=none",
                     "status-autorefresh=00:01:00",
@@ -1681,6 +1696,8 @@ class MikrotikClient {
                 val params = mutableListOf(
                     ".id=$profId",
                     "shared-users=$sharedUsers",
+                    "add-mac-cookie=yes",
+                    "mac-cookie-timeout=30d",
                     "keepalive-timeout=none",
                     "idle-timeout=none",
                     "status-autorefresh=00:01:00",
@@ -2070,18 +2087,37 @@ class MikrotikClient {
                     "/ip/hotspot/user/print",
                     "=.proplist=.id,name,password,profile,limit-bytes-total,uptime,bytes-in,bytes-out,comment,disabled"
                 )
+                val activeRes = try {
+                    conn.execute("/ip/hotspot/active/print", "=.proplist=user,bytes-in,bytes-out,uptime")
+                } catch (_: Exception) { emptyList() }
+
+                val activeTrafficMap = activeRes.groupBy { it["user"] ?: "" }.mapValues { entry ->
+                    val totalIn = entry.value.sumOf { it["bytes-in"]?.toLongOrNull() ?: 0L }
+                    val totalOut = entry.value.sumOf { it["bytes-out"]?.toLongOrNull() ?: 0L }
+                    val latestUptime = entry.value.firstOrNull()?.get("uptime") ?: "0s"
+                    Triple(totalIn, totalOut, latestUptime)
+                }
+
                 val users = res.mapNotNull {
                     val name = it["name"] ?: return@mapNotNull null
                     if (name.isBlank() || name == "default-trial") return@mapNotNull null
+
+                    val actTraffic = activeTrafficMap[name]
+                    val actIn = actTraffic?.first ?: 0L
+                    val actOut = actTraffic?.second ?: 0L
+                    val actUptime = actTraffic?.third ?: "0s"
+                    val rawUptime = it["uptime"] ?: "0s"
+                    val finalUptime = if (actUptime != "0s" && actUptime.isNotBlank()) actUptime else rawUptime
+
                     RouterHotspotUser(
                         id = it[".id"] ?: "",
                         name = name,
                         password = it["password"] ?: "",
                         profile = it["profile"] ?: "default",
                         comment = it["comment"] ?: "",
-                        uptime = it["uptime"] ?: "0s",
-                        bytesIn = it["bytes-in"]?.toLongOrNull() ?: 0L,
-                        bytesOut = it["bytes-out"]?.toLongOrNull() ?: 0L,
+                        uptime = finalUptime,
+                        bytesIn = (it["bytes-in"]?.toLongOrNull() ?: 0L) + actIn,
+                        bytesOut = (it["bytes-out"]?.toLongOrNull() ?: 0L) + actOut,
                         limitBytesTotal = it["limit-bytes-total"]?.toLongOrNull() ?: 0L,
                         disabled = it["disabled"]?.toBooleanStrictOrNull() ?: false
                     )

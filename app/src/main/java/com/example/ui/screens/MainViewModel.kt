@@ -123,20 +123,23 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         cal.add(Calendar.DAY_OF_YEAR, -1)
         val yesterdayKey = dateFormat.format(cal.time)
 
-        cal.time = Date()
-        cal.add(Calendar.DAY_OF_YEAR, -7)
-        val sevenDaysAgoTime = cal.timeInMillis
+        val cal7 = Calendar.getInstance(myanmarTz).apply {
+            add(Calendar.DAY_OF_YEAR, -7)
+        }
+        val sevenDaysAgoTime = cal7.timeInMillis
 
-        cal.time = Date()
-        cal.add(Calendar.DAY_OF_YEAR, -30)
-        val thirtyDaysAgoTime = cal.timeInMillis
+        val cal30 = Calendar.getInstance(myanmarTz).apply {
+            add(Calendar.DAY_OF_YEAR, -30)
+        }
+        val thirtyDaysAgoTime = cal30.timeInMillis
 
+        val distinctSessions = sessions.distinctBy { Pair(it.macAddress, it.dateKey) }
         when (filter) {
-            "Today" -> sessions.filter { it.dateKey == todayKey }
-            "Yesterday" -> sessions.filter { it.dateKey == yesterdayKey }
-            "Last 7 Days" -> sessions.filter { it.sessionStartTime >= sevenDaysAgoTime }
-            "Last 30 Days" -> sessions.filter { it.sessionStartTime >= thirtyDaysAgoTime }
-            else -> sessions
+            "Today" -> distinctSessions.filter { it.dateKey == todayKey }
+            "Yesterday" -> distinctSessions.filter { it.dateKey == yesterdayKey }
+            "Last 7 Days" -> distinctSessions.filter { it.sessionStartTime >= sevenDaysAgoTime }
+            "Last 30 Days" -> distinctSessions.filter { it.sessionStartTime >= thirtyDaysAgoTime }
+            else -> distinctSessions
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -157,15 +160,18 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         cal.add(Calendar.DAY_OF_YEAR, -1)
         val yesterdayStart = cal.timeInMillis
 
-        cal.time = Date()
-        cal.add(Calendar.DAY_OF_YEAR, -7)
-        val sevenDaysAgo = cal.timeInMillis
+        val cal7 = Calendar.getInstance(myanmarTz).apply {
+            add(Calendar.DAY_OF_YEAR, -7)
+        }
+        val sevenDaysAgo = cal7.timeInMillis
 
-        cal.time = Date()
-        cal.add(Calendar.DAY_OF_YEAR, -30)
-        val thirtyDaysAgo = cal.timeInMillis
+        val cal30 = Calendar.getInstance(myanmarTz).apply {
+            add(Calendar.DAY_OF_YEAR, -30)
+        }
+        val thirtyDaysAgo = cal30.timeInMillis
 
-        val activated = list.filter { it.isUsed }
+        val distinctVouchers = list.distinctBy { it.code }
+        val activated = distinctVouchers.filter { it.isUsed }
         val filtered = when (filter) {
             "Today" -> activated.filter { it.generatedAt >= todayStart }
             "Yesterday" -> activated.filter { it.generatedAt in yesterdayStart until todayStart }
@@ -393,6 +399,27 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 onFinished?.invoke(false, err)
             } finally {
                 isExecutingScript.value = false
+            }
+        }
+    }
+
+    fun runUniversalRouterSetup(
+        ssid: String,
+        adminPassword: String = "Khant1234@",
+        capacity: Int = 250,
+        onFinished: ((Boolean, String) -> Unit)? = null
+    ) {
+        val script = com.example.utils.UniversalSetupHelper.generateScript(ssid, adminPassword, capacity)
+        viewModelScope.launch {
+            userMessage.value = "Starting setup for SSID '$ssid' (Direct IP Gateway, no DNS name required)..."
+            executeRscScript(script) { success, log ->
+                if (success) {
+                    userMessage.value = "✓ Router setup completed successfully for SSID '$ssid'!"
+                    fetchRouterData()
+                } else {
+                    userMessage.value = "✗ Setup finished with errors. See log."
+                }
+                onFinished?.invoke(success, log)
             }
         }
     }
@@ -815,14 +842,37 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     }
 
     fun renameAccessPoint(mac: String, newName: String) {
+        val cleanMac = mac.trim().uppercase()
+        val cleanName = newName.trim()
+        if (cleanMac.isBlank() || cleanName.isBlank()) return
+
+        // 1. INSTANT OPTIMISTIC UI UPDATE (0 ms latency - immediate Compose recomposition)
+        val currentTopo = networkTopology.value
+        val updatedAps = currentTopo.accessPoints.map { ap ->
+            if (ap.macAddress.equals(cleanMac, ignoreCase = true)) {
+                ap.copy(name = cleanName)
+            } else ap
+        }
+        networkTopology.value = currentTopo.copy(accessPoints = updatedAps)
+
+        val currentBindings = ipBindings.value
+        val updatedBindings = currentBindings.map { b ->
+            if (b.macAddress.equals(cleanMac, ignoreCase = true)) {
+                b.copy(comment = "AP: $cleanName")
+            } else b
+        }
+        ipBindings.value = updatedBindings
+
+        // 2. Persist to MikroTik router asynchronously
         viewModelScope.launch {
-            val ok = repository.renameAccessPoint(mac, newName)
+            val ok = repository.renameAccessPoint(cleanMac, cleanName)
             if (ok) {
-                userMessage.value = "✓ Renamed AP to $newName!"
+                userMessage.value = "✓ Renamed AP to $cleanName!"
                 fetchNetworkTopology()
                 fetchIpBindings()
             } else {
                 userMessage.value = "✗ Failed to rename AP"
+                fetchNetworkTopology()
             }
         }
     }

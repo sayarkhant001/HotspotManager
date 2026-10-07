@@ -5,7 +5,10 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import kotlinx.serialization.Serializable
 
-@Entity(tableName = "user_profiles")
+@Entity(
+    tableName = "user_profiles",
+    indices = [Index(value = ["name"], unique = true, name = "index_user_profiles_name")]
+)
 @Serializable
 data class UserProfile(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
@@ -22,7 +25,10 @@ data class UserProfile(
     val lockUser: Boolean = false
 )
 
-@Entity(tableName = "vouchers")
+@Entity(
+    tableName = "vouchers",
+    indices = [Index(value = ["code"], unique = true, name = "index_vouchers_code")]
+)
 @Serializable
 data class Voucher(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,

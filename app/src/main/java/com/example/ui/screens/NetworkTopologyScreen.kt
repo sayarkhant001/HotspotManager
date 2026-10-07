@@ -122,11 +122,12 @@ fun NetworkTopologyScreen(
     var scale by remember { mutableFloatStateOf(1f) }
 
     LaunchedEffect(Unit) {
+        viewModel.fetchNetworkTopology()
+        viewModel.fetchIpBindings()
+        viewModel.fetchRouterData()
         while (isActive) {
+            delay(25000L)
             viewModel.fetchNetworkTopology()
-            viewModel.fetchIpBindings()
-            viewModel.fetchRouterData()
-            delay(3500L)
         }
     }
 
@@ -1666,13 +1667,15 @@ fun AddDeviceDialog(
 ) {
     val presets = remember { DeviceModelDetector.HARDWARE_PRESETS }
     var selectedCategory by remember { mutableStateOf("All") }
-    val categories = listOf("All", "EW Series", "EST Bridges", "Ceiling APs", "TP-Link")
+    val categories = listOf("All", "RG-EW Series", "RAP Ceiling", "RAP Wall-Plate", "Outdoor & OD", "AirMetro & EST", "TP-Link")
 
     val filteredPresets = remember(selectedCategory) {
         when (selectedCategory) {
-            "EW Series" -> presets.filter { it.shortName.startsWith("EW") || it.modelName.contains("EW") }
-            "EST Bridges" -> presets.filter { it.shortName.startsWith("EST") || it.modelName.contains("EST") }
-            "Ceiling APs" -> presets.filter { it.shortName.startsWith("RAP") || it.modelName.contains("RAP") }
+            "RG-EW Series" -> presets.filter { it.shortName.startsWith("EW") || it.modelName.contains("EW") || it.shortName.startsWith("RG-M") }
+            "RAP Ceiling" -> presets.filter { it.deviceType.contains("Ceiling", ignoreCase = true) }
+            "RAP Wall-Plate" -> presets.filter { it.deviceType.contains("Wall", ignoreCase = true) || it.shortName.startsWith("RAP12") }
+            "Outdoor & OD" -> presets.filter { it.deviceType.contains("Outdoor", ignoreCase = true) || it.shortName.contains("OD") || it.shortName.startsWith("RAP62") || it.shortName.startsWith("RAP52") }
+            "AirMetro & EST" -> presets.filter { it.modelName.contains("AirMetro", ignoreCase = true) || it.modelName.contains("EST", ignoreCase = true) }
             "TP-Link" -> presets.filter { it.brand.contains("TP-Link") }
             else -> presets
         }

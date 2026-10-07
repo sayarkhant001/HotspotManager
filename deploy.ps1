@@ -166,8 +166,8 @@ Show-Banner
 # ── 1. GATHER INTERACTIVE REQUIREMENTS ────────────────────────
 if ([string]::IsNullOrWhiteSpace($SiteName)) {
     Write-Host "[STEP 1/4] Site & Portal Selection" -ForegroundColor White
-    $SiteName = Read-Host "  Enter Site Name [Press ENTER for 'YadanarTun_WiFi']"
-    if ([string]::IsNullOrWhiteSpace($SiteName)) { $SiteName = "YadanarTun_WiFi" }
+    $SiteName = Read-Host "  Enter Site Name [Press ENTER for 'Kyaw_Gyi']"
+    if ([string]::IsNullOrWhiteSpace($SiteName)) { $SiteName = "Kyaw_Gyi" }
 }
 
 if ([string]::IsNullOrWhiteSpace($Ssid)) {
@@ -177,7 +177,7 @@ if ([string]::IsNullOrWhiteSpace($Ssid)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($DnsName)) {
-    $DefaultDns = "$($SiteName.ToLower().Replace('_','')).wifi"
+    $DefaultDns = if ($SiteName -eq "Kyaw_Gyi") { "kyaw.gyi" } else { "$($SiteName.ToLower().Replace('_','')).wifi" }
     $DnsName = Read-Host "  Enter Captive Portal DNS name [Press ENTER for '$DefaultDns']"
     if ([string]::IsNullOrWhiteSpace($DnsName)) { $DnsName = $DefaultDns }
 }

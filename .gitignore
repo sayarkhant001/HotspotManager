@@ -24,3 +24,5 @@ scratch/
 !HotspotManager-v1.3.6.apk
 *.zip
 hotspot1/
+__pycache__/
+*.sqlite

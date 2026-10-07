@@ -1,17 +1,19 @@
 # ==============================================================================
-#                     YADANAR_TUN_WIFI - SETUP SCRIPT
+#                     KYAW_GYI_WIFI - SETUP SCRIPT
 #                Absolute Master Formula & Automation Suite
 # ==============================================================================
 # Description:
-#   Automates complete MikroTik router configuration for Yadanar Tun Wifi:
+#   Automates complete MikroTik router configuration for Kyaw Gyi WiFi:
 #   - WAN DHCP Client & NAT Masquerade
 #   - LAN Bridge, DHCP Server (10.10.10.0/23, pool 10.10.10.10-10.10.11.250)
-#   - Wi-Fi Configuration (SSID: Hide Wifi)
+#   - Wi-Fi Configuration (SSID: Kyaw_Gyi)
+#   - Captive Portal DNS: kyaw.gyi
 #   - Hotspot Server & Directory Detection (flash/hotspot vs hotspot)
-#   - User Profiles: 5GB, 30Day, 2GB, 2Hour, VIP
-#     * Leaves existing profiles untouched
-#     * Preserves existing vouchers and their assigned users & limits
-#     * Enables MAC-roaming: users can log back in if MAC changes or after logout before limits reached
+#   - Long-Day User Session Remembering:
+#     * Cookie & MAC-cookie enabled (30 days persistence)
+#     * Clients reconnecting after going offline or router restarts are remembered
+#     * No re-asking for credentials until voucher date expires or quota is reached
+#     * No new user profile creations performed during setup
 #   - RouterOS API Service (Port 8728) & User Credentials for HotspotManager
 #   - Firewall rules optimized to ALLOW API & Hotspot, while dropping WAN/SSH attacks
 #   - Walled Garden IP entry for port 8728 so app connects even before portal login
@@ -23,7 +25,7 @@
 # ==============================================================================
 
 :put "================================================="
-:put "    YADANAR TUN WIFI - STARTING FULL SETUP       "
+:put "      KYAW GYI WIFI - STARTING FULL SETUP        "
 :put "================================================="
 
 :local rosVer [/system resource get version]
@@ -48,10 +50,10 @@
 } on-error={}
 
 # ── GLOBAL VARIABLES ──────────────────────────────────────────
-:global wifiSsid   "Hide Wifi"
+:global wifiSsid   "Kyaw_Gyi"
 # Set to 'yes' to hide SSID broadcast, or 'no' to broadcast normally
 :global hideSsid   no
-:global dnsName    "yadanartun.wifi"
+:global dnsName    "kyaw.gyi"
 :global apiPass    "Khant1234@"
 # To bypass admin devices permanently without voucher, enter MACs: {"XX:XX:XX:XX:XX:XX"; "YY:YY:YY:YY:YY:YY"}
 :global adminMacs  [:toarray ""]
@@ -62,7 +64,7 @@
 
 # ── SYSTEM IDENTITY ───────────────────────────────────────────
 :put "--- Setting Router Identity ---"
-:do { /system identity set name="YadanarTun_WiFi-Router" } on-error={}
+:do { /system identity set name="Kyaw_Gyi-Router" } on-error={}
 
 # ── STEP 1: WAN Interface & NAT ───────────────────────────────
 :put "=== Step 1: WAN Interface & NAT ==="
@@ -236,18 +238,18 @@
 
 :do {
   /ip hotspot profile add name=hs-profile hotspot-address=$gwIp dns-name=$dnsName html-directory=$hsDir \
-    login-by=http-chap,http-pap rate-limit=""
+    login-by=cookie,http-chap,http-pap,mac-cookie http-cookie-lifetime=30d mac-cookie-timeout=30d rate-limit=""
 } on-error={
   :do {
     /ip hotspot profile set [find name=hs-profile] hotspot-address=$gwIp dns-name=$dnsName html-directory=$hsDir \
-      login-by=http-chap,http-pap rate-limit=""
+      login-by=cookie,http-chap,http-pap,mac-cookie http-cookie-lifetime=30d mac-cookie-timeout=30d rate-limit=""
   } on-error={}
 }
 
-# Update all existing hotspot server profiles on the router to require voucher authentication
+# Update all existing hotspot server profiles on the router to enable 30-day MAC cookies
 :foreach hp in=[/ip hotspot profile find] do={
   :do {
-    /ip hotspot profile set $hp login-by=http-chap,http-pap html-directory=$hsDir hotspot-address=$gwIp dns-name=$dnsName
+    /ip hotspot profile set $hp login-by=cookie,http-chap,http-pap,mac-cookie http-cookie-lifetime=30d mac-cookie-timeout=30d html-directory=$hsDir hotspot-address=$gwIp dns-name=$dnsName
   } on-error={}
 }
 
@@ -265,168 +267,42 @@
     /ip hotspot set [find name=hs-server] interface=hotspot-bridge address-pool=none profile=hs-profile disabled=no
   } on-error={}
 }
-# Clear stale active sessions and remembered cookies so every device must authenticate fresh
-:do { /ip hotspot active remove [find] } on-error={}
-:do { /ip hotspot cookie remove [find] } on-error={}
-:do { /ip hotspot host remove [find] } on-error={}
-:put "  Hotspot Server Configured (active sessions & cookies reset)."
-# ── STEP 6: User Profile Setup (Continuous Validity Countdown & MAC Roaming) ──
-:put "=== Step 6: User Profile Setup ==="
+:put "  Hotspot Server Configured (30-Day Cookie & MAC-Cookie persistence enabled)."
+
+# ── STEP 6: User Profile Optimization (MAC Roaming & 30-Day Cookie Persistence) ──
+# Note: Zero new user profiles are created during setup (managed directly via HotspotManager app).
+# Configures the default user profile and existing user profiles to remember clients for 30 days.
+:put "=== Step 6: User Profile MAC Roaming & Persistence (No Profile Creations) ==="
 
 # Define on-login script to automatically:
-# 1. Remove stale active sessions/cookies when a user reconnects with randomized/changed MAC.
-# 2. Trigger 'voucher-activate' to initiate continuous expiration countdown from time of first login.
+# 1. Clean stale active sessions/cookies when a user reconnects with randomized/changed MAC.
+# 2. Trigger 'voucher-activate' if present to track continuous expiration countdown.
 :local macFixScript ":local u \$user; :local m \$\"mac-address\"; :do { /ip hotspot active remove [find user=\$u and mac-address!=\$m]; /ip hotspot cookie remove [find user=\$u and mac-address!=\$m] } on-error={}; :global hsUser \$user; :do { /system script run voucher-activate } on-error={}"
 
-# 1. Profile 5GB (20M/20M, 1 Day, 5GB Quota):
+# 1. Update the default user profile for 30-day MAC cookie persistence and zero idle kicks
 :do {
-  /ip hotspot user profile add name="5GB" rate-limit="20M/20M" session-timeout=1d \
-    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-  :put "  Profile 5GB created (session-timeout=1d, rate-limit=20M/20M)."
-} on-error={
-  :do {
-    /ip hotspot user profile set [find name="5GB"] rate-limit="20M/20M" session-timeout=1d \
-      keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-    :put "  Profile 5GB updated."
-  } on-error={}
-}
-
-# 2. Profile 30Day (10M/10M, 30 Days, 60GB Quota):
-:do {
-  /ip hotspot user profile add name="30Day" rate-limit="10M/10M" session-timeout=30d \
-    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-  :put "  Profile 30Day created (session-timeout=30d, rate-limit=10M/10M)."
-} on-error={
-  :do {
-    /ip hotspot user profile set [find name="30Day"] rate-limit="10M/10M" session-timeout=30d \
-      keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-    :put "  Profile 30Day updated."
-  } on-error={}
-}
-
-# 3. Profile 2GB (20M/20M, 1 Day, 2GB Quota):
-:do {
-  /ip hotspot user profile add name="2GB" rate-limit="20M/20M" session-timeout=1d \
-    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-  :put "  Profile 2GB created (session-timeout=1d, rate-limit=20M/20M)."
-} on-error={
-  :do {
-    /ip hotspot user profile set [find name="2GB"] rate-limit="20M/20M" session-timeout=1d \
-      keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-    :put "  Profile 2GB updated."
-  } on-error={}
-}
-
-# 4. Profile 2Hour (5M/5M, 2 Hours, Unlimited Quota):
-:do {
-  /ip hotspot user profile add name="2Hour" rate-limit="5M/5M" session-timeout=2h \
-    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-  :put "  Profile 2Hour created (session-timeout=2h, rate-limit=5M/5M)."
-} on-error={
-  :do {
-    /ip hotspot user profile set [find name="2Hour"] rate-limit="5M/5M" session-timeout=2h \
-      keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-    :put "  Profile 2Hour updated."
-  } on-error={}
-}
-
-# 5. Profile VIP (5M/5M, Unlimited):
-:do {
-  /ip hotspot user profile add name="VIP" rate-limit="5M/5M" session-timeout=none \
-    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-  :put "  Profile VIP created (unlimited, rate-limit=5M/5M)."
-} on-error={
-  :do {
-    /ip hotspot user profile set [find name="VIP"] rate-limit="5M/5M" session-timeout=none \
-      keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-    :put "  Profile VIP updated."
-  } on-error={}
-}
-
-# Legacy profile aliases for backward compatibility
-:do {
-  /ip hotspot user profile add name="1GB_1H" rate-limit="10M/10M" session-timeout=1h \
-    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-} on-error={}
-:do {
-  /ip hotspot user profile add name="15M" rate-limit="10M/10M" session-timeout=15m \
-    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
+  /ip hotspot user profile set [find name="default"] \
+    shared-users=2 \
+    add-mac-cookie=yes \
+    mac-cookie-timeout=30d \
+    keepalive-timeout=none \
+    idle-timeout=none \
+    on-login=$macFixScript
+  :put "  Default user profile updated: shared-users=2, add-mac-cookie=yes, mac-cookie-timeout=30d."
 } on-error={}
 
-# 3. Update default profile with safe matching values and MAC roaming & continuous countdown
-:do {
-  /ip hotspot user profile set [find name="default"] rate-limit="10M/10M" session-timeout=1h \
-    keepalive-timeout=none idle-timeout=none shared-users=2 on-login=$macFixScript
-} on-error={}
-:put "  Default profile updated."
-
-# 4. Dynamic Duration-Based MAC Cookie Timeout & Roaming on all profiles:
-# Edits all existing profiles on configured routers to work this way:
-# - Adjusts mac-cookie-timeout to MATCH each voucher's exact validity duration (15m, 1h, 7d, etc.)
-# - Sets shared-users=2 and keepalive-timeout=none so users can log back in when MAC changes
-# - Attaches continuous validity countdown timer and MAC purge logic
-# - Preserves rate-limits, quotas, and existing voucher users
+# 2. Adapt all other existing user profiles on the router (WITHOUT creating any new profiles)
 :foreach p in=[/ip hotspot user profile find] do={
   :local pName [/ip hotspot user profile get $p name]
-  :if ($pName != "default" and $pName != "1GB_1H" and $pName != "15M") do={
-    :local dur 1h
-    :local sTime [/ip hotspot user profile get $p session-timeout]
-    :local sStr [:tostr $sTime]
-    :local pComm ""
-    :do { :set pComm [/ip hotspot user profile get $p comment] } on-error={}
-
-    # 1. Detect duration from session-timeout, name, or comment:
-    :if ($sStr != "" and $sStr != "00:00:00" and $sStr != "0s" and $sStr != "0") do={
-      :set dur $sTime
-    } else={
-      :if ($pName ~ "15M" or $pName ~ "15m" or $pComm ~ "15m" or $pComm ~ "15M") do={
-        :set dur 15m
-      } else={
-        :if ($pName ~ "30M" or $pName ~ "30m" or $pComm ~ "30m" or $pComm ~ "30M") do={
-          :set dur 30m
-        } else={
-          :if ($pName ~ "45M" or $pName ~ "45m" or $pComm ~ "45m" or $pComm ~ "45M") do={
-            :set dur 45m
-          } else={
-            :if ($pName ~ "30D" or $pName ~ "30d" or $pName ~ "Month" or $pComm ~ "30") do={
-              :set dur 30d
-            } else={
-              :if ($pName ~ "14D" or $pName ~ "14d" or $pName ~ "2W" or $pName = "2GB_10M" or $pComm ~ "14") do={
-                :set dur 14d
-              } else={
-                :if ($pName ~ "7D" or $pName ~ "7d" or $pName ~ "1W" or $pName = "1GB_10M" or $pComm ~ "7") do={
-                  :set dur 7d
-                } else={
-                  :if ($pName ~ "6H" or $pName ~ "6h" or $pComm ~ "6h") do={
-                    :set dur 6h
-                  } else={
-                    :if ($pName ~ "3H" or $pName ~ "3h") do={
-                      :set dur 3h
-                    } else={
-                      :if ($pName ~ "2H" or $pName ~ "2h") do={
-                        :set dur 2h
-                      } else={
-                        :if ($pName ~ "1H" or $pName ~ "1h" or $pComm ~ "1h") do={
-                          :set dur 1h
-                        } else={
-                          :if ($pName ~ "1D" or $pName ~ "1d" or $pName ~ "24H") do={
-                            :set dur 1d
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    # 2. Update existing profile properties
+  :if ($pName != "default") do={
     :do {
-      /ip hotspot user profile set $p shared-users=2 keepalive-timeout=none idle-timeout=none
+      /ip hotspot user profile set $p \
+        shared-users=2 \
+        add-mac-cookie=yes \
+        mac-cookie-timeout=30d \
+        keepalive-timeout=none \
+        idle-timeout=none
+      
       :local curOnLogin ""
       :do { :set curOnLogin [/ip hotspot user profile get $p on-login] } on-error={}
       :if ([:len $curOnLogin] = 0) do={
@@ -436,13 +312,11 @@
           /ip hotspot user profile set $p on-login=($curOnLogin . "; " . $macFixScript)
         }
       }
-      :put ("  Edited profile '" . $pName . "': shared-users=2, roaming & continuous countdown=active.")
-    } on-error={
-      :put ("  Could not edit profile: " . $pName)
-    }
+      :put ("  Updated existing profile '" . $pName . "': add-mac-cookie=yes, mac-cookie-timeout=30d, keepalive=none, idle=none.")
+    } on-error={}
   }
 }
-:put "  All existing profiles successfully adapted for duration-based remembering, MAC roaming, and continuous countdown."
+:put "  All user profiles configured for zero-prompt reconnection and 30-day MAC persistence."
 
 # 5. Clean up any orphaned cookies from deleted/non-existent users to relieve memory load
 :foreach c in=[/ip hotspot cookie find] do={
@@ -536,17 +410,7 @@
     } on-error={};
   }
 
-  # Auto-assign quota limits on first login if currently 0
-  :do {
-    :local uLimBytes [/ip hotspot user get [find name=$u] limit-bytes-total];
-    :local profName [/ip hotspot user get [find name=$u] profile];
-    :if ($uLimBytes = 0) do={
-      :if ($profName = "5GB") do={ /ip hotspot user set [find name=$u] limit-bytes-total=5368709120 };
-      :if ($profName = "2GB") do={ /ip hotspot user set [find name=$u] limit-bytes-total=2147483648 };
-      :if ($profName = "30Day") do={ /ip hotspot user set [find name=$u] limit-bytes-total=64424509440 };
-      :if ($profName = "1GB_1H") do={ /ip hotspot user set [find name=$u] limit-bytes-total=1073741824 };
-    }
-  } on-error={};
+
 
   :local cDate [/system clock get date];
   :local cTime [/system clock get time];
@@ -793,16 +657,7 @@
   }
 } on-error={}
 
-# 3. Ensure profiles and byte limits are set for any vouchers with limit=0
-:do {
-  :foreach u in=[/ip hotspot user find where limit-bytes-total=0] do={
-    :local uProf [/ip hotspot user get $u profile]
-    :if ($uProf = "5GB") do={ /ip hotspot user set $u limit-bytes-total=5368709120 }
-    :if ($uProf = "2GB") do={ /ip hotspot user set $u limit-bytes-total=2147483648 }
-    :if ($uProf = "30Day") do={ /ip hotspot user set $u limit-bytes-total=64424509440 }
-    :if ($uProf = "1GB_1H") do={ /ip hotspot user set $u limit-bytes-total=1073741824 }
-  }
-} on-error={}
+
 :put "  Voucher optimization and normalization completed."
 
 # ── STEP 13b: Hotspot Accounts Auto-Import ─────────────────────
@@ -869,7 +724,7 @@
 
 :put ""
 :put "================================================="
-:put "       YADANAR TUN WIFI - SETUP COMPLETED        "
+:put "         KYAW GYI WIFI - SETUP COMPLETED         "
 :put "================================================="
 :put ("Router Model    : " . $boardName)
 :put ("RouterOS Version: " . $rosVer)
@@ -882,6 +737,8 @@
 :put "Network Range   : 10.10.10.0/23"
 :put ("SSID            : " . $wifiSsid)
 :put "Portal Directory: flash/hotspot (or hotspot)"
+:put "Persistence     : 30-Day Cookie & MAC-Cookie Auto-Reconnect"
+:put "User Profiles   : Managed via HotspotManager (Zero dummy profiles created)"
 :put "API Port        : 8728 (ENABLED & ALLOWED)"
 :put "Admin User      : admin / Khant1234@"
 :put "App API User    : flutter_app / Khant1234@"

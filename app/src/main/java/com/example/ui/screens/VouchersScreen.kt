@@ -62,6 +62,8 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
     val vouchers by viewModel.vouchers.collectAsStateWithLifecycle()
     val profiles by viewModel.profiles.collectAsStateWithLifecycle()
     val isSyncing by viewModel.isSyncingVouchers.collectAsStateWithLifecycle()
+    val activeUsers by viewModel.activeUsers.collectAsStateWithLifecycle()
+    val activeCodes = remember(activeUsers) { activeUsers.map { it.user }.toSet() }
     val userMsg by viewModel.userMessage.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -82,7 +84,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedProfileFilter by remember { mutableStateOf<String?>(null) }
-    var printFilterMode by remember { mutableStateOf("ALL") } // ALL, USED, UNPRINTED, PRINTED
+    var printFilterMode by remember { mutableStateOf("ALL") } // ALL, USING, EXPIRED, UNPRINTED, PRINTED
     var selectedVoucherCodes by remember { mutableStateOf(setOf<String>()) }
 
     var showGenerateDialog by remember { mutableStateOf(false) }
@@ -95,22 +97,21 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
     var showDeleteAllUsedDialog by remember { mutableStateOf(false) }
     var showDeleteSelectedDialog by remember { mutableStateOf(false) }
 
-    val usingCount = vouchers.count { it.isCurrentlyUsing() }
-    val expiredCount = vouchers.count { it.isExpired() }
-    val usedCount = vouchers.count { it.isUsed || it.isExpired() }
+    val usingCount = vouchers.count { it.isCurrentlyUsing(activeCodes) }
+    val expiredCount = vouchers.count { it.isExpired() || it.isUsed }
+    val usedCount = expiredCount
     val unprintedCount = vouchers.count { !it.isPrinted && !it.isUsed && !it.isExpired() }
     val printedCount = vouchers.count { it.isPrinted && !it.isUsed && !it.isExpired() }
 
-    val filteredVouchers = remember(vouchers, searchQuery, selectedProfileFilter, printFilterMode) {
+    val filteredVouchers = remember(vouchers, searchQuery, selectedProfileFilter, printFilterMode, activeCodes) {
         vouchers.filter { v ->
             val matchesSearch = searchQuery.isEmpty() ||
                 v.code.contains(searchQuery, ignoreCase = true) ||
                 v.profileName.contains(searchQuery, ignoreCase = true)
             val matchesProfile = selectedProfileFilter == null || v.profileName == selectedProfileFilter
             val matchesPrint = when (printFilterMode) {
-                "USING" -> v.isCurrentlyUsing()
-                "EXPIRED" -> v.isExpired()
-                "USED" -> v.isUsed || v.isExpired()
+                "USING" -> v.isCurrentlyUsing(activeCodes)
+                "EXPIRED", "USED" -> v.isExpired() || v.isUsed
                 "UNPRINTED" -> !v.isPrinted && !v.isUsed && !v.isExpired()
                 "PRINTED" -> v.isPrinted && !v.isUsed && !v.isExpired()
                 else -> true
@@ -426,9 +427,11 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
             ) {
                 items(filteredVouchers, key = { it.code }) { voucher ->
                     val isSelected = voucher.code in selectedVoucherCodes
+                    val isOnline = voucher.code in activeCodes
                     VoucherItemCard(
                         voucher = voucher,
                         isSelected = isSelected,
+                        isOnline = isOnline,
                         onToggleSelect = {
                             selectedVoucherCodes = if (isSelected) {
                                 selectedVoucherCodes - voucher.code
@@ -667,6 +670,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
 fun VoucherItemCard(
     voucher: Voucher,
     isSelected: Boolean,
+    isOnline: Boolean = false,
     onToggleSelect: () -> Unit,
     onRenew: (() -> Unit)? = null,
     onDelete: () -> Unit
@@ -718,17 +722,16 @@ fun VoucherItemCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
 
+                    val isExp = voucher.isExpired() || voucher.isUsed
                     val badgeColor = when {
-                        voucher.isExpired() -> Color(0xFFDC2626)
-                        voucher.isCurrentlyUsing() -> Color(0xFF0284C7)
-                        voucher.isUsed -> Color(0xFFE65100)
+                        isOnline -> Color(0xFF0284C7)
+                        isExp -> Color(0xFFDC2626)
                         voucher.isPrinted -> Color(0xFF2E7D32)
                         else -> MaterialTheme.colorScheme.outline
                     }
                     val badgeText = when {
-                        voucher.isExpired() -> strings.filterExpired
-                        voucher.isCurrentlyUsing() -> strings.filterUsing
-                        voucher.isUsed -> strings.statusUsed
+                        isOnline -> strings.filterUsing
+                        isExp -> strings.filterExpired
                         voucher.isPrinted -> strings.statusPrinted
                         else -> strings.statusUnprinted
                     }
@@ -791,9 +794,10 @@ fun VoucherItemCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                if (voucher.price > 0) {
+                val displayPrice = VoucherPrinter.resolveVoucherPrice(voucher)
+                if (displayPrice > 0.0) {
                     Text(
-                        text = "Price: ${"%,d".format(java.util.Locale.US, voucher.price.toLong())} Ks",
+                        text = "Price: ${"%,d".format(java.util.Locale.US, displayPrice.toLong())} Ks",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
@@ -901,6 +905,7 @@ fun parseRouterOsUptimeMinutes(uptime: String): Int {
 }
 
 fun Voucher.isExpired(): Boolean {
+    if (isUsed) return true
     val totalUsedMb = (bytesIn + bytesOut) / (1024.0 * 1024.0)
     if (dataLimitMb > 0 && totalUsedMb >= dataLimitMb) return true
     if (durationMinutes > 0 && parseRouterOsUptimeMinutes(uptime) >= durationMinutes) return true
@@ -908,9 +913,9 @@ fun Voucher.isExpired(): Boolean {
     return false
 }
 
-fun Voucher.isCurrentlyUsing(): Boolean {
-    val hasStarted = isUsed || (uptime.isNotBlank() && uptime != "0s") || bytesOut > 0 || bytesIn > 0
-    return hasStarted && !isExpired()
+fun Voucher.isCurrentlyUsing(activeCodes: Set<String> = emptySet()): Boolean {
+    if (activeCodes.contains(code)) return true
+    return false
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

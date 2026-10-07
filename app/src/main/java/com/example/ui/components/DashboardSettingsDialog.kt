@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -114,6 +115,11 @@ fun DashboardSettingsDialog(
     var isChangingPass by remember { mutableStateOf(false) }
     var passErrorMsg by remember { mutableStateOf<String?>(null) }
     var passSuccessMsg by remember { mutableStateOf<String?>(null) }
+
+    var phoneSetupSsid by remember { mutableStateOf("Kyaw_Gyi") }
+    var phoneSetupPass by remember { mutableStateOf(initialPass.ifBlank { "Khant1234@" }) }
+    var phoneSetupCap by remember { mutableStateOf("250") }
+    var showPhoneSetupConfirm by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1302,6 +1308,144 @@ fun DashboardSettingsDialog(
                         // ============================================================
                         val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
+                        // 0. Universal Phone-Based Router Setup Card (One-Tap Provisioning)
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+                            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.WifiTethering,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            "Universal Phone-Based Setup",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            "One-tap setup for any MikroTik (v6 & v7)",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    "Configures Wi-Fi AP, Hotspot, and flash quota/uptime persistence directly from your phone. Uses Direct IP Mode (no DNS name) for 100% captive portal reliability.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                // SSID Input
+                                OutlinedTextField(
+                                    value = phoneSetupSsid,
+                                    onValueChange = { phoneSetupSsid = it },
+                                    label = { Text("Wi-Fi SSID Name") },
+                                    placeholder = { Text("e.g. Kyaw_Gyi") },
+                                    singleLine = true,
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    // Admin Password
+                                    OutlinedTextField(
+                                        value = phoneSetupPass,
+                                        onValueChange = { phoneSetupPass = it },
+                                        label = { Text("Admin Password") },
+                                        singleLine = true,
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    // Capacity
+                                    OutlinedTextField(
+                                        value = phoneSetupCap,
+                                        onValueChange = { if (it.all { c -> c.isDigit() }) phoneSetupCap = it },
+                                        label = { Text("IP Capacity") },
+                                        singleLine = true,
+                                        leadingIcon = {
+                                            Icon(Icons.Default.People, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        },
+                                        modifier = Modifier.weight(0.7f)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                // Direct IP Notice Badge
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = Color(0xFF4CAF50),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(
+                                                "Direct IP Mode Enabled (dns-name=\"\")",
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.labelMedium
+                                            )
+                                            Text(
+                                                "No DNS domain needed. Prevents captive portal redirect failures and SSL cert warnings on Android & iOS. Exact quota & time cut-off with 5s flash sync enabled.",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Button(
+                                    onClick = { showPhoneSetupConfirm = true },
+                                    enabled = !isExecutingScript && phoneSetupSsid.isNotBlank(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    if (isExecutingScript) {
+                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Configuring Router...", fontWeight = FontWeight.Bold)
+                                    } else {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Run Universal Setup Now", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
                         // 1. GitHub Master Provisioning Scripts Card
                         Surface(
                             shape = RoundedCornerShape(14.dp),
@@ -1597,5 +1741,36 @@ fun DashboardSettingsDialog(
                 }
             }
         }
+    }
+
+    if (showPhoneSetupConfirm) {
+        AlertDialog(
+            onDismissRequest = { showPhoneSetupConfirm = false },
+            title = { Text("Run Universal Router Setup?") },
+            text = {
+                Text(
+                    "This will configure Wi-Fi SSID '$phoneSetupSsid' on Direct IP Gateway 10.10.10.1 (no DNS name) and deploy persistent quota & time tracking (saving every 5s to flash, deducting consumed uptime & quota across power cuts). Existing vouchers will be preserved."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPhoneSetupConfirm = false
+                        viewModel.runUniversalRouterSetup(
+                            ssid = phoneSetupSsid,
+                            adminPassword = phoneSetupPass,
+                            capacity = phoneSetupCap.toIntOrNull() ?: 250
+                        )
+                    }
+                ) {
+                    Text("Proceed & Configure")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showPhoneSetupConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

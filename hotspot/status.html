@@ -1,143 +1,333 @@
 <!DOCTYPE html>
-<html lang="my">
+<html lang="en">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <title>ရတနာထွန်း Wifi – အခြေအနေ</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Yadanar Tun Wifi – Connected</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <meta http-equiv="refresh" content="60; url=$(link-status)" />
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23060913'/%3E%3Cpath d='M14 24 Q32 10 50 24' stroke='%2300F2FE' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M20 32 Q32 20 44 32' stroke='%2338BDF8' stroke-width='3.5' fill='none' stroke-linecap='round'/%3E%3Cpolygon points='27,43 37,43 41,47 32,56 23,47' fill='%23F59E0B'/%3E%3C/svg%3E" />
+  <meta name="description" content="Yadanar Tun Wifi – You are connected. View your session details." />
+  <!--
+    status.html – Active session dashboard.
+  -->
+  <meta http-equiv="refresh" content="$(refresh-timeout-secs); url=$(link-status)" />
+  <link rel="icon" href="img/favicon.ico" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-  <!-- Dynamic Ambient Animated Glow Orbs -->
-  <div class="bg-ambient">
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
-    <div class="orb orb-3"></div>
+  <!-- Loading Overlay -->
+  <div class="body-loading" id="body_loading">
+    <div class="loading-inner">
+      <div class="loading-ring"></div>
+      <p class="loading-text">Loading…</p>
+    </div>
   </div>
 
-  <div class="portal-container">
-    <div class="glass-card" style="text-align: center;">
+  <div class="body-wrapper">
 
-      <!-- Brand Header -->
-      <div class="brand-header" style="margin-bottom: 18px;">
-        <h1 class="brand-title">ရတနာထွန်း Wifi</h1>
-        <p class="brand-sub">
-          <span class="live-dot"></span>
-          အင်တာနက် ချိတ်ဆက်ထားသည်
-        </p>
-      </div>
+    <div class="body-background">
+      <div class="body-background-mask"></div>
+    </div>
 
-      <!-- Active User Card -->
-      <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 12px 16px; margin-bottom: 16px; text-align: left; display: flex; align-items: center; gap: 12px;">
-        <div style="width: 38px; height: 38px; border-radius: 12px; background: rgba(56, 189, 248, 0.15); display: flex; align-items: center; justify-content: center; color: #38BDF8;">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-            <circle cx="12" cy="7" r="4"/>
+    <div class="particles" aria-hidden="true">
+      <span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span>
+    </div>
+
+    <div class="body-content-wrapper">
+      <div class="login-card">
+
+        <!-- Logo Badge -->
+        <div class="logo-badge-wrapper">
+          <div class="logo-badge">
+            <svg class="logo-svg" viewBox="0 0 72 72" fill="none"
+                 xmlns="http://www.w3.org/2000/svg" aria-label="Yadanar Tun Wifi">
+              <defs>
+                <linearGradient id="ytGoldGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#FDE68A"/>
+                  <stop offset="50%" stop-color="#F59E0B"/>
+                  <stop offset="100%" stop-color="#B45309"/>
+                </linearGradient>
+              </defs>
+              <!-- Radiant WiFi Arcs -->
+              <path d="M14 26 Q36 6 58 26" stroke="url(#ytGoldGlow)" stroke-width="4.2" stroke-linecap="round" fill="none"/>
+              <path d="M22 34 Q36 20 50 34" stroke="url(#ytGoldGlow)" stroke-width="4" stroke-linecap="round" fill="none"/>
+              <path d="M29 42 Q36 34 43 42" stroke="url(#ytGoldGlow)" stroke-width="3.6" stroke-linecap="round" fill="none"/>
+              <!-- Faceted Yadanar Gem -->
+              <polygon points="30,49 42,49 47,54 36,65 25,54" fill="#F59E0B" stroke="#FDE68A" stroke-width="1.5" stroke-linejoin="round"/>
+              <polygon points="30,49 42,49 36,54" fill="#FFFBEB" opacity="0.9"/>
+              <polygon points="25,54 30,49 36,54" fill="#FDE68A" opacity="0.95"/>
+              <polygon points="47,54 42,49 36,54" fill="#D97706" opacity="0.95"/>
+              <polygon points="25,54 36,54 36,65" fill="#F59E0B"/>
+              <polygon points="47,54 36,54 36,65" fill="#B45309"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Brand Name & Subtitle -->
+        <h1 class="brand-name">Yadanar Tun Wifi</h1>
+        <p class="brand-sub">ရတနာထွန်း • <span>Connected Session</span></p>
+
+        <!-- Connected indicator -->
+        <div class="status-connected-badge">
+          <span class="status-dot"></span>
+          <span class="status-connected-text">CONNECTED</span>
+        </div>
+
+        <!-- Voucher / Username display -->
+        <div class="voucher-display">
+          <span class="voucher-display-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.8">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+              <line x1="7" y1="7" x2="7.01" y2="7"/>
+            </svg>
+          </span>
+          <div class="voucher-display-body">
+            <p class="voucher-display-label">Voucher / Username</p>
+            <p class="voucher-display-value" id="display_username">$(username)</p>
+          </div>
+        </div>
+
+        <!-- Session stats grid -->
+        <div class="profile-grid">
+
+          <div class="profile-stat">
+            <p class="profile-stat-label">Session Time</p>
+            <p class="profile-stat-value green" id="stat_uptime">$(uptime)</p>
+          </div>
+
+          <div class="profile-stat">
+            <p class="profile-stat-label">Time Remaining</p>
+            <p class="profile-stat-value gold" id="stat_timeleft">$(session-time-left)</p>
+          </div>
+
+          <!-- Data Used: sum of bytes-in + bytes-out, formatted by JS -->
+          <div class="profile-stat" style="border-color:rgba(74,222,128,.20);background:rgba(74,222,128,.05);">
+            <p class="profile-stat-label" style="color:rgba(74,222,128,.75);">&#8595; Data Used</p>
+            <p class="profile-stat-value" id="stat_data_used" style="color:#4ade80;">...</p>
+            <!-- Raw values read by JS -->
+            <span id="stat_bytes_in" style="display:none;">$(bytes-in)</span>
+            <span id="stat_bytes_out" style="display:none;">$(bytes-out)</span>
+            <span id="stat_remain_bytes" style="display:none;">$(remain-bytes-total)</span>
+            <span id="stat_limit_bytes" style="display:none;">$(limit-bytes-total)</span>
+          </div>
+
+          <!-- Data Remaining: calculated by JS from username prefix / byte counters -->
+          <div class="profile-stat" style="border-color:rgba(99,179,237,.20);background:rgba(99,179,237,.05);">
+            <p class="profile-stat-label" style="color:rgba(99,179,237,.75);" id="stat_data_remaining_label">&#8593; Data Left</p>
+            <p class="profile-stat-value" id="stat_data_remaining" style="color:#63b3ed;">...</p>
+          </div>
+
+          <div class="profile-stat">
+            <p class="profile-stat-label">IP Address</p>
+            <p class="profile-stat-value" id="stat_ip">$(ip)</p>
+          </div>
+
+          <div class="profile-stat">
+            <p class="profile-stat-label">MAC Address</p>
+            <p class="profile-stat-value" id="stat_mac" style="font-size:11px;letter-spacing:.04em;">$(mac)</p>
+          </div>
+
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Browse button — lands directly on Google -->
+        <a class="connect-btn" href="https://www.google.com" id="browse_btn"
+           style="display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;margin-bottom:12px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
           </svg>
-        </div>
-        <div>
-          <div style="font-size: 11px; color: var(--text-dim); font-weight: 500;">အသုံးပြုသူ</div>
-          <div style="font-size: 15px; font-weight: 700; color: #FFFFFF;" id="display_username">$(username)</div>
-        </div>
-      </div>
+          BROWSE INTERNET
+        </a>
 
-      <!-- Live Session Stats 2x2 -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;">
-        <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; text-align: left;">
-          <div style="font-size: 11px; color: var(--text-dim);">အသုံးပြုချိန်</div>
-          <div style="font-size: 14px; font-weight: 700; color: #10B981; margin-top: 2px;" id="stat_uptime">$(uptime)</div>
-        </div>
-
-        <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; text-align: left;">
-          <div style="font-size: 11px; color: var(--text-dim);">ကျန်ရှိချိန်</div>
-          <div style="font-size: 14px; font-weight: 700; color: #F59E0B; margin-top: 2px;" id="stat_timeleft">$(session-time-left)</div>
-        </div>
-
-        <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; text-align: left;">
-          <div style="font-size: 11px; color: var(--text-dim);">အသုံးပြုပြီး</div>
-          <div style="font-size: 14px; font-weight: 700; color: #38BDF8; margin-top: 2px;" id="stat_data_used">$(bytes-in-nice) / $(bytes-out-nice)</div>
-        </div>
-
-        <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; text-align: left;">
-          <div style="font-size: 11px; color: var(--text-dim);">ကျန်ရှိဒေတာ</div>
-          <div style="font-size: 14px; font-weight: 700; color: #A7F3D0; margin-top: 2px;" id="stat_data_remaining">$(remain-bytes-total)</div>
-        </div>
-      </div>
-
-      <!-- IP & MAC -->
-      <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 16px;">
-        IP: <span style="color:#E2E8F0;">$(ip)</span> &bull; MAC: <span style="color:#E2E8F0;">$(mac)</span>
-      </div>
-
-      <!-- Logout Form -->
-      <form action="$(link-logout)" name="logout" method="post">
-        <input type="hidden" name="erase-cookie" value="on" />
-        <button type="submit" style="width: 100%; padding: 13px; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 14px; background: rgba(239, 68, 68, 0.12); color: #FCA5A5; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <!-- Logout Button — clears cookie and logs out -->
+        <a class="logout-btn" href="$(link-logout)?erase-cookie=on" id="logout_btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2"
+               style="margin-right:8px; flex-shrink:0;">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
             <polyline points="16 17 21 12 16 7"/>
             <line x1="21" y1="12" x2="9" y2="12"/>
           </svg>
-          ထွက်မည် (Logout)
-        </button>
-      </form>
+          LOG OUT
+        </a>
 
-      <p class="footer-copy">
-        ရတနာထွန်း Wifi &bull; High Speed Hotspot
-      </p>
+        <!-- Feature tags -->
+        <div class="feature-row">
+          <span class="feature-tag">&#10022; HIGH SPEED</span>
+          <span class="feature-tag">&#10022; STABLE LINK</span>
+          <span class="feature-tag">&#10022; 24/7 UP TIME</span>
+        </div>
 
+        <p class="card-footer">
+          Yadanar Tun Wifi &nbsp;&bull;&nbsp; Powered by MikroTik
+        </p>
+
+      </div><!-- /.login-card -->
     </div>
-  </div>
 
-  <script src="js/main.js"></script>
+  </div><!-- /.body-wrapper -->
+
   <script>
-    (function() {
-      function formatBytesToMB(val) {
-        if (!val) return 'Unlimited';
-        var s = String(val).trim();
-        if (!s || s.indexOf('$(') !== -1 || s.toLowerCase() === 'unlimited' || s.toLowerCase() === 'none') {
-          return 'Unlimited';
-        }
-        // Strip commas and extra spaces (e.g. "2,147,483,648" -> "2147483648")
-        s = s.replace(/,/g, '').trim();
-        var m = s.match(/([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)?/);
-        if (!m) return s;
-        var num = parseFloat(m[1]);
-        if (isNaN(num)) return s;
-        if (num === 0) return '0 MB';
-        var unit = (m[2] || '').toLowerCase();
-        var mb = 0;
-        if (unit.indexOf('g') !== -1) {
-          mb = num * 1024;
-        } else if (unit.indexOf('m') !== -1) {
-          mb = num;
-        } else if (unit.indexOf('k') !== -1) {
-          mb = num / 1024;
-        } else {
-          // Raw bytes (no unit or b/byte/bytes)
-          mb = num / (1024 * 1024);
-        }
-        if (mb >= 100) {
-          return Math.round(mb) + ' MB';
-        } else if (mb >= 1) {
-          return (Math.round(mb * 10) / 10).toFixed(1) + ' MB';
-        } else if (mb > 0) {
-          return '< 1 MB';
-        } else {
-          return '0 MB';
-        }
+    (function () {
+      setTimeout(function () {
+        var overlay = document.getElementById('body_loading');
+        if (overlay) overlay.classList.add('hide');
+      }, 600);
+
+      function fmtBytes(n) {
+        if (isNaN(n) || n < 0) return '0 B';
+        var units = ['B','KB','MB','GB','TB'];
+        var i = 0;
+        while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+        return n.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
       }
-      var remEl = document.getElementById('stat_data_remaining');
-      if (remEl) {
-        remEl.textContent = formatBytesToMB(remEl.textContent);
-      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        /* ── Read raw byte counters ── */
+        var inEl   = document.getElementById('stat_bytes_in');
+        var outEl  = document.getElementById('stat_bytes_out');
+        var inEl     = document.getElementById('stat_bytes_in');
+        var outEl    = document.getElementById('stat_bytes_out');
+        var remainEl = document.getElementById('stat_remain_bytes');
+        var limitEl  = document.getElementById('stat_limit_bytes');
+        var usedEl   = document.getElementById('stat_data_used');
+        var leftEl   = document.getElementById('stat_data_remaining');
+        var leftLabel = document.getElementById('stat_data_remaining_label');
+
+        var rawIn     = inEl     ? parseInt(inEl.textContent.trim(),     10) : NaN;
+        var rawOut    = outEl    ? parseInt(outEl.textContent.trim(),    10) : NaN;
+        var rawRemain = remainEl ? parseInt(remainEl.textContent.trim(), 10) : NaN;
+        var rawLimit  = limitEl  ? parseInt(limitEl.textContent.trim(),  10) : NaN;
+        var sessionBytes = (!isNaN(rawIn) && !isNaN(rawOut)) ? rawIn + rawOut : 0;
+
+        /* ── Detect plan capacity ── */
+        var unameEl = document.getElementById('display_username');
+        var uname   = unameEl ? unameEl.textContent.trim() : '';
+        var up      = uname.toUpperCase();
+        var limitBytes = 0;
+        var planLabel  = '';
+        var isUnlimited = false;
+
+        if (!isNaN(rawLimit) && rawLimit > 0) {
+          limitBytes = rawLimit;
+          if (limitBytes >= 30000000000) { planLabel = '30GB Plan'; }
+          else if (limitBytes >= 5000000000) { planLabel = '5GB Plan'; }
+          else if (limitBytes >= 2000000000) { planLabel = '2GB Plan'; }
+          else if (limitBytes >= 1500000000) { planLabel = '1.7GB Plan'; }
+          else if (limitBytes >= 700000000)  { planLabel = '750MB Plan'; }
+          else { planLabel = fmtBytes(limitBytes) + ' Plan'; }
+        } else if (up.indexOf('AG3H') === 0) {
+          limitBytes = 3221225472;   /* 3 GB */
+          planLabel  = '3GB Plan';
+        } else if (up.indexOf('AG7D') === 0) {
+          limitBytes = 7516192768;   /* 7 GB */
+          planLabel  = '7GB Plan';
+        } else if (up.indexOf('AG30') === 0 || up.indexOf('30GB') !== -1 || up.indexOf('30D') !== -1) {
+          limitBytes = 32212254720;  /* 30 GB */
+          planLabel  = '30GB Plan';
+        } else if (up.indexOf('AGU') === 0 || up.indexOf('UNLIM') === 0) {
+          isUnlimited = true;
+          planLabel   = 'Unlimited';
+        } else if (uname.indexOf('55') === 0) {
+          limitBytes = 5368709120;   /* 5 GB */
+          planLabel  = '5GB Plan';
+        } else {
+          /* Default numeric vouchers are 2GB */
+          limitBytes = 2147483648;   /* 2 GB */
+          planLabel  = '2GB Plan';
+        }
+
+        /* ── Compute remaining and used bytes ── */
+        var totalUsed = sessionBytes;
+        var remaining = limitBytes;
+
+        if (!isNaN(rawRemain) && rawRemain > 0) {
+          remaining = rawRemain;
+          if (limitBytes > remaining) {
+            totalUsed = limitBytes - remaining;
+          }
+        } else if (limitBytes > 0) {
+          remaining = limitBytes - totalUsed;
+          if (remaining < 0) remaining = 0;
+        }
+
+        /* ── Render statistics ── */
+        if (usedEl) {
+          usedEl.textContent = fmtBytes(totalUsed);
+        }
+
+        if (leftEl) {
+          if (isUnlimited) {
+            leftEl.textContent = 'Unlimited';
+            if (leftLabel) leftLabel.textContent = '\u2191 ' + planLabel;
+          } else {
+            leftEl.textContent = fmtBytes(remaining);
+            if (remaining < 104857600) {
+              leftEl.style.color = '#fb7171';
+              leftEl.title = 'Less than 100 MB remaining!';
+            }
+            if (leftLabel) leftLabel.textContent = '\u2191 ' + planLabel + ' Left';
+          }
+        }
+
+        /* Browse button — always lands to Google */
+        var browseBtn = document.getElementById('browse_btn');
+        if (browseBtn) {
+          browseBtn.setAttribute('href', 'https://www.google.com');
+          browseBtn.addEventListener('click', function () {
+            browseBtn.setAttribute('href', 'https://www.google.com');
+          });
+        }
+
+        function getPlanHours(u) {
+          if (!u) return 1;
+          var up = u.toUpperCase();
+          if (up.indexOf('30D') !== -1 || up.indexOf('50GB') !== -1) return 30 * 24;
+          if (up.indexOf('14D') !== -1 || up.indexOf('2GB') !== -1)  return 14 * 24;
+          if (up.indexOf('7D') !== -1  || up.indexOf('7GB') !== -1)  return 7 * 24;
+          if (up.indexOf('6H') !== -1  || up.indexOf('3GB') !== -1)  return 6;
+          return 1;
+        }
+
+        function persistVoucher(u) {
+          if (!u || u.indexOf('$(') !== -1 || u === 'admin' || u === 'default-trial') return;
+          try {
+            var h = getPlanHours(u);
+            var exp = Date.now() + (h * 3600 * 1000);
+            localStorage.setItem('yadanartun_voucher', u);
+            localStorage.setItem('allgood_voucher', u);
+            localStorage.setItem('yadanartun_voucher_expiry', exp.toString());
+          } catch (e) {}
+        }
+
+        /* Save active voucher with exact validity duration */
+        persistVoucher(uname);
+
+        /* Logout button fallback & voucher retention */
+        var logoutBtn = document.getElementById('logout_btn');
+        if (logoutBtn) {
+          var lHref = logoutBtn.getAttribute('href') || '';
+          if (!lHref || lHref.indexOf('$(') !== -1) {
+            var origin = (window.location.origin && window.location.origin.startsWith('http'))
+              ? window.location.origin
+              : 'http://10.10.10.1';
+            logoutBtn.setAttribute('href', origin + '/logout?erase-cookie=on');
+          }
+          logoutBtn.addEventListener('click', function () {
+            persistVoucher(uname);
+          });
+        }
+      });
     })();
   </script>
+
 </body>
 </html>

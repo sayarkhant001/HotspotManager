@@ -467,7 +467,8 @@ object BluetoothThermalPrinter {
                 canvas.drawText(profLabel, rightCenter, if (is80) 42f else 28f, textPaint)
 
                 val quota = VoucherPrinter.formatQuotaString(voucher.dataLimitMb)
-                val priceStr = if (voucher.price > 0) "${"%,d".format(Locale.US, voucher.price.toLong())} Ks" else "Free"
+                val effPrice = VoucherPrinter.resolveVoucherPrice(voucher)
+                val priceStr = if (effPrice > 0) "${"%,d".format(Locale.US, effPrice.toLong())} Ks" else "Free"
                 val limitPriceText = "$quota • $priceStr"
                 val lpSize = autoFitTextSize(textPaint, limitPriceText, rightMaxW, if (is80) 26f else 16.5f, 10f)
                 canvas.drawText(limitPriceText, rightCenter, if (is80) 86f else 57f, textPaint)
@@ -527,7 +528,8 @@ object BluetoothThermalPrinter {
                 val vSize = autoFitTextSize(textPaint, valStr, subCellMaxW, if (is80) 26f else 17f, 12f)
                 canvas.drawText(valStr, marginX + col1W * 1.5f, botMidY + (vSize * 0.35f), textPaint)
 
-                val priceStr = if (voucher.price > 0) "${"%,d".format(Locale.US, voucher.price.toLong())} Ks" else "Free"
+                val effPrice = VoucherPrinter.resolveVoucherPrice(voucher)
+                val priceStr = if (effPrice > 0) "${"%,d".format(Locale.US, effPrice.toLong())} Ks" else "Free"
                 val pSize = autoFitTextSize(textPaint, priceStr, subCellMaxW, if (is80) 32f else 20f, 13f)
                 canvas.drawText(priceStr, marginX + col1W * 2.5f, botMidY + (pSize * 0.35f), textPaint)
             }
@@ -592,7 +594,8 @@ object BluetoothThermalPrinter {
                 canvas.drawText(limitText, rightCenter, r2Center + (qvSize * 0.35f), textPaint)
 
                 // Row 3: Price in Ks (Extra Bold & Large)
-                val priceStr = if (voucher.price > 0) "${"%,d".format(Locale.US, voucher.price.toLong())} Ks" else "Free"
+                val effPrice = VoucherPrinter.resolveVoucherPrice(voucher)
+                val priceStr = if (effPrice > 0) "${"%,d".format(Locale.US, effPrice.toLong())} Ks" else "Free"
                 val prSize = autoFitTextSize(textPaint, priceStr, rightMaxW, if (is80) 34f else 22f, 13f)
                 val r3Center = 2f + (rowH * 2f) + (rowH / 2f)
                 canvas.drawText(priceStr, rightCenter, r3Center + (prSize * 0.35f), textPaint)

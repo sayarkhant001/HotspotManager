@@ -65,10 +65,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     }
 
     LaunchedEffect(Unit) {
-        while (true) {
-            viewModel.fetchRouterData()
-            kotlinx.coroutines.delay(3000)
-        }
+        viewModel.fetchRouterData()
     }
 
     Scaffold(
@@ -396,8 +393,13 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             // Calculate accurate router data usage
             val hwTotalGb = (hwBytes.first + hwBytes.second) / (1024.0 * 1024.0 * 1024.0)
             val totalDataRawMb = filteredSessions.sumOf { it.dataUsedMb }
-            val formattedDataUsage = if (selectedFilter == "All" && hwTotalGb > 0.0) {
-                "${Math.round(hwTotalGb * 100.0) / 100.0} GB"
+            val formattedDataUsage = if (selectedFilter == "All") {
+                val bestGb = maxOf(hwTotalGb, totalDataRawMb / 1024.0)
+                if (bestGb >= 1.0) {
+                    "${Math.round(bestGb * 100.0) / 100.0} GB"
+                } else {
+                    "${Math.round(totalDataRawMb * 10.0) / 10.0} MB"
+                }
             } else if (totalDataRawMb >= 1024.0) {
                 "${Math.round((totalDataRawMb / 1024.0) * 100.0) / 100.0} GB"
             } else {

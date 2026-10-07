@@ -3,14 +3,14 @@
 <div align="center">
 
 ![HotspotManager Banner](https://img.shields.io/badge/MikroTik-RouterOS_v7-red?style=for-the-badge&logo=mikrotik)
-![Android Version](https://img.shields.io/badge/Android_App-v1.4.7-green?style=for-the-badge&logo=android)
+![Android Version](https://img.shields.io/badge/Android_App-v1.4.8-green?style=for-the-badge&logo=android)
 ![SSID](https://img.shields.io/badge/SSID-Hide%20Wifi-blue?style=for-the-badge&logo=wi-fi)
 
 <h3>High-Performance MikroTik Hotspot System with Real-Time Profile Alignment & Luxury Captive Portal</h3>
 
 <p>
-  <a href="https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.4.7.apk">
-    <img src="https://img.shields.io/badge/Download_APK-v1.4.7_(Direct)-success?style=for-the-badge&logo=android" alt="Download APK" />
+  <a href="https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.4.8.apk">
+    <img src="https://img.shields.io/badge/Download_APK-v1.4.8_(Direct)-success?style=for-the-badge&logo=android" alt="Download APK" />
   </a>
 </p>
 
@@ -20,15 +20,13 @@
 
 ## 📱 App Download for Users
 
-- **Direct Download Link:** [HotspotManager-v1.4.7.apk](https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.4.7.apk)
-- **Version:** v1.4.7 (versionCode: 24)
-- **What's New in v1.4.7:**
-  - 🗑️ **30-Day Auto-Prune Expired Vouchers:** Automatically cleans up expired vouchers that reached expiration 30 or more days ago, preventing local Room DB bloat while keeping active online users and unexpired/stock inventory 100% safe.
-  - 🛡️ **Non-Disruptive Advance Mode:** Inspects RouterOS `/system/device-mode/print` first; prevents triggering hardware power-cycle confirmation prompts and preserves active connections for all connected clients.
-  - ⚡ **Safe RouterOS Script Execution:** RouterOS API script runner executes scripts by name (`=number=$scriptName`) with output capture and cleanup, preventing API trap errors.
-  - 🔄 **Voucher Release & Transfer:** Red circle button unbinds a client's MAC address from a voucher so it can be reinserted into another phone without losing remaining quota/time.
-  - 📑 **Using & Expired Tabs:** Clean separation between vouchers currently being used and vouchers whose quota/time is fully expired. Removed Mikhmon references and removed blocked tab.
-  - 🚀 **GitHub Remote Script Runner & Terminal Console:** Fetch and run `setup.rsc` and custom RSC scripts directly from GitHub with 1 tap.
+- **Direct Download Link:** [HotspotManager-v1.4.8.apk](https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.4.8.apk)
+- **Version:** v1.4.8 (versionCode: 25)
+- **What's New in v1.4.8:**
+  - 🔄 **Reboot-Resilient Quota & Time Persistence:** Real-time persistence of client data consumption (`[USED:...]` and `[ORIG-LIMIT:...]`) and continuous calendar validity (`[ACT:...]`) ensures router reboots and power outages never reset client quota or refund consumed data.
+  - 🌐 **Expanded Ruijie & AP Network Topology Engine:** Enhanced device model detection covering Ruijie Reyee EW7200BE, RAP outdoor/wall APs, and accurate active client session mapping.
+  - ⚡ **Seamless MAC Roaming & Fast CNA Popups:** Integrated walled-garden bypass for instant captive portal popups on iOS, Android, and Windows devices with 30-day session remembering.
+  - 🛡️ **Non-Disruptive Advance Mode & Zero Voucher Disruption:** Safely queries live RouterOS v7 state without disturbing active users or resetting vouchers.
 
 ---
 

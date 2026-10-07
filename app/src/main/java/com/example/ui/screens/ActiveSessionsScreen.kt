@@ -44,10 +44,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
 
     LaunchedEffect(Unit) {
         viewModel.fetchIpBindings()
-        while (true) {
-            viewModel.fetchRouterData()
-            kotlinx.coroutines.delay(3000)
-        }
+        viewModel.fetchRouterData()
     }
 
     val filteredUsers = remember(users, searchQuery) {
@@ -261,7 +258,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
             val defaultComment = if (modelInfo.isApOrBridge) {
                 "${modelInfo.modelName}: ${u.hostName.ifBlank { u.user }}"
             } else {
-                "Whitelisted: ${u.hostName.ifBlank { u.user }}"
+                "Whitelisted: ${modelInfo.displayName}"
             }
 
             AlertDialog(
@@ -276,7 +273,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                 },
                 title = {
                     Text(
-                        text = if (modelInfo.isApOrBridge) "Whitelist ${modelInfo.modelName}" else strings.whitelistAction,
+                        text = if (modelInfo.isApOrBridge) "Whitelist ${modelInfo.modelName}" else "Whitelist ${modelInfo.displayName}",
                         fontWeight = FontWeight.Bold
                     )
                 },
@@ -306,7 +303,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                             text = if (modelInfo.isApOrBridge)
                                 "Allow ${modelInfo.brand} ${modelInfo.modelName} to bypass Hotspot authentication without voucher?"
                             else
-                                "Allow \"${u.user}\" (${u.address} / ${u.macAddress}) to use the internet without voucher authentication?",
+                                "Allow \"${modelInfo.displayName}\" (${u.address} / ${u.macAddress}) to use the internet without voucher authentication?",
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -537,7 +534,11 @@ fun ActiveUserCard(
                                 )
                             } else {
                                 Icon(
-                                    imageVector = if (user.hostName.isNotBlank()) Icons.Default.PhoneAndroid else Icons.Default.Person,
+                                    imageVector = when (modelInfo.deviceType) {
+                                        "Computer", "Laptop" -> Icons.Default.Computer
+                                        "Tablet" -> Icons.Default.TabletAndroid
+                                        else -> if (modelInfo.brand != "Client") Icons.Default.Smartphone else if (user.hostName.isNotBlank()) Icons.Default.PhoneAndroid else Icons.Default.Person
+                                    },
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp),
                                     tint = MaterialTheme.colorScheme.onPrimaryContainer
@@ -598,15 +599,47 @@ fun ActiveUserCard(
                                     }
                                 }
                             }
-                        } else if (user.hostName.isNotBlank()) {
-                            Text(
-                                text = "📱 ${user.hostName}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
+                        } else {
+                            // Client Device Model & Code Badge
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Icon(
+                                            when (modelInfo.deviceType) {
+                                                "Computer", "Laptop" -> Icons.Default.Computer
+                                                "Tablet" -> Icons.Default.TabletAndroid
+                                                else -> Icons.Default.Smartphone
+                                            },
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = modelInfo.displayName,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        )
+                                        if (modelInfo.modelCode.isNotBlank() && !modelInfo.displayName.contains(modelInfo.modelCode)) {
+                                            Text(
+                                                text = " (${modelInfo.modelCode})",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                         Text(
                             text = "IP: ${user.address}",
@@ -849,6 +882,13 @@ fun WhitelistedUserCard(
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF059669)
+                        )
+                    } else if (modelInfo.displayName.isNotBlank() && modelInfo.displayName != item.comment) {
+                        Text(
+                            text = "📱 ${modelInfo.displayName}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                     Text(

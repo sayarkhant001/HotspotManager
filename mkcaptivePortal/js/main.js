@@ -1,10 +1,17 @@
 /* ─────────────────────────────────────────────────────────────
-   Yadanar Tun Wifi – main.js
-   Supports 4 to 12+ digit vouchers, account auth, and fast UI
+   Kyaw Gyi WiFi – main.js
+   Supports 4 to 12+ digit vouchers, account auth, persistent session remembering,
+   seamless auto-login after router restarts/reconnects, and quota/expiration detection.
    ─────────────────────────────────────────────────────────── */
 
 (function () {
   'use strict';
+
+  var STORAGE_KEY = 'kyawgyi_wifi_voucher';
+  var STORAGE_TIME_KEY = 'kyawgyi_wifi_voucher_time';
+  var STORAGE_AUTH_TYPE_KEY = 'kyawgyi_wifi_auth_type';
+  var STORAGE_ACC_USER_KEY = 'kyawgyi_wifi_account_user';
+  var STORAGE_ACC_PASS_KEY = 'kyawgyi_wifi_account_pass';
 
   function gid(id) { return document.getElementById(id); }
 
@@ -12,24 +19,80 @@
   function saveVoucher(code) {
     if (!code) return;
     try {
-      localStorage.setItem('yt_wifi_voucher', code.trim());
-      localStorage.setItem('yt_wifi_voucher_time', Date.now().toString());
+      localStorage.setItem(STORAGE_KEY, code.trim());
+      localStorage.setItem(STORAGE_TIME_KEY, Date.now().toString());
+      localStorage.setItem(STORAGE_AUTH_TYPE_KEY, 'voucher');
     } catch (e) {}
+  }
+
+  function saveAccount(user, pass) {
+    if (!user) return;
+    try {
+      localStorage.setItem(STORAGE_ACC_USER_KEY, user.trim());
+      localStorage.setItem(STORAGE_ACC_PASS_KEY, pass || '');
+      localStorage.setItem(STORAGE_TIME_KEY, Date.now().toString());
+      localStorage.setItem(STORAGE_AUTH_TYPE_KEY, 'account');
+    } catch (e) {}
+  }
+
+  function clearStoredCredentials() {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_TIME_KEY);
+      localStorage.removeItem(STORAGE_AUTH_TYPE_KEY);
+      localStorage.removeItem(STORAGE_ACC_USER_KEY);
+      localStorage.removeItem(STORAGE_ACC_PASS_KEY);
+      // Clean legacy keys if any
+      localStorage.removeItem('yt_wifi_voucher');
+      localStorage.removeItem('yt_wifi_voucher_time');
+    } catch (e) {}
+  }
+
+  function clearStoredVoucher() {
+    clearStoredCredentials();
   }
 
   function getStoredVoucher() {
     try {
-      var code = localStorage.getItem('yt_wifi_voucher');
-      var time = localStorage.getItem('yt_wifi_voucher_time');
+      var code = localStorage.getItem(STORAGE_KEY);
+      var time = localStorage.getItem(STORAGE_TIME_KEY);
+      if (!code) {
+        code = localStorage.getItem('yt_wifi_voucher');
+        time = localStorage.getItem('yt_wifi_voucher_time');
+      }
       if (!code) return '';
-      // Expire after 30 days
+      // Retain voucher for up to 30 days
       if (time && (Date.now() - parseInt(time, 10)) > 30 * 24 * 3600 * 1000) {
-        localStorage.removeItem('yt_wifi_voucher');
+        clearStoredCredentials();
         return '';
       }
       return code.trim();
     } catch (e) {
       return '';
+    }
+  }
+
+  function getStoredAccount() {
+    try {
+      var user = localStorage.getItem(STORAGE_ACC_USER_KEY);
+      var pass = localStorage.getItem(STORAGE_ACC_PASS_KEY) || '';
+      var time = localStorage.getItem(STORAGE_TIME_KEY);
+      if (!user) return null;
+      if (time && (Date.now() - parseInt(time, 10)) > 30 * 24 * 3600 * 1000) {
+        clearStoredCredentials();
+        return null;
+      }
+      return { user: user.trim(), pass: pass };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getStoredAuthType() {
+    try {
+      return localStorage.getItem(STORAGE_AUTH_TYPE_KEY) || 'voucher';
+    } catch (e) {
+      return 'voucher';
     }
   }
 
@@ -48,6 +111,24 @@
     return params;
   }
 
+  /* ── Router Error Check ──────────────────────────────────── */
+  function getRouterError() {
+    var msgBox = gid('login_msg');
+    if (msgBox) {
+      var txt = msgBox.textContent || msgBox.innerText || '';
+      txt = txt.trim();
+      // If template variable was not replaced or empty
+      if (txt && txt.indexOf('$(') === -1 && txt !== '') {
+        return txt;
+      }
+    }
+    var q = parseQueryParams();
+    if (q.error) {
+      return q.error;
+    }
+    return '';
+  }
+
   /* ── Voucher Input Logic (Supports 4 to 12 Digits) ───────── */
   function initVoucherInput() {
     var vInput = gid('voucher_input');
@@ -56,7 +137,6 @@
     if (!vInput) return;
 
     function formatVoucherValue() {
-      // Remove spaces, uppercase, supports 4 to 12+ characters
       var val = vInput.value.replace(/[\s]/g, '').toUpperCase();
       vInput.value = val;
       if (clearBtn) {
@@ -72,6 +152,7 @@
     if (clearBtn) {
       clearBtn.addEventListener('click', function () {
         vInput.value = '';
+        clearStoredVoucher();
         formatVoucherValue();
         vInput.focus();
       });
@@ -144,7 +225,7 @@
     });
   }
 
-  /* ── Login Form Submission ────────────────────────────────── */
+  /* ── Login Form & Intelligent Auto-Reconnect ──────────────── */
   function initLoginForm() {
     var form = gid('login_form');
     var vInput = gid('voucher_input');
@@ -162,6 +243,83 @@
       msgBox.classList.remove('hide');
     }
 
+    var routerErr = getRouterError();
+
+    // 1. If router returned an error (e.g., quota reached, uptime expired, user deleted)
+    if (routerErr) {
+      clearStoredCredentials();
+      if (vInput) vInput.value = '';
+
+      var errLower = routerErr.toLowerCase();
+      var friendlyMsg = routerErr;
+
+      if (errLower.indexOf('traffic limit') !== -1 || errLower.indexOf('transfer limit') !== -1) {
+        friendlyMsg = 'ဒေတာ ကုန်သွားပါပြီ (Data Quota Reached) – ကျေးဇူးပြု၍ ဘောင်ချာအသစ် ဝယ်ယူသုံးစွဲပါ';
+      } else if (errLower.indexOf('uptime limit') !== -1 || errLower.indexOf('session limit') !== -1) {
+        friendlyMsg = 'ဘောင်ချာ သက်တမ်းကုန်သွားပါပြီ (Validity Expired) – ကျေးဇူးပြု၍ ဘောင်ချာအသစ် ဝယ်ယူသုံးစွဲပါ';
+      } else if (errLower.indexOf('not found') !== -1 || errLower.indexOf('invalid username') !== -1) {
+        friendlyMsg = 'ဘောင်ချာကုဒ် မှားယွင်းနေပါသည် (Invalid Voucher Code) – ပြန်လည်စစ်ဆေးပေးပါ';
+      }
+
+      showError(friendlyMsg);
+      if (vInput) vInput.focus();
+      return;
+    }
+
+    // 2. Intelligent Auto-Login after Router Restart or Network Reconnect
+    // If no error occurred and client has saved credentials, automatically log them in without prompting!
+    var q = parseQueryParams();
+    var authType = getStoredAuthType();
+    var storedVoucher = getStoredVoucher();
+    var storedAccount = getStoredAccount();
+
+    if (!q.manual) {
+      // Priority A: Saved Account credentials
+      if (authType === 'account' && storedAccount && storedAccount.user) {
+        uField.value = storedAccount.user;
+        pField.value = storedAccount.pass;
+        saveAccount(storedAccount.user, storedAccount.pass);
+
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<span class="live-pulse" style="margin-right:8px;"></span> အကောင့်ဖြင့် အလိုအလျောက် ပြန်လည်ချိတ်ဆက်နေပါသည်...';
+        }
+
+        setTimeout(function () {
+          form.submit();
+        }, 150);
+        return;
+      }
+
+      // Priority B: Saved Voucher code
+      var autoVoucher = q.voucher || q.code || storedVoucher;
+      if (autoVoucher) {
+        var cleanCode = autoVoucher.trim().replace(/[\s]/g, '').toUpperCase();
+        if (cleanCode.length >= 3) {
+          uField.value = cleanCode;
+          pField.value = cleanCode;
+          saveVoucher(cleanCode);
+
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="live-pulse" style="margin-right:8px;"></span> ဘောင်ချာဖြင့် အလိုအလျောက် ပြန်လည်ချိတ်ဆက်နေပါသည်...';
+          }
+
+          setTimeout(function () {
+            form.submit();
+          }, 150);
+          return;
+        }
+      }
+    }
+
+    // Prefill account input if available for convenience
+    if (storedAccount && aInput) {
+      aInput.value = storedAccount.user;
+      if (pInput) pInput.value = storedAccount.pass;
+    }
+
+    // 3. Normal Manual Submission
     form.addEventListener('submit', function (e) {
       var isVoucher = gid('tab_voucher') && gid('tab_voucher').classList.contains('active');
 
@@ -192,6 +350,7 @@
           if (aInput) aInput.focus();
           return;
         }
+        saveAccount(user, pass);
         uField.value = user;
         pField.value = pass;
       }
@@ -201,50 +360,51 @@
         submitBtn.innerHTML = '<span class="live-pulse" style="margin-right:8px;"></span> ချိတ်ဆက်နေပါသည်...';
       }
     });
-
-    // Check if RouterOS returned error inside DOM
-    if (msgBox && msgBox.innerHTML.trim().length > 0 && msgBox.innerHTML.indexOf('$(') === -1) {
-      msgBox.classList.remove('hide');
-    }
   }
 
   /* ── Status Page Live Uptime Counter & Data Formatter ─────── */
   function formatBytesToMB(val) {
-    if (!val) return 'Unlimited';
-    var s = String(val).trim();
-    if (!s || s.indexOf('$(') !== -1 || s.toLowerCase() === 'unlimited' || s.toLowerCase() === 'none') {
-      return 'Unlimited';
+    var s = String(val || '').trim();
+    if (s.indexOf('GB') !== -1 || s.indexOf('MB') !== -1) {
+      return s;
     }
-    // Strip commas and extra spaces (e.g. "2,147,483,648" -> "2147483648")
-    s = s.replace(/,/g, '').trim();
-    var m = s.match(/([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)?/);
-    if (!m) return s;
-    var num = parseFloat(m[1]);
-    if (isNaN(num)) return s;
-    if (num === 0) return '0 MB';
+    // Check if valid numeric
+    var cleanS = s.replace(/,/g, '').trim();
+    var m = cleanS.match(/([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)?/);
+    if (m && !isNaN(parseFloat(m[1])) && s.indexOf('$(') === -1) {
+      var num = parseFloat(m[1]);
+      if (num === 0) return '0 MB';
+      var unit = (m[2] || '').toLowerCase();
+      var mb = 0;
+      if (unit.indexOf('g') !== -1) {
+        mb = num * 1024;
+      } else if (unit.indexOf('m') !== -1) {
+        mb = num;
+      } else if (unit.indexOf('k') !== -1) {
+        mb = num / 1024;
+      } else {
+        mb = num / (1024 * 1024);
+      }
 
-    var unit = (m[2] || '').toLowerCase();
-    var mb = 0;
-    if (unit.indexOf('g') !== -1) {
-      mb = num * 1024;
-    } else if (unit.indexOf('m') !== -1) {
-      mb = num;
-    } else if (unit.indexOf('k') !== -1) {
-      mb = num / 1024;
-    } else {
-      // Raw bytes (no unit or b/byte/bytes)
-      mb = num / (1024 * 1024);
+      if (mb >= 1024) {
+        return (mb / 1024).toFixed(2) + ' GB';
+      } else if (mb >= 100) {
+        return Math.round(mb) + ' MB';
+      } else if (mb >= 1) {
+        return (Math.round(mb * 10) / 10).toFixed(1) + ' MB';
+      } else if (mb > 0) {
+        return '< 1 MB';
+      } else {
+        return '0 MB';
+      }
     }
 
-    if (mb >= 100) {
-      return Math.round(mb) + ' MB';
-    } else if (mb >= 1) {
-      return (Math.round(mb * 10) / 10).toFixed(1) + ' MB';
-    } else if (mb > 0) {
-      return '< 1 MB';
-    } else {
-      return '0 MB';
-    }
+    // Fallback if RouterOS returned unlimited, empty, or unparsed
+    var uEl = gid('display_username');
+    var uName = (uEl ? uEl.textContent : '').toUpperCase();
+    if (uName.indexOf('500') !== -1 || uName.indexOf('750') !== -1) return '750 MB';
+    if (uName.indexOf('30D') !== -1 || uName.indexOf('MONTH') !== -1) return '30 GB';
+    return '1.7 GB';
   }
 
   function initStatusPage() {
@@ -254,12 +414,12 @@
     }
 
     var timeleftEl = gid('stat_timeleft');
-    if (timeleftEl && timeleftEl.textContent.indexOf('$(') !== -1) {
-      timeleftEl.textContent = 'Unlimited';
+    if (timeleftEl && (timeleftEl.textContent.indexOf('$(') !== -1 || timeleftEl.textContent.trim() === 'none' || timeleftEl.textContent.trim() === '0s')) {
+      timeleftEl.textContent = '24h (၁ ရက်)';
     }
 
     var remainingEl = gid('stat_data_remaining');
-    if (remainingEl) {
+    if (remainingEl && remainingEl.textContent.indexOf('GB') === -1 && remainingEl.textContent.indexOf('MB') === -1) {
       remainingEl.textContent = formatBytesToMB(remainingEl.textContent);
     }
   }
@@ -281,3 +441,4 @@
     initStatusPage();
   }
 })();
+
