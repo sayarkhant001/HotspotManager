@@ -146,13 +146,38 @@
   /ip hotspot user profile set [find] keepalive-timeout=2m idle-timeout=3m
 } on-error={}
 
-# 10. FAST CNA WALLED GARDEN (APPLE / ANDROID / WINDOWS)
-:local cnaList {"captive.apple.com"; "hotspot.cisco.com"; "appleiphonecell.com"; "connectivitycheck.gstatic.com"; "connectivitycheck.android.com"; "clients3.google.com"; "msftconnecttest.com"}
-:foreach host in=$cnaList do={
-  :do {
-    /ip hotspot walled-garden add dst-host=$host action=allow comment="Fast CNA Detection"
-  } on-error={}
-}
+# 10. INSTANT CAPTIVE PORTAL CNA & DNS HIJACKING (APPLE, ANDROID, WINDOWS, XIAOMI)
+# Clean up any stale probe domains from walled garden so router always intercepts probe requests
+:do {
+  /ip hotspot walled-garden remove [find comment="Fast CNA Detection"]
+} on-error={}
+
+# Reject DoT (port 853) with immediate TCP reset so Android Private DNS falls back instantly to standard DNS
+:do {
+  /ip firewall filter add chain=input protocol=tcp dst-port=853 action=reject reject-with=tcp-reset place-before=0 comment="Reject DoT Instant Fallback"
+} on-error={}
+:do {
+  /ip firewall filter add chain=forward protocol=tcp dst-port=853 action=reject reject-with=tcp-reset place-before=0 comment="Reject DoT Instant Fallback"
+} on-error={}
+
+# Force all DNS queries (port 53 UDP/TCP) to the local router even if clients have hardcoded 8.8.8.8 or 1.1.1.1
+:do {
+  /ip firewall nat add chain=dstnat in-interface=hotspot-bridge protocol=udp dst-port=53 action=redirect to-ports=53 place-before=0 comment="Force DNS to Router"
+} on-error={}
+:do {
+  /ip firewall nat add chain=dstnat in-interface=hotspot-bridge protocol=tcp dst-port=53 action=redirect to-ports=53 place-before=0 comment="Force DNS to Router"
+} on-error={}
+
+# Allow DNS and Hotspot HTTP on LAN bridge
+:do {
+  /ip firewall filter add chain=input in-interface=hotspot-bridge protocol=udp dst-port=53 action=accept comment="Allow Hotspot DNS UDP"
+} on-error={}
+:do {
+  /ip firewall filter add chain=input in-interface=hotspot-bridge protocol=tcp dst-port=53 action=accept comment="Allow Hotspot DNS TCP"
+} on-error={}
+:do {
+  /ip firewall filter add chain=input in-interface=hotspot-bridge protocol=tcp dst-port=80 action=accept comment="Allow Hotspot HTTP"
+} on-error={}
 
 # 11. SCRIPT 1: voucher-activate (UNIVERSAL QUOTA & DURATION RESOLVER)
 :do { /system script remove [find name="voucher-activate"] } on-error={}
