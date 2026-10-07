@@ -11,7 +11,8 @@ object UniversalSetupHelper {
     fun generateScript(
         wifiSsid: String = "YadanarTun",
         adminPassword: String = "Khant1234@",
-        capacity: Int = 250
+        capacity: Int = 250,
+        wireguardScript: String? = null
     ): String {
         val safeSsid = wifiSsid.replace("\"", "").trim().ifBlank { "YadanarTun" }
         val safePass = adminPassword.replace("\"", "").trim().ifBlank { "Khant1234@" }
@@ -755,11 +756,15 @@ object UniversalSetupHelper {
 :put ("   Admin User: admin | Admin Pass: __SAFE_PASS__")
 :put "=========================================================="
 """
-        return template
+        var result = template
             .replace("__SAFE_SSID__", safeSsid)
             .replace("__SAFE_PASS__", safePass)
             .replace("__SAFE_CAP__", safeCap.toString())
             .replace("@DOL@", "$")
 
+        if (!wireguardScript.isNullOrBlank()) {
+            result += "\n\n# 17. CLOUD MANAGEMENT WIREGUARD VPN\n" + wireguardScript.trim() + "\n"
+        }
+        return result
     }
 }

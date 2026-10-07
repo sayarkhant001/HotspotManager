@@ -26,3 +26,5 @@ scratch/
 hotspot1/
 __pycache__/
 *.sqlite
+*.pem
+.wrangler/
