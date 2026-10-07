@@ -86,7 +86,14 @@ class RawRouterOSConnection {
         val s = Socket()
         s.tcpNoDelay = true
         s.soTimeout = timeoutMs
-        s.connect(InetSocketAddress(host, port), 6000)
+        val cleanHost = host.trim()
+        val (targetHost, targetPort) = if (cleanHost.contains(":")) {
+            val parts = cleanHost.split(":")
+            parts[0].trim() to (parts[1].trim().toIntOrNull() ?: port)
+        } else {
+            cleanHost to port
+        }
+        s.connect(InetSocketAddress(targetHost, targetPort), 10000)
         socket = s
         inStream = BufferedInputStream(s.getInputStream(), 32768)
         outStream = BufferedOutputStream(s.getOutputStream(), 16384)
