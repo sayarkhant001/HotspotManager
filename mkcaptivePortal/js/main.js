@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────
-   Kyaw Gyi WiFi – main.js
+   Yadanar Tun WiFi – main.js
    Supports 4 to 12+ digit vouchers, account auth, persistent session remembering,
    seamless auto-login after router restarts/reconnects, and quota/expiration detection.
    ─────────────────────────────────────────────────────────── */
@@ -7,11 +7,11 @@
 (function () {
   'use strict';
 
-  var STORAGE_KEY = 'kyawgyi_wifi_voucher';
-  var STORAGE_TIME_KEY = 'kyawgyi_wifi_voucher_time';
-  var STORAGE_AUTH_TYPE_KEY = 'kyawgyi_wifi_auth_type';
-  var STORAGE_ACC_USER_KEY = 'kyawgyi_wifi_account_user';
-  var STORAGE_ACC_PASS_KEY = 'kyawgyi_wifi_account_pass';
+  var STORAGE_KEY = 'yadanartun_wifi_voucher';
+  var STORAGE_TIME_KEY = 'yadanartun_wifi_voucher_time';
+  var STORAGE_AUTH_TYPE_KEY = 'yadanartun_wifi_auth_type';
+  var STORAGE_ACC_USER_KEY = 'yadanartun_wifi_account_user';
+  var STORAGE_ACC_PASS_KEY = 'yadanartun_wifi_account_pass';
 
   function gid(id) { return document.getElementById(id); }
 
@@ -43,6 +43,11 @@
       localStorage.removeItem(STORAGE_ACC_USER_KEY);
       localStorage.removeItem(STORAGE_ACC_PASS_KEY);
       // Clean legacy keys if any
+      localStorage.removeItem('kyawgyi_wifi_voucher');
+      localStorage.removeItem('kyawgyi_wifi_voucher_time');
+      localStorage.removeItem('kyawgyi_wifi_auth_type');
+      localStorage.removeItem('kyawgyi_wifi_account_user');
+      localStorage.removeItem('kyawgyi_wifi_account_pass');
       localStorage.removeItem('yt_wifi_voucher');
       localStorage.removeItem('yt_wifi_voucher_time');
     } catch (e) {}
@@ -56,6 +61,10 @@
     try {
       var code = localStorage.getItem(STORAGE_KEY);
       var time = localStorage.getItem(STORAGE_TIME_KEY);
+      if (!code) {
+        code = localStorage.getItem('kyawgyi_wifi_voucher');
+        time = localStorage.getItem('kyawgyi_wifi_voucher_time');
+      }
       if (!code) {
         code = localStorage.getItem('yt_wifi_voucher');
         time = localStorage.getItem('yt_wifi_voucher_time');
@@ -77,6 +86,10 @@
       var user = localStorage.getItem(STORAGE_ACC_USER_KEY);
       var pass = localStorage.getItem(STORAGE_ACC_PASS_KEY) || '';
       var time = localStorage.getItem(STORAGE_TIME_KEY);
+      if (!user) {
+        user = localStorage.getItem('kyawgyi_wifi_account_user');
+        pass = localStorage.getItem('kyawgyi_wifi_account_pass') || '';
+      }
       if (!user) return null;
       if (time && (Date.now() - parseInt(time, 10)) > 30 * 24 * 3600 * 1000) {
         clearStoredCredentials();
@@ -90,7 +103,7 @@
 
   function getStoredAuthType() {
     try {
-      return localStorage.getItem(STORAGE_AUTH_TYPE_KEY) || 'voucher';
+      return localStorage.getItem(STORAGE_AUTH_TYPE_KEY) || localStorage.getItem('kyawgyi_wifi_auth_type') || 'voucher';
     } catch (e) {
       return 'voucher';
     }
@@ -400,22 +413,18 @@
     }
 
     // Fallback if RouterOS returned unlimited, empty, or unparsed
-    var uEl = gid('display_username');
-    var uName = (uEl ? uEl.textContent : '').toUpperCase();
-    if (uName.indexOf('500') !== -1 || uName.indexOf('750') !== -1) return '750 MB';
-    if (uName.indexOf('30D') !== -1 || uName.indexOf('MONTH') !== -1) return '30 GB';
-    return '1.7 GB';
+    return 'ကန့်သတ်မထားပါ';
   }
 
   function initStatusPage() {
     var uptimeEl = gid('stat_uptime');
     if (uptimeEl && uptimeEl.textContent.indexOf('$(') !== -1) {
-      uptimeEl.textContent = 'Active';
+      uptimeEl.textContent = 'အသုံးပြုနေဆဲ';
     }
 
     var timeleftEl = gid('stat_timeleft');
     if (timeleftEl && (timeleftEl.textContent.indexOf('$(') !== -1 || timeleftEl.textContent.trim() === 'none' || timeleftEl.textContent.trim() === '0s')) {
-      timeleftEl.textContent = '24h (၁ ရက်)';
+      timeleftEl.textContent = 'ကန့်သတ်မထားပါ';
     }
 
     var remainingEl = gid('stat_data_remaining');

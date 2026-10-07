@@ -9,11 +9,11 @@ package com.example.utils
 object UniversalSetupHelper {
 
     fun generateScript(
-        wifiSsid: String = "Kyaw_Gyi",
+        wifiSsid: String = "YadanarTun",
         adminPassword: String = "Khant1234@",
         capacity: Int = 250
     ): String {
-        val safeSsid = wifiSsid.replace("\"", "").trim().ifBlank { "Kyaw_Gyi" }
+        val safeSsid = wifiSsid.replace("\"", "").trim().ifBlank { "YadanarTun" }
         val safePass = adminPassword.replace("\"", "").trim().ifBlank { "Khant1234@" }
         val safeCap = capacity.coerceIn(10, 10000)
 

@@ -116,7 +116,7 @@ fun DashboardSettingsDialog(
     var passErrorMsg by remember { mutableStateOf<String?>(null) }
     var passSuccessMsg by remember { mutableStateOf<String?>(null) }
 
-    var phoneSetupSsid by remember { mutableStateOf("Kyaw_Gyi") }
+    var phoneSetupSsid by remember { mutableStateOf("YadanarTun") }
     var phoneSetupPass by remember { mutableStateOf(initialPass.ifBlank { "Khant1234@" }) }
     var phoneSetupCap by remember { mutableStateOf("250") }
     var showPhoneSetupConfirm by remember { mutableStateOf(false) }
@@ -1350,7 +1350,7 @@ fun DashboardSettingsDialog(
                                     value = phoneSetupSsid,
                                     onValueChange = { phoneSetupSsid = it },
                                     label = { Text("Wi-Fi SSID Name") },
-                                    placeholder = { Text("e.g. Kyaw_Gyi") },
+                                    placeholder = { Text("e.g. YadanarTun") },
                                     singleLine = true,
                                     leadingIcon = {
                                         Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.size(18.dp))

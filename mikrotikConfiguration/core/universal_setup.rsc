@@ -8,8 +8,8 @@
 :put "   STARTING UNIVERSAL CAPTIVE PORTAL PROVISIONING          "
 :put "=========================================================="
 
-:global siteName "Kyaw_Gyi"
-:global wifiSsid "Kyaw_Gyi"
+:global siteName "YadanarTun"
+:global wifiSsid "YadanarTun"
 :global dnsName ""
 :global adminPass "Khant1234@"
 :global ipCapacity 250
@@ -62,7 +62,7 @@
 
 # RouterOS v7 wifi
 :do {
-  :local v7Cmd (":foreach w in=[/interface wifi find] do={ :do { /interface wifi set $w configuration.mode=ap configuration.ssid=\"Kyaw_Gyi\" configuration.hide-ssid=no datapath.bridge=hotspot-bridge security.authentication-types=\"\" disabled=no } on-error={ /interface wifi set $w mode=ap ssid=\"Kyaw_Gyi\" disabled=no }; :local wName [/interface wifi get $w name]; :do { /interface bridge port add bridge=hotspot-bridge interface=$wName } on-error={} }")
+  :local v7Cmd (":foreach w in=[/interface wifi find] do={ :do { /interface wifi set $w configuration.mode=ap configuration.ssid=\"YadanarTun\" configuration.hide-ssid=no datapath.bridge=hotspot-bridge security.authentication-types=\"\" disabled=no } on-error={ /interface wifi set $w mode=ap ssid=\"YadanarTun\" disabled=no }; :local wName [/interface wifi get $w name]; :do { /interface bridge port add bridge=hotspot-bridge interface=$wName } on-error={} }")
   [ :parse $v7Cmd ]
   :if ([:len [/interface wifi find]] > 0) do={ :set wifiConfigured true }
 } on-error={}
@@ -70,7 +70,7 @@
 # RouterOS v6 wireless
 :if (!$wifiConfigured) do={
   :do {
-    :local legacyCmd (":foreach w in=[/interface wireless find] do={ /interface wireless set $w ssid=\"Kyaw_Gyi\" hide-ssid=no mode=ap-bridge security-profile=default disabled=no; :do { /interface wireless security-profile set [find default=yes] authentication-types=\"\" mode=none } on-error={}; :local wName [/interface wireless get $w name]; :do { /interface bridge port add bridge=hotspot-bridge interface=$wName } on-error={} }")
+    :local legacyCmd (":foreach w in=[/interface wireless find] do={ /interface wireless set $w ssid=\"YadanarTun\" hide-ssid=no mode=ap-bridge security-profile=default disabled=no; :do { /interface wireless security-profile set [find default=yes] authentication-types=\"\" mode=none } on-error={}; :local wName [/interface wireless get $w name]; :do { /interface bridge port add bridge=hotspot-bridge interface=$wName } on-error={} }")
     [ :parse $legacyCmd ]
     :if ([:len [/interface wireless find]] > 0) do={ :set wifiConfigured true }
   } on-error={}
@@ -731,7 +731,7 @@
 
 :put "=========================================================="
 :put "   PROVISIONING COMPLETED SUCCESSFULLY!                  "
-:put ("   SSID: Kyaw_Gyi | Gateway IP: " . $gwIp . " (Direct IP Mode)")
+:put ("   SSID: YadanarTun | Gateway IP: " . $gwIp . " (Direct IP Mode)")
 :put ("   Capacity: 250 users on " . $netCidr)
 :put ("   Admin User: admin | Admin Pass: Khant1234@")
 :put "=========================================================="
