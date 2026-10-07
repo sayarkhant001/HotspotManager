@@ -286,8 +286,16 @@ object UniversalSetupHelper {
 
 :if (@DOL@origLim > 0) do={
   :set curComm [@DOL@setTag comm=@DOL@curComm tag="[ORIG-LIMIT:" val=[:tostr @DOL@origLim]];
-  :if (@DOL@curLim = 0 or @DOL@curLim > (@DOL@origLim * 12 / 10)) do={
-    /ip hotspot user set @DOL@uObj limit-bytes-total=@DOL@origLim;
+  :local baseBytes 0;
+  :local bStr [@DOL@parseTag comm=@DOL@curComm tag="[BASE:"];
+  :if ([:len @DOL@bStr] > 0) do={ :set baseBytes [:tonum @DOL@bStr] };
+  :local remBytes (@DOL@origLim - @DOL@baseBytes);
+  :if (@DOL@remBytes <= 0) do={
+    /ip hotspot user set @DOL@uObj limit-bytes-total=1;
+    /ip hotspot active remove [find user=@DOL@u];
+    /ip hotspot cookie remove [find user=@DOL@u];
+  } else={
+    /ip hotspot user set @DOL@uObj limit-bytes-total=@DOL@remBytes;
   };
 };
 
@@ -334,8 +342,16 @@ object UniversalSetupHelper {
 
 :if (@DOL@origUp > [:totime "0s"]) do={
   :set curComm [@DOL@setTag comm=@DOL@curComm tag="[ORIG-UP:" val=[:tostr @DOL@origUp]];
-  :if (@DOL@curUp = "00:00:00" or @DOL@curUp = "0s" or [:len @DOL@curUp] = 0 or @DOL@curUp > (@DOL@origUp * 12 / 10)) do={
-    /ip hotspot user set @DOL@uObj limit-uptime=@DOL@origUp;
+  :local baseUp [:totime "0s"];
+  :local buStr [@DOL@parseTag comm=@DOL@curComm tag="[BASE-UP:"];
+  :if ([:len @DOL@buStr] > 0) do={ :set baseUp [:totime @DOL@buStr] };
+  :local remUp (@DOL@origUp - @DOL@baseUp);
+  :if (@DOL@remUp <= [:totime "0s"]) do={
+    /ip hotspot user set @DOL@uObj limit-uptime=1s;
+    /ip hotspot active remove [find user=@DOL@u];
+    /ip hotspot cookie remove [find user=@DOL@u];
+  } else={
+    /ip hotspot user set @DOL@uObj limit-uptime=@DOL@remUp;
   };
 };
 
@@ -494,7 +510,7 @@ object UniversalSetupHelper {
 
         :local deltaBytes (@DOL@totalUsed - @DOL@curStoredUsed);
         :if (@DOL@deltaBytes < 0) do={ :set deltaBytes (-@DOL@deltaBytes) };
-        :if ((@DOL@totalUsed > 0 and @DOL@deltaBytes >= 262144) or (@DOL@totalUsed != @DOL@curStoredUsed and @DOL@sessionBytes = 0) or (@DOL@totalUp != @DOL@curStoredUp and (@DOL@totalUp - @DOL@curStoredUp) >= [:totime "10s"])) do={
+        :if ((@DOL@totalUsed > 0 and @DOL@deltaBytes >= 32768) or (@DOL@totalUsed != @DOL@curStoredUsed and @DOL@sessionBytes = 0) or (@DOL@totalUp != @DOL@curStoredUp and (@DOL@totalUp - @DOL@curStoredUp) >= [:totime "2s"])) do={
           :set comm [@DOL@setTag comm=@DOL@comm tag="[USED:" val=[:tostr @DOL@totalUsed]];
           :set comm [@DOL@setTag comm=@DOL@comm tag="[USED-UP:" val=[:tostr @DOL@totalUp]];
           /ip hotspot user set @DOL@u comment=@DOL@comm;
@@ -522,7 +538,7 @@ object UniversalSetupHelper {
 }
 
 :do { /system scheduler remove [find name="hs-quota-saver"] } on-error={}
-/system scheduler add name="hs-quota-saver" interval=5s start-time=startup \
+/system scheduler add name="hs-quota-saver" interval=2s start-time=startup \
   on-event="/system script run hs-quota-save" comment="Auto-persist user bytes every 5s"
 
 # 13. SCRIPT 3: hs-on-logout (BASE SYNC ON DISCONNECT)

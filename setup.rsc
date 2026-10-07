@@ -259,8 +259,16 @@
 
 :if ($origLim > 0) do={
   :set curComm [$setTag comm=$curComm tag="[ORIG-LIMIT:" val=[:tostr $origLim]];
-  :if ($curLim = 0 or $curLim > ($origLim * 12 / 10)) do={
-    /ip hotspot user set $uObj limit-bytes-total=$origLim;
+  :local baseBytes 0;
+  :local bStr [$parseTag comm=$curComm tag="[BASE:"];
+  :if ([:len $bStr] > 0) do={ :set baseBytes [:tonum $bStr] };
+  :local remBytes ($origLim - $baseBytes);
+  :if ($remBytes <= 0) do={
+    /ip hotspot user set $uObj limit-bytes-total=1;
+    /ip hotspot active remove [find user=$u];
+    /ip hotspot cookie remove [find user=$u];
+  } else={
+    /ip hotspot user set $uObj limit-bytes-total=$remBytes;
   };
 };
 
@@ -307,8 +315,16 @@
 
 :if ($origUp > [:totime "0s"]) do={
   :set curComm [$setTag comm=$curComm tag="[ORIG-UP:" val=[:tostr $origUp]];
-  :if ($curUp = "00:00:00" or $curUp = "0s" or [:len $curUp] = 0 or $curUp > ($origUp * 12 / 10)) do={
-    /ip hotspot user set $uObj limit-uptime=$origUp;
+  :local baseUp [:totime "0s"];
+  :local buStr [$parseTag comm=$curComm tag="[BASE-UP:"];
+  :if ([:len $buStr] > 0) do={ :set baseUp [:totime $buStr] };
+  :local remUp ($origUp - $baseUp);
+  :if ($remUp <= [:totime "0s"]) do={
+    /ip hotspot user set $uObj limit-uptime=1s;
+    /ip hotspot active remove [find user=$u];
+    /ip hotspot cookie remove [find user=$u];
+  } else={
+    /ip hotspot user set $uObj limit-uptime=$remUp;
   };
 };
 
@@ -467,7 +483,7 @@
 
         :local deltaBytes ($totalUsed - $curStoredUsed);
         :if ($deltaBytes < 0) do={ :set deltaBytes (-$deltaBytes) };
-        :if (($totalUsed > 0 and $deltaBytes >= 262144) or ($totalUsed != $curStoredUsed and $sessionBytes = 0) or ($totalUp != $curStoredUp and ($totalUp - $curStoredUp) >= [:totime "10s"])) do={
+        :if (($totalUsed > 0 and $deltaBytes >= 32768) or ($totalUsed != $curStoredUsed and $sessionBytes = 0) or ($totalUp != $curStoredUp and ($totalUp - $curStoredUp) >= [:totime "2s"])) do={
           :set comm [$setTag comm=$comm tag="[USED:" val=[:tostr $totalUsed]];
           :set comm [$setTag comm=$comm tag="[USED-UP:" val=[:tostr $totalUp]];
           /ip hotspot user set $u comment=$comm;
@@ -495,7 +511,7 @@
 }
 
 :do { /system scheduler remove [find name="hs-quota-saver"] } on-error={}
-/system scheduler add name="hs-quota-saver" interval=5s start-time=startup \
+/system scheduler add name="hs-quota-saver" interval=2s start-time=startup \
   on-event="/system script run hs-quota-save" comment="Auto-persist user bytes every 5s"
 
 # 13. SCRIPT 3: hs-on-logout (BASE SYNC ON DISCONNECT)
