@@ -1390,6 +1390,45 @@ fun DashboardSettingsDialog(
 
                                 Spacer(modifier = Modifier.height(12.dp))
 
+                                // Dynamic IP Subnet Notice based on User Input
+                                val parsedCap = phoneSetupCap.toIntOrNull() ?: 250
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Lan,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(
+                                                if (parsedCap > 250) "Network: 10.10.8.0/22 (Large Capacity Subnet)" else "Network: 10.10.10.0/24 (Standard Subnet)",
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                if (parsedCap > 250) 
+                                                    "IP Range: 10.10.8.10 - 10.10.11.254 (Supports $parsedCap devices dynamically)"
+                                                else 
+                                                    "IP Range: 10.10.10.10 - 10.10.10.254 (Supports up to $parsedCap devices)",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
                                 // Direct IP Notice Badge
                                 Surface(
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
@@ -1759,7 +1798,8 @@ fun DashboardSettingsDialog(
                         viewModel.runUniversalRouterSetup(
                             ssid = phoneSetupSsid,
                             adminPassword = phoneSetupPass,
-                            capacity = phoneSetupCap.toIntOrNull() ?: 250
+                            capacity = phoneSetupCap.toIntOrNull() ?: 250,
+                            context = context
                         )
                     }
                 ) {

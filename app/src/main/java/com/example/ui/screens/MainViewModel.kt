@@ -407,10 +407,28 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         ssid: String,
         adminPassword: String = "Khant1234@",
         capacity: Int = 250,
+        wireguardScript: String? = null,
+        context: Context? = null,
         onFinished: ((Boolean, String) -> Unit)? = null
     ) {
-        val script = com.example.utils.UniversalSetupHelper.generateScript(ssid, adminPassword, capacity)
         viewModelScope.launch {
+            var finalWgScript = wireguardScript
+            if (finalWgScript.isNullOrBlank() && context != null) {
+                try {
+                    val routersRes = com.example.data.remote.CloudApiClient.getCustomerRouters(context)
+                    if (routersRes.isSuccess) {
+                        val routers = routersRes.getOrNull().orEmpty()
+                        if (routers.isNotEmpty()) {
+                            val rId = routers.first().id
+                            val scriptRes = com.example.data.remote.CloudApiClient.getRouterScript(context, rId)
+                            if (scriptRes.isSuccess) {
+                                finalWgScript = scriptRes.getOrNull()
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+            val script = com.example.utils.UniversalSetupHelper.generateScript(ssid, adminPassword, capacity, finalWgScript)
             userMessage.value = "Starting setup for SSID '$ssid' (Direct IP Gateway, no DNS name required)..."
             executeRscScript(script) { success, log ->
                 if (success) {

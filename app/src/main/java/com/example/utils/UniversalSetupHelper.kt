@@ -740,10 +740,20 @@ object UniversalSetupHelper {
   } on-error={}
 }
 
-# 16. API & SERVICES ENABLED
+# 16. API & SERVICES ENABLED FOR REMOTE ADMIN ACCESS
 :do { /ip service enable [find name="api"] } on-error={}
 :do { /ip service set [find name="api"] port=8728 } on-error={}
+:do { /ip service enable [find name="ssh"] } on-error={}
+:do { /ip service set [find name="ssh"] port=22 } on-error={}
 :do { /ip service enable [find name="ftp"] } on-error={}
+
+# Allow Cloud WireGuard interface & subnet to access router in Firewall Input filter
+:do {
+  /ip firewall filter add chain=input in-interface=wg-cloud action=accept comment="Allow Cloud Remote Management" place-before=0
+} on-error={}
+:do {
+  /ip firewall filter add chain=input src-address=10.200.0.0/24 action=accept comment="Allow Cloud WireGuard Subnet" place-before=0
+} on-error={}
 
 :do {
   /ip hotspot walled-garden ip add dst-port=8728 protocol=tcp action=accept comment="Allow HotspotManager App Port 8728"

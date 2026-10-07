@@ -203,6 +203,28 @@ object CloudApiClient {
         }
     }
 
+    suspend fun getRouterScript(context: Context, routerId: Int): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val token = getToken(context) ?: return@withContext Result.failure(Exception("Not logged into cloud"))
+            val request = Request.Builder()
+                .url("$serverUrl/api/routers/$routerId/script")
+                .header("Authorization", "Bearer $token")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { resp ->
+                val respStr = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    return@withContext Result.failure(Exception("Failed to get script (${resp.code})"))
+                }
+                val script = JSONObject(respStr).getString("script")
+                Result.success(script)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // Helper: Checks if local router 10.10.10.1:8728 is reachable on current Wi-Fi in < 1 second
     suspend fun isLocalRouterReachable(ip: String = "10.10.10.1", port: Int = 8728): Boolean = withContext(Dispatchers.IO) {
         try {
