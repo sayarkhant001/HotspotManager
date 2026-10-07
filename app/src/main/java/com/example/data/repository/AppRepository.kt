@@ -448,6 +448,13 @@ class AppRepository(
 
         val sessionLogs = mutableListOf<com.example.domain.models.RouterSessionLog>()
 
+        val activeUsersList = try {
+            getActiveHotspotUsers()
+        } catch (_: Exception) {
+            emptyList<com.example.domain.models.ActiveUser>()
+        }
+        val activeUsersMap = activeUsersList.associateBy { it.user }
+
         val vouchers = routerUsers.map { u ->
             var prof = profileMap[u.profile]
                 ?: profilesList.firstOrNull { it.name.equals(u.profile, ignoreCase = true) }
@@ -481,13 +488,22 @@ class AppRepository(
             }
             val uptimeSec = parseUptimeSeconds(u.uptime)
 
+            val activeUser = activeUsersMap[u.name]
+            val liveIn = activeUser?.bytesIn?.toLongOrNull() ?: 0L
+            val liveOut = activeUser?.bytesOut?.toLongOrNull() ?: 0L
+            val liveTotal = liveIn + liveOut
+            val liveUpSec = parseUptimeSeconds(activeUser?.uptime ?: "")
+
             // Once used or activated, isUsed NEVER resets to false on reboot
             val isUsed = (existing?.isUsed == true) ||
+                         (activeUser != null) ||
                          (parsedActTime != null) ||
                          (parsedUsedBytes > 0L) ||
                          (u.uptime != "0s" && u.uptime.isNotBlank()) ||
+                         (liveUpSec > 0L) ||
                          (u.bytesOut > 0L) ||
-                         (u.bytesIn > 0L)
+                         (u.bytesIn > 0L) ||
+                         (liveTotal > 0L)
 
             val isPrinted = u.comment.contains("PRINTED", ignoreCase = true) || (existing?.isPrinted == true)
 
@@ -500,20 +516,22 @@ class AppRepository(
             val existingOut = existing?.bytesOut ?: 0L
             val existingTotal = existingIn + existingOut
 
-            // Total bytes reported by router (either saved in comment or base + current boot traffic)
+            // Total bytes reported by router (either saved in comment or base + current boot traffic or live session)
             val routerCalculatedTotal = if (parsedUsedBytes > 0L) {
-                maxOf(parsedUsedBytes, sessionTotal)
+                maxOf(parsedUsedBytes, sessionTotal, liveTotal)
             } else if (parsedBaseBytes > 0L) {
-                parsedBaseBytes + sessionTotal
+                parsedBaseBytes + maxOf(sessionTotal, liveTotal)
             } else {
-                sessionTotal
+                maxOf(sessionTotal, liveTotal)
             }
-            val totalCumulative = maxOf(routerCalculatedTotal, existingTotal, sessionTotal)
+            val totalCumulative = maxOf(routerCalculatedTotal, existingTotal, sessionTotal, liveTotal)
 
+            val activeOrSessionIn = if (liveTotal > 0L) liveIn else sessionIn
+            val activeOrSessionTotal = if (liveTotal > 0L) liveTotal else sessionTotal
             val effectiveBytesIn: Long
             val effectiveBytesOut: Long
-            if (sessionTotal > 0L) {
-                val ratioIn = sessionIn.toDouble() / sessionTotal
+            if (activeOrSessionTotal > 0L) {
+                val ratioIn = activeOrSessionIn.toDouble() / activeOrSessionTotal
                 val inBytes = (totalCumulative * ratioIn).toLong()
                 effectiveBytesIn = inBytes
                 effectiveBytesOut = totalCumulative - inBytes
@@ -568,8 +586,8 @@ class AppRepository(
             val sessionUpSec = parseUptimeSeconds(u.uptime)
             val existingUpSec = parseUptimeSeconds(existing?.uptime ?: "")
             val baseUpSec = parseBaseUptimeSeconds(u.comment) ?: 0L
-            val totalUpSec = maxOf(usedUpSec, sessionUpSec, existingUpSec, sessionUpSec + baseUpSec)
-            val effectiveUptime = if (totalUpSec > 0) formatUptimeSeconds(totalUpSec) else u.uptime
+            val totalUpSec = maxOf(usedUpSec, sessionUpSec, existingUpSec, liveUpSec, sessionUpSec + baseUpSec)
+            val effectiveUptime = if (totalUpSec > 0) formatUptimeSeconds(totalUpSec) else (activeUser?.uptime ?: u.uptime)
 
             Voucher(
                 id = existing?.id ?: 0,

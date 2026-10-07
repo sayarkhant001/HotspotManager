@@ -1,15 +1,7 @@
 /* ─────────────────────────────────────────────────────────────
    Kyaw Gyi WiFi – Minimalist Animated Glassmorphism Portal
-   Clean, Lightweight, High-Performance, Lowest Text Count
+   Clean, Lightweight, High-Performance, Myanmar Fonts Only
    ─────────────────────────────────────────────────────────── */
-
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap');
-
-*, *::before, *::after {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
 
 :root {
   --primary-cyan: #00F2FE;
@@ -18,8 +10,8 @@
   --accent-emerald: #10B981;
   --accent-gold: #F59E0B;
 
-  --card-bg: rgba(13, 22, 41, 0.65);
-  --card-border: rgba(255, 255, 255, 0.12);
+  --card-bg: rgba(13, 22, 41, 0.75);
+  --card-border: rgba(255, 255, 255, 0.14);
 
   --input-bg: rgba(255, 255, 255, 0.05);
   --input-border: rgba(56, 189, 248, 0.28);
@@ -28,7 +20,14 @@
   --text-white: #FFFFFF;
   --text-dim: #94A3B8;
 
-  --font-main: 'Outfit', 'Noto Sans Myanmar', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-main: 'Pyidaungsu', 'Padauk', 'Noto Sans Myanmar', 'Myanmar Text', sans-serif;
+}
+
+*, *::before, *::after, html, body, input, button, select, textarea, p, span, h1, h2, h3, a, label, div {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Pyidaungsu', 'Padauk', 'Noto Sans Myanmar', 'Myanmar Text', sans-serif !important;
 }
 
 html, body {
@@ -36,7 +35,7 @@ html, body {
   font-family: var(--font-main);
   background: #060913;
   color: var(--text-white);
-  line-height: 1.5;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }

@@ -64,6 +64,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
     val isSyncing by viewModel.isSyncingVouchers.collectAsStateWithLifecycle()
     val activeUsers by viewModel.activeUsers.collectAsStateWithLifecycle()
     val activeCodes = remember(activeUsers) { activeUsers.map { it.user }.toSet() }
+    val activeUsersMap = remember(activeUsers) { activeUsers.associateBy { it.user } }
     val userMsg by viewModel.userMessage.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -98,8 +99,8 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
     var showDeleteSelectedDialog by remember { mutableStateOf(false) }
 
     val usingCount = vouchers.count { it.isCurrentlyUsing(activeCodes) }
-    val expiredCount = vouchers.count { it.isExpired() || it.isUsed }
-    val usedCount = expiredCount
+    val expiredCount = vouchers.count { it.isExpired() }
+    val usedCount = vouchers.count { it.isUsed || it.isExpired() }
     val unprintedCount = vouchers.count { !it.isPrinted && !it.isUsed && !it.isExpired() }
     val printedCount = vouchers.count { it.isPrinted && !it.isUsed && !it.isExpired() }
 
@@ -111,7 +112,8 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
             val matchesProfile = selectedProfileFilter == null || v.profileName == selectedProfileFilter
             val matchesPrint = when (printFilterMode) {
                 "USING" -> v.isCurrentlyUsing(activeCodes)
-                "EXPIRED", "USED" -> v.isExpired() || v.isUsed
+                "EXPIRED" -> v.isExpired()
+                "USED" -> v.isUsed || v.isExpired()
                 "UNPRINTED" -> !v.isPrinted && !v.isUsed && !v.isExpired()
                 "PRINTED" -> v.isPrinted && !v.isUsed && !v.isExpired()
                 else -> true
@@ -428,10 +430,12 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                 items(filteredVouchers, key = { it.code }) { voucher ->
                     val isSelected = voucher.code in selectedVoucherCodes
                     val isOnline = voucher.code in activeCodes
+                    val activeUser = activeUsersMap[voucher.code]
                     VoucherItemCard(
                         voucher = voucher,
                         isSelected = isSelected,
                         isOnline = isOnline,
+                        activeUser = activeUser,
                         onToggleSelect = {
                             selectedVoucherCodes = if (isSelected) {
                                 selectedVoucherCodes - voucher.code
@@ -671,6 +675,7 @@ fun VoucherItemCard(
     voucher: Voucher,
     isSelected: Boolean,
     isOnline: Boolean = false,
+    activeUser: com.example.domain.models.ActiveUser? = null,
     onToggleSelect: () -> Unit,
     onRenew: (() -> Unit)? = null,
     onDelete: () -> Unit
@@ -722,16 +727,18 @@ fun VoucherItemCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
 
-                    val isExp = voucher.isExpired() || voucher.isUsed
+                    val isExp = voucher.isExpired()
                     val badgeColor = when {
                         isOnline -> Color(0xFF0284C7)
                         isExp -> Color(0xFFDC2626)
+                        voucher.isUsed -> Color(0xFFE65100)
                         voucher.isPrinted -> Color(0xFF2E7D32)
                         else -> MaterialTheme.colorScheme.outline
                     }
                     val badgeText = when {
                         isOnline -> strings.filterUsing
                         isExp -> strings.filterExpired
+                        voucher.isUsed -> strings.statusUsed
                         voucher.isPrinted -> strings.statusPrinted
                         else -> strings.statusUnprinted
                     }
@@ -805,17 +812,58 @@ fun VoucherItemCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                if (voucher.isUsed) {
-                    val totalBytes = voucher.bytesIn + voucher.bytesOut
-                    val usedMb = (totalBytes / (1024 * 1024))
-                    val limitMb = voucher.dataLimitMb
+                // Determine live / persistent consumption
+                val liveIn = activeUser?.bytesIn?.toLongOrNull() ?: 0L
+                val liveOut = activeUser?.bytesOut?.toLongOrNull() ?: 0L
+                val liveBytes = liveIn + liveOut
+
+                // Parse tags from comment: [USED:12345] [USED-UP:4h12m] [ORIG-LIMIT:2147483648]
+                val commentUsedBytes = Regex("\\[USED:(\\d+)\\]").find(voucher.comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+                val commentUptime = Regex("\\[USED-UP:([^\\]]+)\\]").find(voucher.comment)?.groupValues?.get(1)?.trim() ?: ""
+                val commentOrigLimit = Regex("\\[ORIG-LIMIT:(\\d+)\\]").find(voucher.comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+
+                val totalConsumedBytes = maxOf(
+                    liveBytes,
+                    voucher.bytesIn + voucher.bytesOut,
+                    commentUsedBytes
+                )
+
+                val usedMb: Int = if (activeUser != null && activeUser.quotaUsedMb > 0) {
+                    activeUser.quotaUsedMb.toInt()
+                } else {
+                    (totalConsumedBytes / (1024L * 1024L)).toInt()
+                }
+
+                val limitMb: Int = when {
+                    activeUser != null && activeUser.quotaTotalMb > 0 -> activeUser.quotaTotalMb
+                    voucher.dataLimitMb > 0 -> voucher.dataLimitMb
+                    commentOrigLimit > 0L -> (commentOrigLimit / (1024L * 1024L)).toInt()
+                    else -> 0
+                }
+
+                val effectiveUptime: String = when {
+                    activeUser != null && activeUser.uptime.isNotBlank() && activeUser.uptime != "0s" -> activeUser.uptime
+                    voucher.uptime.isNotBlank() && voucher.uptime != "0s" -> voucher.uptime
+                    commentUptime.isNotBlank() && commentUptime != "0s" -> commentUptime
+                    else -> ""
+                }
+
+                val effectiveTimeLeft: String = when {
+                    activeUser != null && activeUser.sessionTimeLeft.isNotBlank() && activeUser.sessionTimeLeft != "0s" -> activeUser.sessionTimeLeft
+                    else -> ""
+                }
+
+                val shouldShowConsumption = isOnline || activeUser != null || voucher.isUsed || usedMb > 0 || effectiveUptime.isNotBlank()
+
+                if (shouldShowConsumption) {
                     val progress = if (limitMb > 0) (usedMb.toFloat() / limitMb.toFloat()).coerceIn(0f, 1f) else 1f
+                    val containerColor = if (isOnline) Color(0xFF0284C7) else Color(0xFFE65100)
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = Color(0xFFE65100).copy(alpha = 0.08f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE65100).copy(alpha = 0.25f)),
+                        color = containerColor.copy(alpha = 0.08f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, containerColor.copy(alpha = 0.25f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
@@ -828,21 +876,33 @@ fun VoucherItemCard(
                                     text = if (limitMb > 0) "$usedMb / $limitMb MB" else "$usedMb MB",
                                     fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFE65100),
+                                    color = containerColor,
                                     maxLines = 1,
                                     softWrap = false,
                                     modifier = Modifier.weight(1f, fill = false)
                                 )
-                                if (voucher.uptime.isNotBlank() && voucher.uptime != "0s") {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "⏱ ${voucher.uptime}",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (effectiveUptime.isNotBlank()) {
+                                        Text(
+                                            text = "⏱ $effectiveUptime",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
+                                    if (effectiveTimeLeft.isNotBlank()) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "⌛ $effectiveTimeLeft",
+                                            fontSize = 9.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFF10B981),
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
                                 }
                             }
                             if (limitMb > 0) {
@@ -850,8 +910,8 @@ fun VoucherItemCard(
                                 LinearProgressIndicator(
                                     progress = progress,
                                     modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-                                    color = Color(0xFFE65100),
-                                    trackColor = Color(0xFFE65100).copy(alpha = 0.2f)
+                                    color = containerColor,
+                                    trackColor = containerColor.copy(alpha = 0.2f)
                                 )
                             }
                         }
@@ -905,11 +965,15 @@ fun parseRouterOsUptimeMinutes(uptime: String): Int {
 }
 
 fun Voucher.isExpired(): Boolean {
-    if (isUsed) return true
-    val totalUsedMb = (bytesIn + bytesOut) / (1024.0 * 1024.0)
-    if (dataLimitMb > 0 && totalUsedMb >= dataLimitMb) return true
-    if (durationMinutes > 0 && parseRouterOsUptimeMinutes(uptime) >= durationMinutes) return true
     if (comment.contains("expired", ignoreCase = true)) return true
+    val commentUsedBytes = Regex("\\[USED:(\\d+)\\]").find(comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+    val totalUsedMb = maxOf(bytesIn + bytesOut, commentUsedBytes) / (1024.0 * 1024.0)
+    if (dataLimitMb > 0 && totalUsedMb >= dataLimitMb) return true
+
+    val commentUptime = Regex("\\[USED-UP:([^\\]]+)\\]").find(comment)?.groupValues?.get(1)?.trim() ?: ""
+    val effectiveUptimeMin = maxOf(parseRouterOsUptimeMinutes(uptime), parseRouterOsUptimeMinutes(commentUptime))
+    if (durationMinutes > 0 && effectiveUptimeMin >= durationMinutes) return true
+
     return false
 }
 

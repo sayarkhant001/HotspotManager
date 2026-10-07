@@ -53,7 +53,7 @@
 :global wifiSsid   "Kyaw_Gyi"
 # Set to 'yes' to hide SSID broadcast, or 'no' to broadcast normally
 :global hideSsid   no
-:global dnsName    "kyaw.gyi"
+:global dnsName    ""
 :global apiPass    "Khant1234@"
 # To bypass admin devices permanently without voucher, enter MACs: {"XX:XX:XX:XX:XX:XX"; "YY:YY:YY:YY:YY:YY"}
 :global adminMacs  [:toarray ""]
