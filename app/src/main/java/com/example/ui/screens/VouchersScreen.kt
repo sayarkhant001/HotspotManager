@@ -99,10 +99,10 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
     var showDeleteSelectedDialog by remember { mutableStateOf(false) }
 
     val usingCount = vouchers.count { it.isCurrentlyUsing(activeCodes) }
-    val expiredCount = vouchers.count { it.isExpired() }
-    val usedCount = vouchers.count { it.isUsed || it.isExpired() }
-    val unprintedCount = vouchers.count { !it.isPrinted && !it.isUsed && !it.isExpired() }
-    val printedCount = vouchers.count { it.isPrinted && !it.isUsed && !it.isExpired() }
+    val expiredCount = vouchers.count { it.isExpired(activeCodes) }
+    val usedCount = vouchers.count { (it.isUsed || it.isExpired(activeCodes)) && !it.isCurrentlyUsing(activeCodes) }
+    val unprintedCount = vouchers.count { !it.isPrinted && !it.isUsed && !it.isExpired(activeCodes) && !it.isCurrentlyUsing(activeCodes) }
+    val printedCount = vouchers.count { it.isPrinted && !it.isUsed && !it.isExpired(activeCodes) && !it.isCurrentlyUsing(activeCodes) }
 
     val filteredVouchers = remember(vouchers, searchQuery, selectedProfileFilter, printFilterMode, activeCodes) {
         vouchers.filter { v ->
@@ -112,10 +112,10 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
             val matchesProfile = selectedProfileFilter == null || v.profileName == selectedProfileFilter
             val matchesPrint = when (printFilterMode) {
                 "USING" -> v.isCurrentlyUsing(activeCodes)
-                "EXPIRED" -> v.isExpired()
-                "USED" -> v.isUsed || v.isExpired()
-                "UNPRINTED" -> !v.isPrinted && !v.isUsed && !v.isExpired()
-                "PRINTED" -> v.isPrinted && !v.isUsed && !v.isExpired()
+                "EXPIRED" -> v.isExpired(activeCodes)
+                "USED" -> (v.isUsed || v.isExpired(activeCodes)) && !v.isCurrentlyUsing(activeCodes)
+                "UNPRINTED" -> !v.isPrinted && !v.isUsed && !v.isExpired(activeCodes) && !v.isCurrentlyUsing(activeCodes)
+                "PRINTED" -> v.isPrinted && !v.isUsed && !v.isExpired(activeCodes) && !v.isCurrentlyUsing(activeCodes)
                 else -> true
             }
             matchesSearch && matchesProfile && matchesPrint
@@ -727,7 +727,7 @@ fun VoucherItemCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
 
-                    val isExp = voucher.isExpired()
+                    val isExp = !isOnline && voucher.isExpired()
                     val badgeColor = when {
                         isOnline -> Color(0xFF0284C7)
                         isExp -> Color(0xFFDC2626)
@@ -964,15 +964,29 @@ fun parseRouterOsUptimeMinutes(uptime: String): Int {
     return (w * 7 * 24 * 60) + (d * 24 * 60) + (h * 60) + m + (if (s > 30) 1 else 0)
 }
 
-fun Voucher.isExpired(): Boolean {
+fun Voucher.isExpired(activeCodes: Set<String> = emptySet()): Boolean {
+    // A voucher currently being used is ACTIVE, never expired!
+    if (activeCodes.contains(code) || activeCodes.contains(username)) return false
+
+    // 1. Explicit expired marker in router comment
     if (comment.contains("expired", ignoreCase = true)) return true
+
+    // 2. Expired by Quota (MB data limit reached)
     val commentUsedBytes = Regex("\\[USED:(\\d+)\\]").find(comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
     val totalUsedMb = maxOf(bytesIn + bytesOut, commentUsedBytes) / (1024.0 * 1024.0)
     if (dataLimitMb > 0 && totalUsedMb >= dataLimitMb) return true
 
+    // 3. Expired by Time / Duration (uptime limit reached)
     val commentUptime = Regex("\\[USED-UP:([^\\]]+)\\]").find(comment)?.groupValues?.get(1)?.trim() ?: ""
     val effectiveUptimeMin = maxOf(parseRouterOsUptimeMinutes(uptime), parseRouterOsUptimeMinutes(commentUptime))
     if (durationMinutes > 0 && effectiveUptimeMin >= durationMinutes) return true
+
+    // 4. Expired by continuous calendar validity (days elapsed since first activation)
+    val actTime = activatedAt
+    if (actTime != null && validityDays > 0) {
+        val validityMs = validityDays * 24L * 60L * 60L * 1000L
+        if (System.currentTimeMillis() - actTime >= validityMs) return true
+    }
 
     return false
 }

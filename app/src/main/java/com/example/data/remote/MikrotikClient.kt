@@ -581,9 +581,28 @@ class MikrotikClient {
 
                 val res = conn.execute(
                     "/ip/hotspot/active/print",
-                    "=.proplist=.id,server,user,address,mac-address,uptime,session-time-left,limit-uptime,bytes-in,bytes-out,comment"
+                    "=.proplist=.id,server,user,address,mac-address,uptime,session-time-left,limit-uptime,bytes-in,bytes-out,comment,idle-time"
                 )
-                res.map {
+                res.mapNotNull {
+                    // Filter out disconnected/ghost sessions with idle-time > 180s (3m)
+                    val idleStr = it["idle-time"] ?: ""
+                    if (idleStr.isNotBlank()) {
+                        var idleSec = 0L
+                        val clean = idleStr.trim().lowercase()
+                        val regex = Regex("(\\d+)([wdhms])")
+                        regex.findAll(clean).forEach { m ->
+                            val v = m.groupValues[1].toLongOrNull() ?: 0L
+                            when (m.groupValues[2]) {
+                                "w" -> idleSec += v * 7 * 86400
+                                "d" -> idleSec += v * 86400
+                                "h" -> idleSec += v * 3600
+                                "m" -> idleSec += v * 60
+                                "s" -> idleSec += v
+                            }
+                        }
+                        if (idleSec > 180L) return@mapNotNull null
+                    }
+
                     val mac = (it["mac-address"] ?: "").uppercase()
                     val ip = it["address"] ?: ""
                     val host = cachedLeasesMap[mac] ?: cachedLeasesMap[ip] ?: ""

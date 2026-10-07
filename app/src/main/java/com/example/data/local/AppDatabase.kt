@@ -10,7 +10,7 @@ import com.example.domain.models.RouterSessionLog
 import com.example.domain.models.UserProfile
 import com.example.domain.models.Voucher
 
-@Database(entities = [UserProfile::class, Voucher::class, RouterSessionLog::class], version = 5, exportSchema = false)
+@Database(entities = [UserProfile::class, Voucher::class, RouterSessionLog::class], version = 6, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun routerDao(): RouterDao
 
@@ -33,13 +33,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("ALTER TABLE vouchers ADD COLUMN activatedAt INTEGER DEFAULT NULL")
+                } catch (_: Exception) {}
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "mikrotik_db"
-                ).addMigrations(MIGRATION_4_5)
+                ).addMigrations(MIGRATION_4_5, MIGRATION_5_6)
                  .fallbackToDestructiveMigration(dropAllTables = true)
                  .build()
                 INSTANCE = instance

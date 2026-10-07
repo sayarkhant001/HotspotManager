@@ -45,6 +45,7 @@ data class Voucher(
     val validityDays: Int = 1,
     val price: Double = 0.0,
     val generatedAt: Long = System.currentTimeMillis(),
+    val activatedAt: Long? = null,
     val isUsed: Boolean = false,
     val isPrinted: Boolean = false,
     val styleType: Int = 1,

@@ -446,8 +446,6 @@ class AppRepository(
             return total
         }
 
-        val sessionLogs = mutableListOf<com.example.domain.models.RouterSessionLog>()
-
         val activeUsersList = try {
             getActiveHotspotUsers()
         } catch (_: Exception) {
@@ -543,32 +541,19 @@ class AppRepository(
                 effectiveBytesOut = totalCumulative - effectiveBytesIn
             }
 
-            val generatedAt = when {
+            val activatedAt = when {
+                existing?.activatedAt != null -> existing.activatedAt
                 parsedActTime != null -> parsedActTime
                 existing?.isUsed == true && existing.generatedAt > 0L -> existing.generatedAt
                 isUsed && uptimeSec > 0 -> System.currentTimeMillis() - (uptimeSec * 1000L)
                 isUsed -> System.currentTimeMillis()
-                else -> existing?.generatedAt ?: System.currentTimeMillis()
+                else -> null
             }
 
-            if (isUsed) {
-                val bIn = effectiveBytesIn
-                val bOut = effectiveBytesOut
-                val mbUsed = (bIn + bOut) / (1024.0 * 1024.0)
-                val sDateKey = dateFormat.format(Date(generatedAt))
-                sessionLogs.add(
-                    com.example.domain.models.RouterSessionLog(
-                        macAddress = u.name,
-                        ipAddress = "",
-                        voucherCode = u.name,
-                        uptime = u.uptime,
-                        bytesIn = bIn,
-                        bytesOut = bOut,
-                        dataUsedMb = Math.round(mbUsed * 100.0) / 100.0,
-                        sessionStartTime = generatedAt,
-                        dateKey = sDateKey
-                    )
-                )
+            val generatedAt = when {
+                existing != null && existing.generatedAt > 0L -> existing.generatedAt
+                activatedAt != null -> activatedAt
+                else -> System.currentTimeMillis()
             }
 
             val rawPrice = when {
@@ -604,6 +589,7 @@ class AppRepository(
                 validityDays = prof?.validityDays ?: defaults.third,
                 price = price,
                 generatedAt = generatedAt,
+                activatedAt = activatedAt,
                 isUsed = isUsed,
                 isPrinted = isPrinted,
                 comment = u.comment,
@@ -626,11 +612,8 @@ class AppRepository(
         if (removedCodes.isNotEmpty()) {
             dao.deleteVouchersByCodes(removedCodes)
         }
-        if (sessionLogs.isNotEmpty()) {
-            sessionLogs.chunked(250).forEach { chunk ->
-                dao.insertSessions(chunk)
-            }
-        }
+        // Clean out any synthetic fake sessions from previous buggy versions
+        dao.clearSyntheticVoucherSessions()
         // Automatically prune vouchers expired 30+ days ago (non-disruptive, preserves active users)
         autoPruneExpiredVouchers()
         return vouchers.size
@@ -807,7 +790,8 @@ class AppRepository(
                 if (!v.isUsed || activeUserNames.contains(v.code)) return@filter false
 
                 // Determine activation time
-                val actTime = parseActivationTimestamp(v.comment)
+                val actTime = v.activatedAt
+                    ?: parseActivationTimestamp(v.comment)
                     ?: if (v.generatedAt > 0L) v.generatedAt else null
                     ?: return@filter false
 
@@ -1009,6 +993,7 @@ class AppRepository(
 
     private val recordMutex = kotlinx.coroutines.sync.Mutex()
     private val sessionBaseMap = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Long>>()
+    private val sessionDayStartMap = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Long>>()
     private val lastLiveBytesMap = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Long>>()
 
     suspend fun recordSessions(users: List<ActiveUser>) = withContext(Dispatchers.IO) {
@@ -1026,36 +1011,40 @@ class AppRepository(
                 val liveBOut = u.bytesOut.toLongOrNull() ?: 0L
                 val liveTotal = liveBIn + liveBOut
 
-                val lastLive = lastLiveBytesMap[sessionKey]
-                var base = sessionBaseMap[sessionKey]
-
-                if (base == null) {
+                // 12:00 AM Midnight Baseline Snapshot:
+                // When a session crosses midnight into a new calendar day,
+                // snapshot the initial bytes so previous days' data NEVER bleeds into today!
+                var dayStart = sessionDayStartMap[sessionKey]
+                if (dayStart == null) {
                     val existing = dao.getSessionByMacAndDate(u.macAddress, dateKey)
-                    if (existing != null && (existing.bytesIn + existing.bytesOut) > 0L) {
-                        if (liveTotal < (existing.bytesIn + existing.bytesOut)) {
-                            // Active session reconnected/rebooted: base is what was already recorded!
-                            base = Pair(existing.bytesIn, existing.bytesOut)
-                        } else {
-                            base = Pair(0L, 0L)
-                        }
+                    if (existing == null) {
+                        dayStart = Pair(liveBIn, liveBOut)
                     } else {
-                        base = Pair(0L, 0L)
+                        dayStart = Pair(0L, 0L)
                     }
-                    sessionBaseMap[sessionKey] = base
+                    sessionDayStartMap[sessionKey] = dayStart
                 }
 
-                // If live session bytes dropped below last seen live bytes, reconnect/restart happened!
+                var base = sessionBaseMap[sessionKey] ?: Pair(0L, 0L)
+                val lastLive = lastLiveBytesMap[sessionKey]
+
+                // If active session reconnected/restarted today (live bytes reset):
                 if (lastLive != null && liveTotal < (lastLive.first + lastLive.second)) {
-                    val newBaseIn = base.first + lastLive.first
-                    val newBaseOut = base.second + lastLive.second
-                    base = Pair(newBaseIn, newBaseOut)
+                    val prevDeltaIn = maxOf(0L, lastLive.first - dayStart.first)
+                    val prevDeltaOut = maxOf(0L, lastLive.second - dayStart.second)
+                    base = Pair(base.first + prevDeltaIn, base.second + prevDeltaOut)
                     sessionBaseMap[sessionKey] = base
+                    dayStart = Pair(0L, 0L)
+                    sessionDayStartMap[sessionKey] = dayStart
                 }
 
                 lastLiveBytesMap[sessionKey] = Pair(liveBIn, liveBOut)
 
-                val finalBIn = base.first + liveBIn
-                val finalBOut = base.second + liveBOut
+                val currentDeltaIn = maxOf(0L, liveBIn - dayStart.first)
+                val currentDeltaOut = maxOf(0L, liveBOut - dayStart.second)
+
+                val finalBIn = base.first + currentDeltaIn
+                val finalBOut = base.second + currentDeltaOut
                 val finalMb = (finalBIn + finalBOut) / (1024.0 * 1024.0)
 
                 RouterSessionLog(

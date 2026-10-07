@@ -145,19 +145,26 @@ object UniversalSetupHelper {
 # 9. HOTSPOT SERVER PROFILE & SERVER (DIRECT IP GATEWAY, NO DNS NAME)
 :do {
   /ip hotspot profile add name=hs-profile hotspot-address=@DOL@gwIp dns-name="" html-directory=@DOL@hsDir \
-    login-by=cookie,http-chap,http-pap,mac-cookie http-cookie-lifetime=30d mac-cookie-timeout=30d rate-limit=""
+    login-by=cookie,http-chap,http-pap,mac-cookie http-cookie-lifetime=30d mac-cookie-timeout=30d rate-limit="" \
+    keepalive-timeout=2m
 } on-error={
   :do {
     /ip hotspot profile set [find name=hs-profile] hotspot-address=@DOL@gwIp dns-name="" html-directory=@DOL@hsDir \
-      login-by=cookie,http-chap,http-pap,mac-cookie http-cookie-lifetime=30d mac-cookie-timeout=30d rate-limit=""
+      login-by=cookie,http-chap,http-pap,mac-cookie http-cookie-lifetime=30d mac-cookie-timeout=30d rate-limit="" \
+      keepalive-timeout=2m
   } on-error={}
 }
 
 :do {
-  /ip hotspot add name=hs-server interface=hotspot-bridge address-pool=hs-pool profile=hs-profile disabled=no
+  /ip hotspot add name=hs-server interface=hotspot-bridge address-pool=hs-pool profile=hs-profile keepalive-timeout=2m disabled=no
 } on-error={
-  :do { /ip hotspot set [find name=hs-server] interface=hotspot-bridge address-pool=hs-pool profile=hs-profile disabled=no } on-error={}
+  :do { /ip hotspot set [find name=hs-server] interface=hotspot-bridge address-pool=hs-pool profile=hs-profile keepalive-timeout=2m disabled=no } on-error={}
 }
+
+# Enforce active session idle & keepalive timeouts across all user profiles so disconnected devices are pruned immediately
+:do {
+  /ip hotspot user profile set [find] keepalive-timeout=2m idle-timeout=3m
+} on-error={}
 
 # 10. FAST CNA WALLED GARDEN (APPLE / ANDROID / WINDOWS)
 :local cnaList {"captive.apple.com"; "hotspot.cisco.com"; "appleiphonecell.com"; "connectivitycheck.gstatic.com"; "connectivitycheck.android.com"; "clients3.google.com"; "msftconnecttest.com"}

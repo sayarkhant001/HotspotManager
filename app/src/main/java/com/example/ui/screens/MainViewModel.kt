@@ -171,12 +171,28 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         val thirtyDaysAgo = cal30.timeInMillis
 
         val distinctVouchers = list.distinctBy { it.code }
-        val activated = distinctVouchers.filter { it.isUsed }
+        // Price tracking: strictly counted on the day the voucher was first inserted/activated,
+        // and never added again on reconnects or following days!
+        val activated = distinctVouchers.filter { v ->
+            v.activatedAt != null || (v.isUsed && v.generatedAt > 0L)
+        }
         val filtered = when (filter) {
-            "Today" -> activated.filter { it.generatedAt >= todayStart }
-            "Yesterday" -> activated.filter { it.generatedAt in yesterdayStart until todayStart }
-            "Last 7 Days" -> activated.filter { it.generatedAt >= sevenDaysAgo }
-            "Last 30 Days" -> activated.filter { it.generatedAt >= thirtyDaysAgo }
+            "Today" -> activated.filter { v ->
+                val act = v.activatedAt ?: v.generatedAt
+                act >= todayStart
+            }
+            "Yesterday" -> activated.filter { v ->
+                val act = v.activatedAt ?: v.generatedAt
+                act in yesterdayStart until todayStart
+            }
+            "Last 7 Days" -> activated.filter { v ->
+                val act = v.activatedAt ?: v.generatedAt
+                act >= sevenDaysAgo
+            }
+            "Last 30 Days" -> activated.filter { v ->
+                val act = v.activatedAt ?: v.generatedAt
+                act >= thirtyDaysAgo
+            }
             else -> activated
         }
         filtered.sumOf { it.price }

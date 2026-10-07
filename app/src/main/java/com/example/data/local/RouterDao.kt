@@ -175,6 +175,9 @@ interface RouterDao {
     @Query("UPDATE sessions SET isBanned = :isBanned WHERE macAddress = :macAddress")
     suspend fun banSessionMac(macAddress: String, isBanned: Boolean)
 
+    @Query("DELETE FROM sessions WHERE ipAddress = '' AND voucherCode = macAddress")
+    suspend fun clearSyntheticVoucherSessions()
+
     @Query("UPDATE vouchers SET profileName = :newName WHERE profileName = :oldName")
     suspend fun updateVoucherProfileName(oldName: String, newName: String)
 
