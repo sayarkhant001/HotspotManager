@@ -39,6 +39,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     val selectedFilter by viewModel.selectedDateFilter.collectAsStateWithLifecycle()
     val filteredSessions by viewModel.filteredSessions.collectAsStateWithLifecycle()
     val activatedSales by viewModel.activatedVoucherSales.collectAsStateWithLifecycle()
+    val voucherDataRawMb by viewModel.dateFilteredVoucherDataMb.collectAsStateWithLifecycle()
     val hwBytes by viewModel.routerHardwareTotalBytes.collectAsStateWithLifecycle()
     val cpuHistory by viewModel.cpuLoadHistory.collectAsStateWithLifecycle()
     val userMsg by viewModel.userMessage.collectAsStateWithLifecycle()
@@ -399,9 +400,10 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             Spacer(modifier = Modifier.height(8.dp))
 
             // Usage Summary Cards for selected date range
-            // Calculate accurate router data usage
+            // Calculate accurate router and voucher data usage synchronized with actual consumption
             val hwTotalGb = (hwBytes.first + hwBytes.second) / (1024.0 * 1024.0 * 1024.0)
-            val totalDataRawMb = filteredSessions.sumOf { it.dataUsedMb }
+            val sessionDataRawMb = filteredSessions.sumOf { it.dataUsedMb }
+            val totalDataRawMb = maxOf(voucherDataRawMb, sessionDataRawMb)
             val formattedDataUsage = if (selectedFilter == "All") {
                 val bestGb = maxOf(hwTotalGb, totalDataRawMb / 1024.0)
                 if (bestGb >= 1.0) {

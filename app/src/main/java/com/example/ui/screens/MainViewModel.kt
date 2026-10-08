@@ -215,6 +215,59 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         filtered.sumOf { it.price }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
+    // Data usage (in MB) strictly consumed by vouchers active/activated within selected date range
+    val dateFilteredVoucherDataMb: StateFlow<Double> = combine(
+        vouchers,
+        selectedDateFilter
+    ) { list, filter ->
+        val myanmarTz = TimeZone.getTimeZone("Asia/Yangon")
+        val cal = Calendar.getInstance(myanmarTz).apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val todayStart = cal.timeInMillis
+
+        cal.add(Calendar.DAY_OF_YEAR, -1)
+        val yesterdayStart = cal.timeInMillis
+
+        val cal7 = Calendar.getInstance(myanmarTz).apply {
+            add(Calendar.DAY_OF_YEAR, -7)
+        }
+        val sevenDaysAgo = cal7.timeInMillis
+
+        val cal30 = Calendar.getInstance(myanmarTz).apply {
+            add(Calendar.DAY_OF_YEAR, -30)
+        }
+        val thirtyDaysAgo = cal30.timeInMillis
+
+        val distinctVouchers = list.distinctBy { it.code }
+        val activated = distinctVouchers.filter { v ->
+            v.activatedAt != null || (v.isUsed && v.generatedAt > 0L) || (v.bytesIn + v.bytesOut) > 0L
+        }
+        val filtered = when (filter) {
+            "Today" -> activated.filter { v ->
+                val act = v.activatedAt ?: v.generatedAt
+                act >= todayStart
+            }
+            "Yesterday" -> activated.filter { v ->
+                val act = v.activatedAt ?: v.generatedAt
+                act in yesterdayStart until todayStart
+            }
+            "Last 7 Days" -> activated.filter { v ->
+                val act = v.activatedAt ?: v.generatedAt
+                act >= sevenDaysAgo
+            }
+            "Last 30 Days" -> activated.filter { v ->
+                val act = v.activatedAt ?: v.generatedAt
+                act >= thirtyDaysAgo
+            }
+            else -> activated
+        }
+        filtered.sumOf { (it.bytesIn + it.bytesOut) / (1024.0 * 1024.0) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
     val isSyncingVouchers = MutableStateFlow(false)
 
     val profileVoucherCounts: StateFlow<Map<String, Int>> = vouchers.map { list ->

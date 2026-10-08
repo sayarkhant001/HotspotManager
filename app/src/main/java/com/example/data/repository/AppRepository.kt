@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
@@ -555,8 +556,8 @@ class AppRepository(
             }
 
             val activatedAt = when {
-                existing?.activatedAt != null -> existing.activatedAt
                 parsedActTime != null -> parsedActTime
+                existing?.activatedAt != null -> existing.activatedAt
                 existing?.isUsed == true && existing.generatedAt > 0L -> existing.generatedAt
                 isUsed && uptimeSec > 0 -> System.currentTimeMillis() - (uptimeSec * 1000L)
                 isUsed -> System.currentTimeMillis()
@@ -1025,13 +1026,17 @@ class AppRepository(
                 val liveTotal = liveBIn + liveBOut
 
                 // 12:00 AM Midnight Baseline Snapshot:
-                // When a session crosses midnight into a new calendar day,
-                // snapshot the initial bytes so previous days' data NEVER bleeds into today!
+                // Only if a session truly started yesterday (uptime > seconds elapsed since midnight)
+                // do we baseline the initial bytes so yesterday's traffic does not bleed into today.
+                // For sessions started today, dayStart is (0,0) so 100% of today's traffic is captured!
                 var dayStart = sessionDayStartMap[sessionKey]
                 if (dayStart == null) {
-                    val existing = dao.getSessionByMacAndDate(u.macAddress, dateKey)
-                    if (existing == null) {
-                        dayStart = Pair(liveBIn, liveBOut)
+                    val uptimeSec = parseUptimeSeconds(u.uptime)
+                    val calNow = Calendar.getInstance(TimeZone.getTimeZone("Asia/Yangon"))
+                    val secSinceMidnight = calNow.get(Calendar.HOUR_OF_DAY) * 3600L + calNow.get(Calendar.MINUTE) * 60L + calNow.get(Calendar.SECOND)
+                    if (uptimeSec > secSinceMidnight && secSinceMidnight > 0L) {
+                        val existing = dao.getSessionByMacAndDate(u.macAddress, dateKey)
+                        dayStart = if (existing == null) Pair(liveBIn, liveBOut) else Pair(0L, 0L)
                     } else {
                         dayStart = Pair(0L, 0L)
                     }
