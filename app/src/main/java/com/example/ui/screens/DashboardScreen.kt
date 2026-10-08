@@ -40,6 +40,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     val filteredSessions by viewModel.filteredSessions.collectAsStateWithLifecycle()
     val activatedSales by viewModel.activatedVoucherSales.collectAsStateWithLifecycle()
     val voucherDataRawMb by viewModel.dateFilteredVoucherDataMb.collectAsStateWithLifecycle()
+    val voucherCount by viewModel.dateFilteredVoucherCount.collectAsStateWithLifecycle()
     val hwBytes by viewModel.routerHardwareTotalBytes.collectAsStateWithLifecycle()
     val cpuHistory by viewModel.cpuLoadHistory.collectAsStateWithLifecycle()
     val userMsg by viewModel.userMessage.collectAsStateWithLifecycle()
@@ -400,18 +401,10 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             Spacer(modifier = Modifier.height(8.dp))
 
             // Usage Summary Cards for selected date range
-            // Calculate accurate router and voucher data usage synchronized with actual consumption
-            val hwTotalGb = (hwBytes.first + hwBytes.second) / (1024.0 * 1024.0 * 1024.0)
+            // Calculate accurate router voucher data usage strictly synchronized with actual consumption
             val sessionDataRawMb = filteredSessions.sumOf { it.dataUsedMb }
-            val totalDataRawMb = maxOf(voucherDataRawMb, sessionDataRawMb)
-            val formattedDataUsage = if (selectedFilter == "All") {
-                val bestGb = maxOf(hwTotalGb, totalDataRawMb / 1024.0)
-                if (bestGb >= 1.0) {
-                    "${Math.round(bestGb * 100.0) / 100.0} GB"
-                } else {
-                    "${Math.round(totalDataRawMb * 10.0) / 10.0} MB"
-                }
-            } else if (totalDataRawMb >= 1024.0) {
+            val totalDataRawMb = if (voucherDataRawMb > 0.0) voucherDataRawMb else sessionDataRawMb
+            val formattedDataUsage = if (totalDataRawMb >= 1024.0) {
                 "${Math.round((totalDataRawMb / 1024.0) * 100.0) / 100.0} GB"
             } else {
                 "${Math.round(totalDataRawMb * 10.0) / 10.0} MB"
@@ -463,7 +456,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "${filteredSessions.size}",
+                                text = "${if (voucherCount > 0) voucherCount else filteredSessions.size}",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1

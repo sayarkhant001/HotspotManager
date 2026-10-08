@@ -558,9 +558,9 @@ class AppRepository(
             val activatedAt = when {
                 parsedActTime != null -> parsedActTime
                 existing?.activatedAt != null -> existing.activatedAt
-                existing?.isUsed == true && existing.generatedAt > 0L -> existing.generatedAt
                 isUsed && uptimeSec > 0 -> System.currentTimeMillis() - (uptimeSec * 1000L)
                 isUsed -> System.currentTimeMillis()
+                existing?.isUsed == true && existing.generatedAt > 0L -> existing.generatedAt
                 else -> null
             }
 
