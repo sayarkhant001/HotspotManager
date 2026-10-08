@@ -519,15 +519,22 @@ class AppRepository(
                 parsedOrigBytes - u.limitBytesTotal
             } else 0L
 
-            val currentBootTraffic = maxOf(sessionTotal, liveTotal)
-            val preRebootBase = maxOf(parsedBaseBytes, existingTotal)
+            // Router recorded used bytes:
+            // When liveTotal > 0 (active session): active bytes are not yet flushed to user sessionTotal,
+            // so we add liveTotal to baseBytes or use the live comment tag parsedUsedBytes.
+            // When disconnected (liveTotal == 0): RouterOS already flushed finished session into sessionTotal,
+            // so sessionTotal, parsedUsedBytes, and parsedBaseBytes represent the SAME traffic - take maxOf, NEVER add!
+            val routerRecordedUsed = if (liveTotal > 0L) {
+                maxOf(parsedUsedBytes, parsedBaseBytes + liveTotal, sessionTotal + liveTotal, liveTotal)
+            } else {
+                maxOf(sessionTotal, parsedUsedBytes, parsedBaseBytes)
+            }
 
             val totalCumulative = when {
-                hardwareUsed > 0L -> maxOf(hardwareUsed, preRebootBase + currentBootTraffic, parsedUsedBytes)
-                parsedBaseBytes > 0L -> parsedBaseBytes + currentBootTraffic
-                parsedUsedBytes > 0L && parsedUsedBytes >= (preRebootBase + currentBootTraffic) -> parsedUsedBytes
-                preRebootBase > 0L && currentBootTraffic > 0L -> preRebootBase + currentBootTraffic
-                else -> maxOf(preRebootBase, currentBootTraffic, parsedUsedBytes)
+                hardwareUsed > 0L -> maxOf(hardwareUsed, routerRecordedUsed)
+                routerRecordedUsed > 0L -> routerRecordedUsed
+                existingTotal > 0L -> existingTotal
+                else -> 0L
             }
 
             val activeOrSessionIn = if (liveTotal > 0L) liveIn else sessionIn
@@ -1244,15 +1251,12 @@ class AppRepository(
                 ?: 0L
             val quotaTotalBytes: Long = if (parsedOrigLimit != null && parsedOrigLimit > 0L) parsedOrigLimit else (quotaTotal.toLong() * 1024L * 1024L)
 
-            val effectiveBaseBytes = maxOf(
-                baseBytes,
-                voucher?.let { it.bytesIn + it.bytesOut } ?: 0L,
-                routerUser?.let { it.bytesIn + it.bytesOut } ?: 0L
-            )
-
+            // In active sessions: live session bytes are in sessionBytes.
+            // baseBytes contains previous completed sessions, and usedBytes is updated continuously by hs-quota-save.
+            // Do NOT add stored Room DB bytes (voucher.bytesIn + bytesOut) on top of sessionBytes to prevent double-counting.
             val exactTotalUsedBytes = maxOf(
                 usedBytes,
-                effectiveBaseBytes + sessionBytes,
+                baseBytes + sessionBytes,
                 sessionBytes
             )
 

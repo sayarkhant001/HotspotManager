@@ -305,7 +305,7 @@ object UniversalSetupHelper {
     :do { /ip hotspot cookie remove [find user=@DOL@u] } on-error={};
     :return "";
   } else={
-    :do { /ip hotspot user set @DOL@uObj limit-bytes-total=@DOL@remBytes } on-error={};
+    :do { /ip hotspot user set @DOL@uObj limit-bytes-total=@DOL@origLim disabled=no } on-error={};
   };
 };
 
@@ -564,11 +564,10 @@ object UniversalSetupHelper {
           :do { /ip hotspot active remove [find user=@DOL@uName] } on-error={};
           :do { /ip hotspot cookie remove [find user=@DOL@uName] } on-error={};
         } else={
-          :if (@DOL@origLim > 0 and @DOL@totalUsed < @DOL@origLim) do={
-            :local remBytes (@DOL@origLim - @DOL@totalUsed);
-            :if (@DOL@remBytes > 0 and (@DOL@curLim = 0 or @DOL@remBytes < @DOL@curLim)) do={
-              :do { /ip hotspot user set @DOL@u limit-bytes-total=@DOL@remBytes } on-error={};
-            };
+          # Dynamic Hardware Ceiling: Keep limit-bytes-total set to origLim
+          # Ensure limit-bytes-total is kept at origLim to prevent false login rejections
+          :if (@DOL@origLim > 0 and @DOL@curLim != @DOL@origLim) do={
+            :do { /ip hotspot user set @DOL@u limit-bytes-total=@DOL@origLim disabled=no } on-error={};
           };
         };
       };

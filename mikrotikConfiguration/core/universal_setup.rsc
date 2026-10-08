@@ -285,7 +285,7 @@
     :do { /ip hotspot cookie remove [find user=$u] } on-error={};
     :return "";
   } else={
-    :do { /ip hotspot user set $uObj limit-bytes-total=$remBytes } on-error={};
+    :do { /ip hotspot user set $uObj limit-bytes-total=$origLim disabled=no } on-error={};
   };
 };
 
@@ -544,11 +544,10 @@
           :do { /ip hotspot active remove [find user=$uName] } on-error={};
           :do { /ip hotspot cookie remove [find user=$uName] } on-error={};
         } else={
-          :if ($origLim > 0 and $totalUsed < $origLim) do={
-            :local remBytes ($origLim - $totalUsed);
-            :if ($remBytes > 0 and ($curLim = 0 or $remBytes < $curLim)) do={
-              :do { /ip hotspot user set $u limit-bytes-total=$remBytes } on-error={};
-            };
+          # Dynamic Hardware Ceiling: Keep limit-bytes-total set to origLim
+          # Ensure limit-bytes-total is kept at origLim to prevent false login rejections
+          :if ($origLim > 0 and $curLim != $origLim) do={
+            :do { /ip hotspot user set $u limit-bytes-total=$origLim disabled=no } on-error={};
           };
         };
       };
