@@ -484,7 +484,7 @@ fun LoginScreen(
                     if (selectedTab == 0) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "Cloud Controller: hotspot-admin.pages.dev",
+                            text = "Cloud Controller: 3.84.81.152:8750",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center

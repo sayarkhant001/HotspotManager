@@ -33,8 +33,8 @@ data class CloudRouter(
 )
 
 object CloudApiClient {
-    // VPS Cloud API URL via Cloudflare Pages
-    var serverUrl: String = "https://hotspot-admin.pages.dev"
+    // VPS Cloud API URL
+    var serverUrl: String = "http://3.84.81.152:8750"
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
@@ -56,7 +56,12 @@ object CloudApiClient {
 
     fun init(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        serverUrl = prefs.getString(KEY_SERVER_URL, "https://hotspot-admin.pages.dev") ?: "https://hotspot-admin.pages.dev"
+        val saved = prefs.getString(KEY_SERVER_URL, null)
+        serverUrl = if (saved.isNullOrBlank() || saved.contains("hotspot-admin.pages.dev")) {
+            "http://3.84.81.152:8750"
+        } else {
+            saved
+        }
     }
 
     fun getToken(context: Context): String? {
