@@ -126,7 +126,7 @@ print(out)
     return execute_on_vps_python(py_code).strip()
 
 def run_rsc_script(rsc_content, router_id=None, host=None, user='admin', password=''):
-    """Uploads and runs an RSC script on the target router."""
+    """Uploads and runs an RSC script on the target router via FTP and /import."""
     if router_id:
         r = get_router_by_id(router_id)
         if not r:
@@ -136,19 +136,130 @@ def run_rsc_script(rsc_content, router_id=None, host=None, user='admin', passwor
         password = r['api_pass']
 
     py_code = f"""
+import ftplib, io, time, sys
+sys.path.append('/opt/hotspot-cloud')
+import cloud_mikrotik
+
+filename = f"agent_exec_{{int(time.time())}}.rsc"
+
+# 1. Upload via FTP
+try:
+    ftp = ftplib.FTP()
+    ftp.connect({json.dumps(host)}, 21, timeout=8)
+    ftp.login({json.dumps(user)}, {json.dumps(password)})
+    ftp.storbinary(f'STOR {{filename}}', io.BytesIO({json.dumps(rsc_content)}.encode('utf-8')))
+    ftp.quit()
+except Exception as e:
+    print(f"FTP Upload Failed: {{e}}")
+    sys.exit(0)
+
+# 2. Execute /import
+client = cloud_mikrotik.RouterOSClient({json.dumps(host)}, timeout=30)
+client.connect()
+if client.login({json.dumps(user)}, {json.dumps(password)}):
+    res = client.talk(['/import', f'=file-name={{filename}}'])
+    
+    # 3. Cleanup file
+    try:
+        files = client.talk(['/file/print', f'?name={{filename}}'])
+        for f in files:
+            if f[0] == '!re':
+                for it in f[1:]:
+                    if it.startswith('=.id='):
+                        client.talk(['/file/remove', f'=.id={{it.split("=", 2)[2]}}'])
+    except Exception:
+        pass
+    client.close()
+    print("Execution Success: " + str(res))
+else:
+    client.close()
+    print("API Login Failed")
+"""
+    return execute_on_vps_python(py_code).strip()
+
+def check_updates(router_id):
+    """Checks for RouterOS package updates and RouterBOOT firmware."""
+    r = get_router_by_id(router_id)
+    if not r:
+        return {}
+    py_code = f"""
+import sys, json
+sys.path.append('/opt/hotspot-cloud')
+import cloud_mikrotik
+
+c = cloud_mikrotik.RouterOSClient({json.dumps(r['wg_ip'])}, timeout=10)
+c.connect()
+if c.login({json.dumps(r['api_user'])}, {json.dumps(r['api_pass'])}):
+    c.talk(['/system/package/update/check-for-updates'])
+    up = c.talk(['/system/package/update/print'])
+    up_data = {{}}
+    for row in up:
+        if row[0] == '!re':
+            for it in row[1:]:
+                if '=' in it:
+                    k, v = it.lstrip('=').split('=', 1)
+                    up_data[k] = v
+    rb = c.talk(['/system/routerboard/print'])
+    rb_data = {{}}
+    for row in rb:
+        if row[0] == '!re':
+            for it in row[1:]:
+                if '=' in it:
+                    k, v = it.lstrip('=').split('=', 1)
+                    rb_data[k] = v
+    c.close()
+    print(json.dumps({{'packages': up_data, 'routerboard': rb_data}}))
+else:
+    c.close()
+    print("{{}}")
+"""
+    raw = execute_on_vps_python(py_code).strip()
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
+
+def install_router_update(router_id):
+    """Triggers RouterOS package download and upgrade with automatic reboot."""
+    r = get_router_by_id(router_id)
+    if not r:
+        return "Router not found"
+    py_code = f"""
 import sys
 sys.path.append('/opt/hotspot-cloud')
 import cloud_mikrotik
 
-client = cloud_mikrotik.RouterOSClient({json.dumps(host)}, timeout=20)
-client.connect()
-if client.login({json.dumps(user)}, {json.dumps(password)}):
-    res = client.run_rsc_code({json.dumps(rsc_content)}, name="agent_exec")
-    client.close()
-    print(res)
+c = cloud_mikrotik.RouterOSClient({json.dumps(r['wg_ip'])}, timeout=10)
+try:
+    c.connect()
+    c.login({json.dumps(r['api_user'])}, {json.dumps(r['api_pass'])})
+    c.talk(['/system/package/update/install'])
+    c.close()
+    print("Install Dispatched (Router is downloading updates and will reboot automatically)")
+except Exception as e:
+    print(f"Dispatched: {{e}}")
+"""
+    return execute_on_vps_python(py_code).strip()
+
+def upgrade_routerboard(router_id):
+    """Upgrades RouterBOOT hardware firmware."""
+    r = get_router_by_id(router_id)
+    if not r:
+        return "Router not found"
+    py_code = f"""
+import sys
+sys.path.append('/opt/hotspot-cloud')
+import cloud_mikrotik
+
+c = cloud_mikrotik.RouterOSClient({json.dumps(r['wg_ip'])}, timeout=10)
+c.connect()
+if c.login({json.dumps(r['api_user'])}, {json.dumps(r['api_pass'])}):
+    c.talk(['/system/routerboard/upgrade'])
+    c.close()
+    print("RouterBOOT firmware upgraded! Will take effect upon next reboot.")
 else:
-    client.close()
-    print("API Login Failed")
+    c.close()
+    print("API Login failed")
 """
     return execute_on_vps_python(py_code).strip()
 
@@ -298,6 +409,18 @@ def main():
     reb_p = subparsers.add_parser("reboot", help="Reboot router")
     reb_p.add_argument("--router", type=int, required=True, help="Router ID")
 
+    # check-updates
+    chk_p = subparsers.add_parser("check-updates", help="Check for RouterOS and firmware updates")
+    chk_p.add_argument("--router", type=int, required=True, help="Router ID")
+
+    # upgrade
+    upg_p = subparsers.add_parser("upgrade", help="Download and install RouterOS update (auto-reboot)")
+    upg_p.add_argument("--router", type=int, required=True, help="Router ID")
+
+    # upgrade-boot
+    boot_p = subparsers.add_parser("upgrade-boot", help="Upgrade RouterBOOT hardware firmware")
+    boot_p.add_argument("--router", type=int, required=True, help="Router ID")
+
     args = parser.parse_args()
 
     if args.command == "list":
@@ -343,6 +466,30 @@ def main():
 
     elif args.command == "reboot":
         res = reboot_router(args.router)
+        print(res)
+
+    elif args.command == "check-updates":
+        res = check_updates(args.router)
+        pkg = res.get('packages', {})
+        rb = res.get('routerboard', {})
+        print("\n=== ROUTEROS PACKAGE STATUS ===")
+        print(f"Channel:           {pkg.get('channel', 'stable')}")
+        print(f"Installed Version: {pkg.get('installed-version', 'unknown')}")
+        print(f"Latest Version:    {pkg.get('latest-version', 'unknown')}")
+        print(f"Status:            {pkg.get('status', 'unknown')}")
+        print("\n=== ROUTERBOOT HARDWARE FIRMWARE ===")
+        print(f"Model:             {rb.get('model', 'unknown')}")
+        print(f"Current Firmware:  {rb.get('current-firmware', 'unknown')}")
+        print(f"Upgrade Firmware:  {rb.get('upgrade-firmware', 'unknown')}")
+        upgradable = rb.get('upgrade-firmware') and rb.get('upgrade-firmware') != rb.get('current-firmware')
+        print(f"Firmware Upgrade:  {'AVAILABLE (Run: upgrade-boot)' if upgradable else 'UP TO DATE'}\n")
+
+    elif args.command == "upgrade":
+        res = install_router_update(args.router)
+        print(res)
+
+    elif args.command == "upgrade-boot":
+        res = upgrade_routerboard(args.router)
         print(res)
 
     else:
