@@ -1,0 +1,411 @@
+@charset "UTF-8";
+
+/* ==========================================================================
+   A Yeik Sitt WiFi – Modern Glassmorphism & Cute Kid Captive Portal Theme
+   Direct IP Mode (10.10.10.1) • Mobile-Optimized • High Performance
+   ========================================================================== */
+
+:root {
+  --bg-deep: #090D16;
+  --bg-card: rgba(18, 24, 38, 0.82);
+  --border-card: rgba(255, 255, 255, 0.12);
+  --border-focus: #F59E0B;
+  --text-primary: #FFFFFF;
+  --text-muted: #94A3B8;
+  --text-dim: #64748B;
+  --accent-peach: #FB923C;
+  --accent-gold: #FBBF24;
+  --accent-cyan: #38BDF8;
+  --accent-green: #34D399;
+  --btn-grad: linear-gradient(135deg, #F59E0B 0%, #FB923C 50%, #EC4899 100%);
+  --btn-grad-hover: linear-gradient(135deg, #D97706 0%, #F97316 50%, #DB2777 100%);
+  --shadow-card: 0 20px 40px -15px rgba(0, 0, 0, 0.65), 0 0 25px rgba(245, 158, 11, 0.18);
+  --font-stack: "Pyidaungsu", "Padauk", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font-stack);
+  background-color: var(--bg-deep);
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 12px;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* ── Ambient Background Glow Orbs ───────────────────────────── */
+.bg-ambient {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.35;
+  animation: floatOrb 12s ease-in-out infinite alternate;
+}
+
+.orb-1 {
+  width: 280px;
+  height: 280px;
+  background: radial-gradient(circle, #F59E0B, #EA580C);
+  top: -60px;
+  left: -60px;
+}
+
+.orb-2 {
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, #38BDF8, #6366F1);
+  bottom: -80px;
+  right: -80px;
+  animation-delay: -5s;
+}
+
+.orb-3 {
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, #EC4899, #F43F5E);
+  top: 50%;
+  left: 65%;
+  animation-delay: -8s;
+}
+
+@keyframes floatOrb {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(25px, 20px) scale(1.08); }
+  100% { transform: translate(-20px, -25px) scale(0.95); }
+}
+
+/* ── Portal Container & Glass Card ─────────────────────────── */
+.portal-container {
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  z-index: 10;
+  margin: auto;
+}
+
+.glass-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-card);
+  border-radius: 28px;
+  padding: 26px 20px 22px 20px;
+  box-shadow: var(--shadow-card);
+  text-align: center;
+  position: relative;
+}
+
+/* ── Cute Avatar & Header ─────────────────────────────────── */
+.kid-avatar-wrap {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  margin: 0 auto 12px auto;
+}
+
+.kid-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 3.5px solid #F59E0B;
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4), 0 0 0 6px rgba(245, 158, 11, 0.15);
+  animation: pulseGlow 4s ease-in-out infinite alternate;
+}
+
+@keyframes pulseGlow {
+  0% { box-shadow: 0 8px 24px rgba(245, 158, 11, 0.35), 0 0 0 4px rgba(245, 158, 11, 0.12); }
+  100% { box-shadow: 0 10px 30px rgba(251, 146, 60, 0.55), 0 0 0 8px rgba(251, 146, 60, 0.22); }
+}
+
+.kid-avatar-badge {
+  position: absolute;
+  bottom: 0px;
+  right: 2px;
+  background: linear-gradient(135deg, #10B981, #059669);
+  color: #FFF;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  border: 2.5px solid var(--bg-deep);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.brand-title {
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  background: linear-gradient(135deg, #FFFFFF 30%, #FDE68A 70%, #F59E0B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 4px;
+}
+
+.brand-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 18px;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--accent-green);
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 10px var(--accent-green);
+  animation: blink 2s infinite ease-in-out;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* ── Minimalist Tab Switcher ──────────────────────────────── */
+.tab-switcher {
+  display: flex;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 4px;
+  margin-bottom: 16px;
+  gap: 4px;
+}
+
+.tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  border-radius: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.25s ease;
+}
+
+.tab-btn.active {
+  background: rgba(245, 158, 11, 0.2);
+  color: #FBBF24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+}
+
+/* ── Form Inputs ───────────────────────────────────────────── */
+.input-box-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.code-input-main {
+  width: 100%;
+  background: rgba(10, 14, 26, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.14);
+  color: #FFFFFF;
+  border-radius: 16px;
+  padding: 13px 44px 13px 18px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-align: center;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.25s ease;
+}
+
+.code-input-main:focus {
+  border-color: var(--border-focus);
+  background: rgba(10, 14, 26, 0.98);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25);
+}
+
+.code-input-main::placeholder {
+  color: var(--text-dim);
+  font-weight: 500;
+  letter-spacing: normal;
+  font-size: 13.5px;
+}
+
+.btn-icon-action {
+  position: absolute;
+  right: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-icon-action:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #FFF;
+}
+
+/* ── Primary Submit Button ────────────────────────────────── */
+.btn-connect {
+  width: 100%;
+  background: var(--btn-grad);
+  border: none;
+  border-radius: 16px;
+  color: #FFFFFF;
+  padding: 13px 20px;
+  font-size: 15.5px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.btn-connect:hover {
+  background: var(--btn-grad-hover);
+  transform: translateY(-1.5px);
+  box-shadow: 0 14px 30px -5px rgba(245, 158, 11, 0.6);
+}
+
+.btn-connect:active {
+  transform: translateY(1px);
+}
+
+/* ── Error & Info Alerts ──────────────────────────────────── */
+.msg-alert {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #FCA5A5;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  margin-bottom: 12px;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.msg-alert.hide {
+  display: none;
+}
+
+/* ── Pricing Cards Grid ───────────────────────────────────── */
+.pricing-section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: left;
+}
+
+.pricing-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #CBD5E1;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pricing-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 8px 6px;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.pricing-card:hover {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.3);
+  transform: translateY(-2px);
+}
+
+.pricing-time {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.pricing-price {
+  font-size: 13px;
+  font-weight: 800;
+  color: #FBBF24;
+  margin-top: 2px;
+}
+
+/* ── Direct IP & Contact Badges ───────────────────────────── */
+.ip-info-box {
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 12px;
+  padding: 9px 12px;
+  margin-top: 12px;
+  text-align: left;
+  font-size: 11.5px;
+  color: #CBD5E1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.footer-copy {
+  margin-top: 16px;
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.hide {
+  display: none !important;
+}

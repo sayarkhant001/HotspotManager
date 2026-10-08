@@ -54,6 +54,9 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     val isExecutingScript by viewModel.isExecutingScript.collectAsStateWithLifecycle()
     val scriptExecutionOutput by viewModel.scriptExecutionOutput.collectAsStateWithLifecycle()
     val showUpdateDialog by viewModel.showUpdateDialog.collectAsStateWithLifecycle()
+    val activeRouterName by viewModel.activeRouterName.collectAsStateWithLifecycle()
+    val cloudUser by viewModel.cloudUser.collectAsStateWithLifecycle()
+    val connMode by viewModel.connectionMode.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     var showSettingsDialog by remember { mutableStateOf(false) }
 
@@ -82,18 +85,24 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
+                            val routerDisplayName = if (activeRouterName.isNotBlank()) activeRouterName else (stats?.boardName ?: strings.appName)
                             Text(
-                                text = stats?.boardName ?: strings.appName,
+                                text = routerDisplayName,
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.titleMedium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            if (stats != null) {
+                            val subtitleText = when {
+                                cloudUser != null -> "${cloudUser?.fullName} • ${if (connMode == "cloud_remote") "☁️ Remote Relay" else "📶 Local Wi-Fi"}"
+                                stats != null -> "RouterOS v${stats?.version}"
+                                else -> ""
+                            }
+                            if (subtitleText.isNotBlank()) {
                                 Text(
-                                    text = "RouterOS v${stats?.version}",
+                                    text = subtitleText,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (cloudUser != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -731,7 +740,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 strings = strings,
                 onDismiss = { showSettingsDialog = false },
                 onLogout = {
-                    viewModel.disconnectFromRouter()
+                    viewModel.disconnectFromRouter(context)
                     showSettingsDialog = false
                     navController.navigate("login") {
                         popUpTo("dashboard") { inclusive = true }

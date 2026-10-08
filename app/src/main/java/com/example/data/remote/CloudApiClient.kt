@@ -26,6 +26,7 @@ data class CloudRouter(
     val wgIp: String,
     val remotePort: Int,
     val remoteAddress: String,
+    val localAddress: String = "10.10.10.1:8728",
     val apiUser: String,
     val apiPass: String,
     val status: String
@@ -36,8 +37,14 @@ object CloudApiClient {
     var serverUrl: String = "https://hotspot-admin.pages.dev"
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
+        .connectTimeout(12, TimeUnit.SECONDS)
+        .readTimeout(12, TimeUnit.SECONDS)
+        .addInterceptor { chain ->
+            val req = chain.request().newBuilder()
+                .header("User-Agent", "HotspotManagerApp/1.0 (Android)")
+                .build()
+            chain.proceed(req)
+        }
         .build()
 
     private const val PREFS_NAME = "hotspot_cloud_prefs"
@@ -147,6 +154,7 @@ object CloudApiClient {
                             wgIp = o.getString("wg_ip"),
                             remotePort = rPort,
                             remoteAddress = o.optString("remote_address", "3.84.81.152:$rPort"),
+                            localAddress = o.optString("local_address", "10.10.10.1:8728"),
                             apiUser = o.optString("api_user", "admin"),
                             apiPass = o.optString("api_pass", "Khant1234@"),
                             status = o.optString("status", "offline")

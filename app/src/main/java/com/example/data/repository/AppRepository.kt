@@ -514,15 +514,21 @@ class AppRepository(
             val existingOut = existing?.bytesOut ?: 0L
             val existingTotal = existingIn + existingOut
 
-            // Total bytes reported by router (either saved in comment or base + current boot traffic or live session)
-            val routerCalculatedTotal = if (parsedUsedBytes > 0L) {
-                maxOf(parsedUsedBytes, sessionTotal, liveTotal)
-            } else if (parsedBaseBytes > 0L) {
-                parsedBaseBytes + maxOf(sessionTotal, liveTotal)
-            } else {
-                maxOf(sessionTotal, liveTotal)
+            // Total bytes reported by router (hardware balance, or base + current boot traffic or live session)
+            val hardwareUsed = if (parsedOrigBytes != null && parsedOrigBytes > 0L && u.limitBytesTotal > 0L && u.limitBytesTotal <= parsedOrigBytes) {
+                parsedOrigBytes - u.limitBytesTotal
+            } else 0L
+
+            val currentBootTraffic = maxOf(sessionTotal, liveTotal)
+            val preRebootBase = maxOf(parsedBaseBytes, existingTotal)
+
+            val totalCumulative = when {
+                hardwareUsed > 0L -> maxOf(hardwareUsed, preRebootBase + currentBootTraffic, parsedUsedBytes)
+                parsedBaseBytes > 0L -> parsedBaseBytes + currentBootTraffic
+                parsedUsedBytes > 0L && parsedUsedBytes >= (preRebootBase + currentBootTraffic) -> parsedUsedBytes
+                preRebootBase > 0L && currentBootTraffic > 0L -> preRebootBase + currentBootTraffic
+                else -> maxOf(preRebootBase, currentBootTraffic, parsedUsedBytes)
             }
-            val totalCumulative = maxOf(routerCalculatedTotal, existingTotal, sessionTotal, liveTotal)
 
             val activeOrSessionIn = if (liveTotal > 0L) liveIn else sessionIn
             val activeOrSessionTotal = if (liveTotal > 0L) liveTotal else sessionTotal
@@ -1172,15 +1178,23 @@ class AppRepository(
             val voucher = voucherMap[userLower]
             val routerUser = routerUsersMap[userLower]
 
+            val effectiveComment = when {
+                routerUser != null && routerUser.comment.isNotBlank() -> routerUser.comment
+                u.comment.isNotBlank() -> u.comment
+                voucher != null && voucher.comment.isNotBlank() -> voucher.comment
+                else -> ""
+            }
+
             // 1. Resolve Profile Name
             val profileName = when {
                 voucher != null && voucher.profileName.isNotBlank() -> voucher.profileName
                 routerUser != null && routerUser.profile.isNotBlank() -> routerUser.profile
-                u.comment.isNotBlank() -> {
-                    profiles.firstOrNull { prof -> u.comment.contains(prof.name, ignoreCase = true) }?.name
+                u.profileName.isNotBlank() -> u.profileName
+                effectiveComment.isNotBlank() -> {
+                    profiles.firstOrNull { prof -> effectiveComment.contains(prof.name, ignoreCase = true) }?.name
                         ?: profiles.firstOrNull { prof ->
                             val cleanProf = prof.name.replace("_", " ").lowercase()
-                            u.comment.lowercase().contains(cleanProf)
+                            effectiveComment.lowercase().contains(cleanProf)
                         }?.name ?: ""
                 }
                 else -> ""
@@ -1189,24 +1203,19 @@ class AppRepository(
             val matchedProfile = profileMap[profileName.lowercase()]
 
             // 2. Resolve Quota Total in MB based on profile
-            val parsedOrigLimit = parseOrigLimitFromComment(u.comment)
+            val parsedOrigLimit = parseOrigLimitFromComment(effectiveComment)
+                ?: parseOrigLimitFromComment(u.comment)
                 ?: routerUser?.let { parseOrigLimitFromComment(it.comment) }
                 ?: voucher?.let { parseOrigLimitFromComment(it.comment) }
-            val defaults = getDefaultProfilePriceAndQuota(profileName.ifBlank { u.comment })
+            val defaults = getDefaultProfilePriceAndQuota(profileName.ifBlank { effectiveComment })
 
             val quotaTotal = when {
                 parsedOrigLimit != null && parsedOrigLimit > 0L -> (parsedOrigLimit / (1024 * 1024)).toInt()
                 voucher != null && voucher.dataLimitMb > 0 -> voucher.dataLimitMb
                 matchedProfile != null && matchedProfile.dataLimitMb > 0 -> matchedProfile.dataLimitMb
                 defaults.second > 0 -> defaults.second
-                routerUser != null && routerUser.limitBytesTotal > 0 -> {
-                    val usedB = parseUsedBytesFromComment(u.comment)
-                        ?: routerUser?.let { parseUsedBytesFromComment(it.comment) } ?: 0L
-                    val fullB = if (usedB > 0L) routerUser.limitBytesTotal + usedB else routerUser.limitBytesTotal
-                    (fullB / (1024 * 1024)).toInt()
-                }
                 else -> {
-                    val combined = "$profileName ${u.comment} ${u.user}".uppercase()
+                    val combined = "$profileName $effectiveComment ${u.user}".uppercase()
                     when {
                         combined.contains("100GB") -> 102400
                         combined.contains("50GB") -> 51200
@@ -1226,23 +1235,43 @@ class AppRepository(
                 }
             }
 
-            val voucherUsedMb = voucher?.let { (it.bytesIn + it.bytesOut) / (1024.0 * 1024.0) } ?: 0.0
-            val routerUserUsedMb = routerUser?.let { (it.bytesIn + it.bytesOut) / (1024.0 * 1024.0) } ?: 0.0
-            val totalUsedMb = maxOf(u.quotaUsedMb, voucherUsedMb, routerUserUsedMb)
-            val remaining = if (quotaTotal > 0) maxOf(0.0, quotaTotal - totalUsedMb) else 0.0
+            val sessionBytes = (u.bytesIn.toLongOrNull() ?: 0L) + (u.bytesOut.toLongOrNull() ?: 0L)
+            val baseBytes = parseBaseBytesFromComment(effectiveComment)
+                ?: parseBaseBytesFromComment(u.comment)
+                ?: 0L
+            val usedBytes = parseUsedBytesFromComment(effectiveComment)
+                ?: parseUsedBytesFromComment(u.comment)
+                ?: 0L
+            val quotaTotalBytes: Long = if (parsedOrigLimit != null && parsedOrigLimit > 0L) parsedOrigLimit else (quotaTotal.toLong() * 1024L * 1024L)
+
+            val effectiveBaseBytes = maxOf(
+                baseBytes,
+                voucher?.let { it.bytesIn + it.bytesOut } ?: 0L,
+                routerUser?.let { it.bytesIn + it.bytesOut } ?: 0L
+            )
+
+            val exactTotalUsedBytes = maxOf(
+                usedBytes,
+                effectiveBaseBytes + sessionBytes,
+                sessionBytes
+            )
+
+            val exactRemainingBytes = if (quotaTotalBytes > 0L) {
+                maxOf(0L, quotaTotalBytes - exactTotalUsedBytes)
+            } else 0L
+
+            val finalUsedMb = Math.round((exactTotalUsedBytes / (1024.0 * 1024.0)) * 10.0) / 10.0
+            val finalRemainingMb = if (quotaTotal > 0) Math.round((exactRemainingBytes / (1024.0 * 1024.0)) * 10.0) / 10.0 else 0.0
 
             // 3. Resolve continuous cumulative Uptime across reboots
-            val baseUpSec = parseUsedUptimeSeconds(u.comment)
-                ?: routerUser?.let { parseUsedUptimeSeconds(it.comment) }
-                ?: voucher?.let { parseUsedUptimeSeconds(it.comment) }
-                ?: 0L
+            val baseUpSec = parseBaseUptimeSeconds(effectiveComment) ?: 0L
+            val usedUpSec = parseUsedUptimeSeconds(effectiveComment) ?: 0L
             val sessionUpSec = parseUptimeSeconds(u.uptime)
-            val effectiveUpSec = maxOf(baseUpSec + sessionUpSec, parseUptimeSeconds(voucher?.uptime ?: ""))
+            val effectiveUpSec = maxOf(usedUpSec, baseUpSec + sessionUpSec, sessionUpSec, parseUptimeSeconds(voucher?.uptime ?: ""))
             val finalUptime = if (effectiveUpSec > 0) formatUptimeSeconds(effectiveUpSec) else u.uptime
 
             // 4. Resolve continuous Time Left countdown (deducting all consumed elapsed time)
-            val actTime = parseActivationTimestamp(u.comment)
-                ?: routerUser?.let { parseActivationTimestamp(it.comment) }
+            val actTime = parseActivationTimestamp(effectiveComment)
                 ?: voucher?.let { parseActivationTimestamp(it.comment) }
             val durationMinutes = when {
                 matchedProfile != null && matchedProfile.durationMinutes > 0 -> matchedProfile.durationMinutes
@@ -1257,9 +1286,14 @@ class AppRepository(
                     val remMs = expiryTime - System.currentTimeMillis()
                     if (remMs > 0) formatDurationMs(remMs) else "0s (Expired)"
                 }
+                routerUser != null && routerUser.limitUptime.isNotBlank() && routerUser.limitUptime != "0s" && routerUser.limitUptime != "none" -> {
+                    val limitSec = parseUptimeSeconds(routerUser.limitUptime)
+                    val remSec = limitSec - effectiveUpSec
+                    if (remSec > 0) formatUptimeSeconds(remSec) else "0s (Expired)"
+                }
                 u.limitUptime.isNotBlank() && u.limitUptime != "0s" && u.limitUptime != "none" -> {
                     val limitSec = parseUptimeSeconds(u.limitUptime)
-                    val remSec = limitSec - sessionUpSec
+                    val remSec = limitSec - effectiveUpSec
                     if (remSec > 0) formatUptimeSeconds(remSec) else "0s (Expired)"
                 }
                 else -> u.sessionTimeLeft
@@ -1269,12 +1303,16 @@ class AppRepository(
                 profileName = if (profileName.isNotBlank()) profileName else (matchedProfile?.name ?: ""),
                 uptime = finalUptime,
                 sessionTimeLeft = if (calculatedTimeLeft.isNotBlank()) calculatedTimeLeft else u.sessionTimeLeft,
-                quotaUsedMb = Math.round(totalUsedMb * 10.0) / 10.0,
+                quotaUsedMb = finalUsedMb,
                 quotaTotalMb = quotaTotal,
-                quotaRemainingMb = Math.round(remaining * 10.0) / 10.0
+                quotaRemainingMb = finalRemainingMb,
+                comment = effectiveComment
             )
         }
     }
+
+    suspend fun uploadPortalZip(zipBytes: ByteArray, onProgress: (String, Int, Int) -> Unit) =
+        mikrotikClient.uploadPortalZip(zipBytes, onProgress)
 
     suspend fun getIpBindings(): List<com.example.domain.models.IpBinding> = mikrotikClient.getIpBindings()
     suspend fun whitelistDevice(mac: String, ip: String = "", comment: String = "Whitelisted Device"): Boolean = mikrotikClient.whitelistDevice(mac, ip, comment)

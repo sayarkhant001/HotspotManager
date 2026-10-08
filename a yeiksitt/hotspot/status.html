@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>A Yeik Sitt WiFi – အင်တာနက် အခြေအနေ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta http-equiv="refresh" content="30; url=$(link-status)" />
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* ── Dedicated Quota Highlight Card ──────────────────────── */
+    .quota-banner {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.16) 0%, rgba(236, 72, 153, 0.12) 100%);
+      border: 1.5px solid rgba(245, 158, 11, 0.4);
+      border-radius: 20px;
+      padding: 18px 14px 16px 14px;
+      margin-bottom: 16px;
+      text-align: center;
+      box-shadow: 0 8px 24px -6px rgba(245, 158, 11, 0.22);
+    }
+    .quota-banner-label {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #FDE68A;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .quota-banner-val {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      color: #FFFFFF;
+      line-height: 1.2;
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 6px;
+    }
+    .quota-banner-unit {
+      font-size: 18px;
+      font-weight: 800;
+      color: #FBBF24;
+    }
+    .quota-banner-sub {
+      font-size: 13px;
+      color: #CBD5E1;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .progress-bar-wrap {
+      background: rgba(0, 0, 0, 0.45);
+      border-radius: 999px;
+      height: 9px;
+      margin: 12px 6px 6px 6px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #10B981 0%, #F59E0B 60%, #EF4444 100%);
+      border-radius: 999px;
+      width: 100%;
+      transition: width 0.6s ease;
+    }
+    .stat-card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 12px;
+      text-align: left;
+    }
+    .stat-card-title {
+      font-size: 11.5px;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+    .stat-card-val {
+      font-size: 15px;
+      font-weight: 700;
+      margin-top: 3px;
+    }
+    .btn-logout {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      background: rgba(239, 68, 68, 0.14);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #FCA5A5;
+      padding: 12px;
+      border-radius: 14px;
+      font-weight: 700;
+      font-size: 14px;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-logout:hover {
+      background: rgba(239, 68, 68, 0.25);
+      color: #FFF;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient Glow -->
+  <div class="bg-ambient">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <div class="portal-container">
+    <div class="glass-card" style="text-align: center;">
+
+      <!-- Cute Baby Avatar Header -->
+      <div class="kid-avatar-wrap" style="width: 86px; height: 86px;">
+        <img src="img/avatar.jpg" alt="A Yeik Sitt WiFi" class="kid-avatar-img" />
+        <div class="kid-avatar-badge" title="Online">✓</div>
+      </div>
+
+      <h1 class="brand-title" style="font-size: 21px;">A Yeik Sitt WiFi</h1>
+      <p class="brand-sub" style="margin-bottom: 14px;">
+        <span class="live-dot"></span>
+        အင်တာနက် ချိတ်ဆက်ထားပါသည်
+      </p>
+
+      <!-- Active User Card -->
+      <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 10px 14px; margin-bottom: 14px; text-align: left; display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 34px; height: 34px; border-radius: 10px; background: rgba(245, 158, 11, 0.18); display: flex; align-items: center; justify-content: center; color: #FBBF24;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="6" width="20" height="12" rx="3"/>
+              <path d="M12 6v12M2 12h2M20 12h2"/>
+            </svg>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: var(--text-dim);">ဘောင်ချာကုဒ် / အသုံးပြုသူ</div>
+            <div style="font-size: 14.5px; font-weight: 700; color: #FFFFFF;" id="display_username">$(username)</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span class="live-dot" style="margin: 0;"></span>
+          <span style="font-size: 11.5px; font-weight: 700; color: #34D399;">Active</span>
+        </div>
+      </div>
+
+      <!-- 🌟 EXACT REMAINING DATA IN MB (HERO BANNER) 🌟 -->
+      <div class="quota-banner">
+        <div class="quota-banner-label">
+          <span>🎯 ကျန်ရှိ ဒေတာပမာဏ (Remaining Quota in MB)</span>
+        </div>
+        <div class="quota-banner-val">
+          <span id="stat_exact_mb">--</span>
+          <span class="quota-banner-unit" id="stat_unit_label">MB</span>
+        </div>
+        <div class="quota-banner-sub" id="stat_exact_sub">
+          တွက်ချက်နေပါသည်...
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="stat_quota_progress"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim); padding:4px 6px 0 6px;">
+          <span>သုံးပြီး: <strong id="stat_used_mb" style="color:#94A3B8;">0 MB</strong></span>
+          <span>ကျန်ရှိ: <strong id="stat_progress_percent" style="color:#34D399;">100%</strong></span>
+        </div>
+      </div>
+
+      <!-- Live Session Stats 2x2 Grid -->
+      <div class="stat-card-grid">
+        <div class="stat-card">
+          <div class="stat-card-title">⏱️ အသုံးပြုချိန် (Uptime)</div>
+          <div class="stat-card-val" style="color: #34D399;" id="stat_uptime">$(uptime)</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-card-title">⏳ ကျန်ရှိချိန် (Time Left)</div>
+          <div class="stat-card-val" style="color: #FBBF24;" id="stat_timeleft">$(session-time-left)</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-card-title">📊 သုံးစွဲပြီးဒေတာ (Data Used)</div>
+          <div class="stat-card-val" style="color: #38BDF8;" id="stat_data_used_card">0 MB</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-card-title">🌐 ကွန်ရက်အမြန်နှုန်း</div>
+          <div class="stat-card-val" style="color: #A78BFA;" id="stat_speed">20 Mbps High Speed</div>
+        </div>
+      </div>
+
+      <!-- Raw Hidden RouterOS Fields for JavaScript -->
+      <span id="raw_bytes_in" style="display:none;">$(bytes-in)</span>
+      <span id="raw_bytes_out" style="display:none;">$(bytes-out)</span>
+      <span id="raw_remain_bytes" style="display:none;">$(remain-bytes-total)</span>
+      <span id="raw_timeleft" style="display:none;">$(session-time-left)</span>
+      <span id="raw_uptime" style="display:none;">$(uptime)</span>
+
+      <!-- IP & MAC Information -->
+      <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 14px; display:flex; justify-content:space-between; padding:0 4px;">
+        <span>IP: <strong style="color: #94A3B8;">$(ip)</strong></span>
+        <span>MAC: <strong style="color: #94A3B8;">$(mac)</strong></span>
+      </div>
+
+      <!-- Logout Form -->
+      <form action="$(link-logout)" name="logout" method="post" onsubmit="try { localStorage.clear(); } catch(e){}">
+        <input type="hidden" name="erase-cookie" value="on" />
+        <button type="submit" class="btn-logout">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          အင်တာနက် အဆက်အသွယ်ဖြတ်မည် (Logout)
+        </button>
+      </form>
+
+      <!-- Direct Gateway Info -->
+      <div class="ip-info-box" style="margin-top: 14px;">
+        <div>
+          <span style="color: #38BDF8; font-weight: 700;">🌐 စစ်ဆေးရန်လိပ်စာ:</span> 
+          <a href="http://10.10.10.1/status" style="color: #38BDF8; font-weight: 700; text-decoration: none;">http://10.10.10.1</a>
+        </div>
+        <div style="font-size: 11px; color: #34D399; font-weight: 700;">
+          Direct IP
+        </div>
+      </div>
+
+      <p class="footer-copy">
+        A Yeik Sitt WiFi &bull; အရိပ်စစ် မြန်နှုန်းမြင့် ဝိုင်ဖိုင် ဝန်ဆောင်မှု
+      </p>
+
+    </div>
+  </div>
+
+  <script src="js/main.js"></script>
+  <script>
+    // Strictly format in MB (no raw bytes 'b' shown anywhere)
+    (function() {
+      function toBytes(val) {
+        if (!val) return null;
+        var s = String(val).trim();
+        if (s.indexOf('$(') !== -1 || s === '' || s.toLowerCase() === 'none') return null;
+        var clean = s.replace(/,/g, '').replace(/\s+/g, '');
+        var m = clean.match(/^([0-9]+(?:\.[0-9]+)?)([a-zA-Z]+)?$/);
+        if (!m) {
+          var n = parseFloat(clean);
+          return isNaN(n) ? null : n;
+        }
+        var n = parseFloat(m[1]);
+        var unit = (m[2] || '').toLowerCase();
+        if (unit.indexOf('g') !== -1) return Math.round(n * 1024 * 1024 * 1024);
+        if (unit.indexOf('m') !== -1) return Math.round(n * 1024 * 1024);
+        if (unit.indexOf('k') !== -1) return Math.round(n * 1024);
+        return Math.round(n);
+      }
+
+      function formatMB(bytes) {
+        if (bytes === null || bytes === undefined || isNaN(bytes)) return null;
+        var mb = bytes / (1024 * 1024);
+        if (mb >= 100) {
+          return mb.toFixed(1) + ' MB';
+        } else if (mb >= 10) {
+          return mb.toFixed(1) + ' MB';
+        } else if (mb >= 1) {
+          return mb.toFixed(2) + ' MB';
+        } else if (mb > 0) {
+          return mb.toFixed(2) + ' MB';
+        } else {
+          return '0 MB';
+        }
+      }
+
+      function updateStatusUI() {
+        var rawRem = document.getElementById('raw_remain_bytes');
+        var rawIn = document.getElementById('raw_bytes_in');
+        var rawOut = document.getElementById('raw_bytes_out');
+
+        var remBytes = rawRem ? toBytes(rawRem.textContent) : null;
+        var inBytes = rawIn ? (toBytes(rawIn.textContent) || 0) : 0;
+        var outBytes = rawOut ? (toBytes(rawOut.textContent) || 0) : 0;
+        var usedBytes = inBytes + outBytes;
+
+        var mbValEl = document.getElementById('stat_exact_mb');
+        var unitLabelEl = document.getElementById('stat_unit_label');
+        var subEl = document.getElementById('stat_exact_sub');
+        var progEl = document.getElementById('stat_quota_progress');
+        var usedMbEl = document.getElementById('stat_used_mb');
+        var cardUsedEl = document.getElementById('stat_data_used_card');
+        var pctEl = document.getElementById('stat_progress_percent');
+
+        // 1. Used data in MB
+        var usedMBStr = formatMB(usedBytes) || '0 MB';
+        if (usedMbEl) usedMbEl.textContent = usedMBStr;
+        if (cardUsedEl) cardUsedEl.textContent = usedMBStr;
+
+        // 2. Remaining data in MB
+        if (remBytes !== null && remBytes > 0) {
+          var mbExact = (remBytes / (1024 * 1024));
+          var gbVal = (remBytes / (1024 * 1024 * 1024));
+
+          if (mbValEl) {
+            // Always display primarily in MB as requested
+            mbValEl.textContent = mbExact.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+            if (unitLabelEl) unitLabelEl.textContent = 'MB';
+          }
+
+          if (subEl) {
+            if (gbVal >= 1.0) {
+              subEl.textContent = '(' + gbVal.toFixed(2) + ' GB ကျန်ရှိပါသည်)';
+            } else {
+              subEl.textContent = '(' + Math.round(remBytes / 1024).toLocaleString() + ' KB ကျန်ရှိပါသည်)';
+            }
+          }
+
+          var totalBytes = remBytes + usedBytes;
+          if (totalBytes > 0) {
+            var pct = Math.max(0, Math.min(100, Math.round((remBytes / totalBytes) * 100)));
+            if (progEl) progEl.style.width = pct + '%';
+            if (pctEl) pctEl.textContent = pct + '% ကျန်ရှိ';
+          }
+        } else if (remBytes === 0) {
+          if (mbValEl) { mbValEl.textContent = '0'; if (unitLabelEl) unitLabelEl.textContent = 'MB'; }
+          if (subEl) subEl.textContent = '⚠️ ဒေတာ ကုန်ဆုံးသွားပါပြီ (0 MB)';
+          if (progEl) progEl.style.width = '0%';
+          if (pctEl) pctEl.textContent = '0%';
+        } else {
+          // Unlimited package
+          if (mbValEl) { mbValEl.textContent = 'ကန့်သတ်မထားပါ'; if (unitLabelEl) unitLabelEl.textContent = ''; }
+          if (subEl) subEl.textContent = 'Unlimited Quota Package';
+          if (progEl) progEl.style.width = '100%';
+          if (pctEl) pctEl.textContent = 'Unlimited';
+        }
+      }
+
+      updateStatusUI();
+    })();
+  </script>
+</body>
+</html>

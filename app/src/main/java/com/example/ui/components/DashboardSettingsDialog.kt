@@ -66,6 +66,30 @@ fun DashboardSettingsDialog(
     val scriptExecutionOutput by viewModel.scriptExecutionOutput.collectAsState()
     var customRscInput by remember { mutableStateOf("") }
 
+    val selectedPortalFileName by viewModel.selectedPortalFileName.collectAsState()
+    val selectedPortalFileSize by viewModel.selectedPortalFileSize.collectAsState()
+    val selectedPortalFileValidation by viewModel.selectedPortalFileValidation.collectAsState()
+    val isPortalValid by viewModel.isPortalValid.collectAsState()
+    val isRscFile by viewModel.isRscFile.collectAsState()
+    val selectedRscContent by viewModel.selectedRscContent.collectAsState()
+    val isUploadingPortal by viewModel.isUploadingPortal.collectAsState()
+
+    val portalZipPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.onPortalFileSelected(context, uri)
+        }
+    }
+
+    val rscFilePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.onPortalFileSelected(context, uri)
+        }
+    }
+
     // -------------------------------------------------------------
     // PRINTER STATE
     // -------------------------------------------------------------
@@ -1556,6 +1580,208 @@ fun DashboardSettingsDialog(
                                     Icon(Icons.Default.Hub, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text("Run Universal mkcaptivePortal setup.rsc", fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+
+                        // 1.5 Captive Portal & Script File Import Card
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.CloudUpload,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            "Import Portal & Script Files",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            "Select .zip portal archive or .rsc script from phone",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    "Pick a custom captive portal .zip archive to deploy to /hotspot on the router, or a .rsc script file to inspect and run.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = { portalZipPickerLauncher.launch("application/zip") },
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.FolderZip, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Select .zip Portal", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = { rscFilePickerLauncher.launch("*/*") },
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Select .rsc Script", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                                    }
+                                }
+
+                                // FILE SELECTION CHECK CARD
+                                if (selectedPortalFileName != null) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = if (isPortalValid) Color(0xFF00E676).copy(alpha = 0.08f) else Color(0xFFFFB300).copy(alpha = 0.08f),
+                                        border = BorderStroke(
+                                            1.dp,
+                                            if (isPortalValid) Color(0xFF00E676).copy(alpha = 0.6f) else Color(0xFFFFB300).copy(alpha = 0.6f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (isRscFile) Icons.Default.Code else Icons.Default.FolderZip,
+                                                        contentDescription = null,
+                                                        tint = if (isPortalValid) Color(0xFF00C853) else Color(0xFFFFB300),
+                                                        modifier = Modifier.size(24.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    Column {
+                                                        Text(
+                                                            text = selectedPortalFileName ?: "",
+                                                            fontWeight = FontWeight.Bold,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                        Text(
+                                                            text = "${(selectedPortalFileSize ?: 0L) / 1024} KB",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+
+                                                IconButton(
+                                                    onClick = { viewModel.clearSelectedPortalFile() },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(8.dp))
+
+                                            // Validation Badge
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = if (isPortalValid) Icons.Default.CheckCircle else Icons.Default.Warning,
+                                                    contentDescription = null,
+                                                    tint = if (isPortalValid) Color(0xFF00C853) else Color(0xFFFFB300),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = selectedPortalFileValidation ?: "",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = if (isPortalValid) Color(0xFF00C853) else Color(0xFFFFB300)
+                                                )
+                                            }
+
+                                            Spacer(modifier = Modifier.height(10.dp))
+
+                                            // Actions
+                                            if (isRscFile) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    OutlinedButton(
+                                                        onClick = {
+                                                            customRscInput = selectedRscContent ?: ""
+                                                            Toast.makeText(context, "Loaded into editor below", Toast.LENGTH_SHORT).show()
+                                                        },
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Text("Load to Editor", fontSize = 12.sp)
+                                                    }
+
+                                                    Button(
+                                                        onClick = {
+                                                            val rsc = selectedRscContent
+                                                            if (!rsc.isNullOrBlank()) {
+                                                                viewModel.executeRscScript(rsc)
+                                                            }
+                                                        },
+                                                        enabled = !isExecutingScript && !selectedRscContent.isNullOrBlank(),
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        if (isExecutingScript) {
+                                                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = Color.White)
+                                                            Spacer(modifier = Modifier.width(6.dp))
+                                                            Text("Running...", fontSize = 12.sp)
+                                                        } else {
+                                                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                            Spacer(modifier = Modifier.width(4.dp))
+                                                            Text("Run Script", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                Button(
+                                                    onClick = {
+                                                        viewModel.uploadSelectedPortal(context)
+                                                    },
+                                                    enabled = isPortalValid && !isUploadingPortal,
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    if (isUploadingPortal) {
+                                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text("Uploading Portal to Router...", fontWeight = FontWeight.Bold)
+                                                    } else {
+                                                        Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text("Upload Portal to Router (/hotspot)", fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

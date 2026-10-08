@@ -27,6 +27,8 @@ import com.example.domain.models.IpBinding
 import com.example.ui.components.GlassCard
 import com.example.utils.DeviceModelDetector
 import com.example.utils.LanguageManager
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,7 +46,10 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
 
     LaunchedEffect(Unit) {
         viewModel.fetchIpBindings()
-        viewModel.fetchRouterData()
+        while (isActive) {
+            viewModel.fetchActiveUsersFast()
+            delay(2500)
+        }
     }
 
     val filteredUsers = remember(users, searchQuery) {
@@ -79,7 +84,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                 },
                 actions = {
                     TextButton(onClick = {
-                        viewModel.fetchRouterData()
+                        viewModel.fetchActiveUsersFast()
                         viewModel.fetchIpBindings()
                     }) {
                         Text(strings.refresh, fontWeight = FontWeight.Bold)

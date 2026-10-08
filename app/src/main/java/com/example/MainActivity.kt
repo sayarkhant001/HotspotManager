@@ -19,6 +19,7 @@ class MainActivity : ComponentActivity() {
     val mikrotikClient = MikrotikClient()
     val repository = AppRepository(database.routerDao(), mikrotikClient, applicationContext)
     com.example.utils.LanguageManager.init(this)
+    com.example.data.remote.CloudApiClient.init(this)
 
     // Ensure Bluetooth permissions are granted on Android 12+ so paired thermal printers are immediately visible
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {

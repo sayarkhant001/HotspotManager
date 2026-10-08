@@ -57,7 +57,8 @@ data class RouterHotspotUser(
     val bytesIn: Long,
     val bytesOut: Long,
     val limitBytesTotal: Long,
-    val disabled: Boolean
+    val disabled: Boolean,
+    val limitUptime: String = ""
 )
 
 data class ScriptExecutionResult(
@@ -581,8 +582,38 @@ class MikrotikClient {
 
                 val res = conn.execute(
                     "/ip/hotspot/active/print",
-                    "=.proplist=.id,server,user,address,mac-address,uptime,session-time-left,limit-uptime,bytes-in,bytes-out,comment,idle-time"
+                    "=.proplist=.id,server,user,address,mac-address,uptime,session-time-left,limit-uptime,limit-bytes-total,bytes-in,bytes-out,comment,idle-time"
                 )
+
+                // Refresh router hotspot users to obtain live cumulative comments ([USED:...], [BASE:...])
+                try {
+                    val userListRes = conn.execute(
+                        "/ip/hotspot/user/print",
+                        "=.proplist=.id,name,password,profile,limit-bytes-total,limit-uptime,uptime,bytes-in,bytes-out,comment,disabled"
+                    )
+                    if (userListRes.isNotEmpty()) {
+                        cachedHotspotUsers = userListRes.mapNotNull { uMap ->
+                            val uName = uMap["name"] ?: return@mapNotNull null
+                            if (uName.isBlank() || uName == "default-trial") return@mapNotNull null
+                            RouterHotspotUser(
+                                id = uMap[".id"] ?: "",
+                                name = uName,
+                                password = uMap["password"] ?: "",
+                                profile = uMap["profile"] ?: "default",
+                                comment = uMap["comment"] ?: "",
+                                uptime = uMap["uptime"] ?: "0s",
+                                bytesIn = uMap["bytes-in"]?.toLongOrNull() ?: 0L,
+                                bytesOut = uMap["bytes-out"]?.toLongOrNull() ?: 0L,
+                                limitBytesTotal = uMap["limit-bytes-total"]?.toLongOrNull() ?: 0L,
+                                disabled = uMap["disabled"]?.toBooleanStrictOrNull() ?: false,
+                                limitUptime = uMap["limit-uptime"] ?: ""
+                            )
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                val userMap = cachedHotspotUsers.associateBy { it.name.lowercase() }
+
                 res.mapNotNull {
                     // Filter out disconnected/ghost sessions with idle-time > 180s (3m)
                     val idleStr = it["idle-time"] ?: ""
@@ -608,12 +639,22 @@ class MikrotikClient {
                     val host = cachedLeasesMap[mac] ?: cachedLeasesMap[ip] ?: ""
                     val bIn = it["bytes-in"]?.toLongOrNull() ?: 0L
                     val bOut = it["bytes-out"]?.toLongOrNull() ?: 0L
-                    val usedMb = (bIn + bOut) / (1024.0 * 1024.0)
+                    val lbt = it["limit-bytes-total"]?.toLongOrNull() ?: 0L
+
+                    val uName = it["user"] ?: ""
+                    val rUser = userMap[uName.lowercase()]
+                    val effComment = if (!rUser?.comment.isNullOrBlank()) rUser!!.comment else (it["comment"] ?: "")
+
+                    val cUsed = Regex("\\[USED:(\\d+)\\]").find(effComment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+                    val cBase = Regex("\\[BASE:(\\d+)\\]").find(effComment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+                    val sBytes = bIn + bOut
+                    val totBytes = maxOf(cUsed, cBase + sBytes, sBytes)
+                    val usedMb = totBytes / (1024.0 * 1024.0)
 
                     ActiveUser(
                         id = it[".id"] ?: "",
                         server = it["server"] ?: "",
-                        user = it["user"] ?: "",
+                        user = uName,
                         address = it["address"] ?: "",
                         macAddress = it["mac-address"] ?: "",
                         uptime = it["uptime"] ?: "",
@@ -621,9 +662,11 @@ class MikrotikClient {
                         bytesOut = it["bytes-out"] ?: "0",
                         hostName = host,
                         quotaUsedMb = Math.round(usedMb * 10.0) / 10.0,
-                        comment = it["comment"] ?: "",
+                        comment = effComment,
+                        profileName = rUser?.profile ?: "",
                         sessionTimeLeft = it["session-time-left"] ?: "",
-                        limitUptime = it["limit-uptime"] ?: ""
+                        limitUptime = it["limit-uptime"] ?: "",
+                        limitBytesTotal = lbt
                     )
                 }
             } catch (e: Exception) {
@@ -2403,6 +2446,87 @@ class MikrotikClient {
             executeRscScript(scriptContent)
         } catch (e: Exception) {
             ScriptExecutionResult(false, "Failed to download remote script from $url: ${e.message}", 0)
+        }
+    }
+
+    /**
+     * Extracts and uploads captive portal files from a .zip byte array to RouterOS storage (/hotspot and /flash/hotspot).
+     */
+    suspend fun uploadPortalZip(
+        zipBytes: ByteArray,
+        onProgress: (fileName: String, current: Int, total: Int) -> Unit
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal()
+                    ?: return@withContext Result.failure(Exception("Router is not connected."))
+
+                val entries = mutableListOf<Pair<String, ByteArray>>()
+                java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(zipBytes)).use { zis ->
+                    var entry = zis.nextEntry
+                    while (entry != null) {
+                        val name = entry.name.replace("\\", "/")
+                        // Skip directories and Mac metadata
+                        if (!entry.isDirectory && !name.contains("__MACOSX") && !name.startsWith(".")) {
+                            val baos = java.io.ByteArrayOutputStream()
+                            val buffer = ByteArray(4096)
+                            var len: Int
+                            while (zis.read(buffer).also { len = it } > 0) {
+                                baos.write(buffer, 0, len)
+                            }
+                            entries.add(name to baos.toByteArray())
+                        }
+                        zis.closeEntry()
+                        entry = zis.nextEntry
+                    }
+                }
+
+                if (entries.isEmpty()) {
+                    return@withContext Result.failure(Exception("Zip file does not contain any valid files."))
+                }
+
+                // Strip root folder if all files are nested under a single directory
+                val firstSlash = entries.first().first.indexOf('/')
+                val canStripPrefix = if (firstSlash > 0) {
+                    val prefix = entries.first().first.substring(0, firstSlash + 1)
+                    entries.all { it.first.startsWith(prefix) }
+                } else false
+
+                val normalized = entries.map { (path, data) ->
+                    val clean = if (canStripPrefix) path.substring(firstSlash + 1) else path
+                    clean.trimStart('/') to data
+                }.filter { it.first.isNotBlank() }
+
+                var uploadedCount = 0
+                val total = normalized.size
+
+                for ((idx, item) in normalized.withIndex()) {
+                    val (relPath, bytes) = item
+                    onProgress(relPath, idx + 1, total)
+
+                    val textContent = try {
+                        String(bytes, java.nio.charset.StandardCharsets.UTF_8)
+                    } catch (_: Exception) {
+                        null
+                    }
+
+                    // Write to hotspot/ and flash/hotspot/
+                    val targetPaths = listOf("hotspot/$relPath", "flash/hotspot/$relPath")
+                    for (tPath in targetPaths) {
+                        try {
+                            if (textContent != null) {
+                                conn.execute("/file/add", "name=$tPath", "contents=$textContent")
+                            }
+                        } catch (_: Exception) {}
+                    }
+                    uploadedCount++
+                }
+
+                Result.success(uploadedCount)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Result.failure(e)
+            }
         }
     }
 

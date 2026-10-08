@@ -91,7 +91,8 @@ data class ActiveUser(
     val profileName: String = "",
     val comment: String = "",
     val sessionTimeLeft: String = "",
-    val limitUptime: String = ""
+    val limitUptime: String = "",
+    val limitBytesTotal: Long = 0L
 )
 
 data class IpBinding(

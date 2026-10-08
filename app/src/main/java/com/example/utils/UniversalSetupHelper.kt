@@ -289,13 +289,23 @@ object UniversalSetupHelper {
   :local baseBytes 0;
   :local bStr [@DOL@parseTag comm=@DOL@curComm tag="[BASE:"];
   :if ([:len @DOL@bStr] > 0) do={ :set baseBytes [:tonum @DOL@bStr] };
-  :local remBytes (@DOL@origLim - @DOL@baseBytes);
+
+  :local usedBytes 0;
+  :local udStr [@DOL@parseTag comm=@DOL@curComm tag="[USED:"];
+  :if ([:len @DOL@udStr] > 0) do={ :set usedBytes [:tonum @DOL@udStr] };
+
+  :local priorBytes @DOL@baseBytes;
+  :if (@DOL@usedBytes > @DOL@priorBytes) do={ :set priorBytes @DOL@usedBytes };
+
+  :local remBytes (@DOL@origLim - @DOL@priorBytes);
   :if (@DOL@remBytes <= 0) do={
-    /ip hotspot user set @DOL@uObj limit-bytes-total=1;
-    /ip hotspot active remove [find user=@DOL@u];
-    /ip hotspot cookie remove [find user=@DOL@u];
+    :log warning ("Hotspot: User " . @DOL@u . " ALREADY EXHAUSTED DATA! REJECTING.");
+    :do { /ip hotspot user set @DOL@uObj comment=@DOL@curComm disabled=yes limit-bytes-total=1 } on-error={};
+    :do { /ip hotspot active remove [find user=@DOL@u] } on-error={};
+    :do { /ip hotspot cookie remove [find user=@DOL@u] } on-error={};
+    :return "";
   } else={
-    /ip hotspot user set @DOL@uObj limit-bytes-total=@DOL@remBytes;
+    :do { /ip hotspot user set @DOL@uObj limit-bytes-total=@DOL@remBytes } on-error={};
   };
 };
 
@@ -345,13 +355,23 @@ object UniversalSetupHelper {
   :local baseUp [:totime "0s"];
   :local buStr [@DOL@parseTag comm=@DOL@curComm tag="[BASE-UP:"];
   :if ([:len @DOL@buStr] > 0) do={ :set baseUp [:totime @DOL@buStr] };
-  :local remUp (@DOL@origUp - @DOL@baseUp);
+
+  :local usedUp [:totime "0s"];
+  :local uuStr [@DOL@parseTag comm=@DOL@curComm tag="[USED-UP:"];
+  :if ([:len @DOL@uuStr] > 0) do={ :set usedUp [:totime @DOL@uuStr] };
+
+  :local priorUp @DOL@baseUp;
+  :if (@DOL@usedUp > @DOL@priorUp) do={ :set priorUp @DOL@usedUp };
+
+  :local remUp (@DOL@origUp - @DOL@priorUp);
   :if (@DOL@remUp <= [:totime "0s"]) do={
-    /ip hotspot user set @DOL@uObj limit-uptime=1s;
-    /ip hotspot active remove [find user=@DOL@u];
-    /ip hotspot cookie remove [find user=@DOL@u];
+    :log warning ("Hotspot: User " . @DOL@u . " ALREADY EXHAUSTED TIME! REJECTING.");
+    :do { /ip hotspot user set @DOL@uObj comment=@DOL@curComm disabled=yes limit-uptime=1s } on-error={};
+    :do { /ip hotspot active remove [find user=@DOL@u] } on-error={};
+    :do { /ip hotspot cookie remove [find user=@DOL@u] } on-error={};
+    :return "";
   } else={
-    /ip hotspot user set @DOL@uObj limit-uptime=@DOL@remUp;
+    :do { /ip hotspot user set @DOL@uObj limit-uptime=@DOL@remUp } on-error={};
   };
 };
 
@@ -366,12 +386,12 @@ object UniversalSetupHelper {
   :if (@DOL@origUp > [:totime "0s"]) do={
     :do {
       /system scheduler add name=@DOL@u start-date=@DOL@cDate start-time=@DOL@cTime interval=@DOL@origUp \
-        on-event=("/ip hotspot active remove [find user=\"" . @DOL@u . "\"]; /ip hotspot user remove [find name=\"" . @DOL@u . "\"]; /ip hotspot cookie remove [find user=\"" . @DOL@u . "\"]; /system scheduler remove [find name=\"" . @DOL@u . "\"]") \
+        on-event=("/ip hotspot active remove [find user=\"" . @DOL@u . "\"]; /ip hotspot user set [find name=\"" . @DOL@u . "\"] disabled=yes limit-uptime=1s; /ip hotspot cookie remove [find user=\"" . @DOL@u . "\"]; /system scheduler remove [find name=\"" . @DOL@u . "\"]") \
         comment=("Voucher continuous timer: " . [:tostr @DOL@origUp] . " from " . [:tostr @DOL@cDate] . " " . [:tostr @DOL@cTime]);
     } on-error={
       :do {
         /system scheduler add name=@DOL@u start-time=startup interval=@DOL@origUp \
-          on-event=("/ip hotspot active remove [find user=\"" . @DOL@u . "\"]; /ip hotspot user remove [find name=\"" . @DOL@u . "\"]; /ip hotspot cookie remove [find user=\"" . @DOL@u . "\"]; /system scheduler remove [find name=\"" . @DOL@u . "\"]") \
+          on-event=("/ip hotspot active remove [find user=\"" . @DOL@u . "\"]; /ip hotspot user set [find name=\"" . @DOL@u . "\"] disabled=yes limit-uptime=1s; /ip hotspot cookie remove [find user=\"" . @DOL@u . "\"]; /system scheduler remove [find name=\"" . @DOL@u . "\"]") \
           comment=("Voucher continuous timer: " . [:tostr @DOL@origUp] . " (fallback)");
       } on-error={};
     };
@@ -508,12 +528,24 @@ object UniversalSetupHelper {
         :local uuStr [@DOL@parseTag comm=@DOL@comm tag="[USED-UP:"];
         :if ([:len @DOL@uuStr] > 0) do={ :set curStoredUp [:totime @DOL@uuStr] };
 
+        # ONLY promote if counters reset due to reboot (i.e. calculated total fell below curStoredUsed)
+        :if (@DOL@curStoredUsed > 0 and @DOL@totalUsed < @DOL@curStoredUsed) do={
+          :set baseBytes @DOL@curStoredUsed;
+          :set totalUsed (@DOL@baseBytes + @DOL@sessionBytes);
+          :set comm [@DOL@setTag comm=@DOL@comm tag="[BASE:" val=[:tostr @DOL@baseBytes]];
+        };
+        :if (@DOL@curStoredUp > [:totime "0s"] and @DOL@totalUp < @DOL@curStoredUp) do={
+          :set baseUp @DOL@curStoredUp;
+          :set totalUp (@DOL@baseUp + @DOL@sUp);
+          :set comm [@DOL@setTag comm=@DOL@comm tag="[BASE-UP:" val=[:tostr @DOL@baseUp]];
+        };
+
         :local deltaBytes (@DOL@totalUsed - @DOL@curStoredUsed);
         :if (@DOL@deltaBytes < 0) do={ :set deltaBytes (-@DOL@deltaBytes) };
         :if ((@DOL@totalUsed > 0 and @DOL@deltaBytes >= 32768) or (@DOL@totalUsed != @DOL@curStoredUsed and @DOL@sessionBytes = 0) or (@DOL@totalUp != @DOL@curStoredUp and (@DOL@totalUp - @DOL@curStoredUp) >= [:totime "2s"])) do={
           :set comm [@DOL@setTag comm=@DOL@comm tag="[USED:" val=[:tostr @DOL@totalUsed]];
           :set comm [@DOL@setTag comm=@DOL@comm tag="[USED-UP:" val=[:tostr @DOL@totalUp]];
-          /ip hotspot user set @DOL@u comment=@DOL@comm;
+          :do { /ip hotspot user set @DOL@u comment=@DOL@comm } on-error={};
         };
 
         :local isDataExhausted false;
@@ -523,14 +555,21 @@ object UniversalSetupHelper {
         :if (@DOL@origUp > [:totime "0s"] and @DOL@totalUp >= @DOL@origUp) do={ :set isTimeExhausted true };
 
         :if (@DOL@isDataExhausted or @DOL@isTimeExhausted) do={
-          :log info ("Hotspot: User " . @DOL@uName . " EXHAUSTED (Data: " . [:tostr @DOL@totalUsed] . "/" . [:tostr @DOL@origLim] . ", Time: " . [:tostr @DOL@totalUp] . "/" . [:tostr @DOL@origUp] . ")");
+          :log warning ("Hotspot: User " . @DOL@uName . " EXHAUSTED - IMMEDIATE AIRTIGHT CUTOFF! (Data: " . [:tostr @DOL@totalUsed] . "/" . [:tostr @DOL@origLim] . ", Time: " . [:tostr @DOL@totalUp] . "/" . [:tostr @DOL@origUp] . ")");
           :set comm [@DOL@setTag comm=@DOL@comm tag="[USED:" val=[:tostr @DOL@totalUsed]];
           :set comm [@DOL@setTag comm=@DOL@comm tag="[USED-UP:" val=[:tostr @DOL@totalUp]];
-          /ip hotspot user set @DOL@u comment=@DOL@comm;
-          /ip hotspot active remove @DOL@a;
-          /ip hotspot cookie remove [find user=@DOL@uName];
-          :if (@DOL@isDataExhausted) do={ /ip hotspot user set @DOL@u limit-bytes-total=1 };
-          :if (@DOL@isTimeExhausted) do={ /ip hotspot user set @DOL@u limit-uptime=1s };
+          :set comm [@DOL@setTag comm=@DOL@comm tag="[BASE:" val=[:tostr @DOL@totalUsed]];
+          :set comm [@DOL@setTag comm=@DOL@comm tag="[BASE-UP:" val=[:tostr @DOL@totalUp]];
+          :do { /ip hotspot user set @DOL@u comment=@DOL@comm disabled=yes limit-bytes-total=1 limit-uptime=1s } on-error={};
+          :do { /ip hotspot active remove [find user=@DOL@uName] } on-error={};
+          :do { /ip hotspot cookie remove [find user=@DOL@uName] } on-error={};
+        } else={
+          :if (@DOL@origLim > 0 and @DOL@totalUsed < @DOL@origLim) do={
+            :local remBytes (@DOL@origLim - @DOL@totalUsed);
+            :if (@DOL@remBytes > 0 and (@DOL@curLim = 0 or @DOL@remBytes < @DOL@curLim)) do={
+              :do { /ip hotspot user set @DOL@u limit-bytes-total=@DOL@remBytes } on-error={};
+            };
+          };
         };
       };
     };

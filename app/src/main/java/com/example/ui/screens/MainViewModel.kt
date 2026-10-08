@@ -48,6 +48,16 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     val isExecutingScript = MutableStateFlow(false)
     val scriptExecutionOutput = MutableStateFlow<String?>(null)
 
+    // Captive Portal & RSC File Upload State
+    val selectedPortalFileUri = MutableStateFlow<android.net.Uri?>(null)
+    val selectedPortalFileName = MutableStateFlow<String?>(null)
+    val selectedPortalFileSize = MutableStateFlow<Long>(0L)
+    val selectedPortalFileValidation = MutableStateFlow<String?>(null)
+    val isPortalValid = MutableStateFlow<Boolean>(false)
+    val isRscFile = MutableStateFlow<Boolean>(false)
+    val selectedRscContent = MutableStateFlow<String?>(null)
+    val isUploadingPortal = MutableStateFlow<Boolean>(false)
+
     init {
         // Quietly check for update from GitHub on start
         checkForAppUpdate(manual = false)
@@ -81,6 +91,13 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     val routerStats = MutableStateFlow<RouterStats?>(null)
     val cpuLoadHistory = MutableStateFlow<List<Float>>(listOf(5f, 10f, 7f, 12f, 8f, 15f))
     val activeUsers = MutableStateFlow<List<ActiveUser>>(emptyList())
+
+    // Cloud User & Multi-Router Management
+    val cloudUser = MutableStateFlow<com.example.data.remote.CloudUser?>(null)
+    val assignedRouters = MutableStateFlow<List<com.example.data.remote.CloudRouter>>(emptyList())
+    val activeRouterName = MutableStateFlow<String>("")
+    val connectionMode = MutableStateFlow<String>("local") // "local", "cloud_remote", "direct"
+    val cloudLoginStatus = MutableStateFlow<String?>(null)
 
     // Network Topology & Whitelisting State
     val networkTopology = MutableStateFlow(NetworkTopologyData())
@@ -209,7 +226,11 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     fun connectToRouter(ip: String, user: String, pass: String) {
         viewModelScope.launch {
             authState.value = AuthState.Loading
+            cloudLoginStatus.value = "Router သို့ ချိတ်ဆက်နေပါသည်..."
+            connectionMode.value = "direct"
+            activeRouterName.value = ip
             val result = repository.mikrotikClient.connect(ip, user, pass)
+            cloudLoginStatus.value = null
             if (result.isSuccess) {
                 authState.value = AuthState.Success
                 startPolling()
@@ -235,6 +256,123 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         }
     }
 
+    fun loginToCloud(
+        context: Context,
+        username: String,
+        password: String,
+        selectedRouterId: Int? = null,
+        onResult: (Boolean, String?) -> Unit = { _, _ -> }
+    ) {
+        viewModelScope.launch {
+            authState.value = AuthState.Loading
+            cloudLoginStatus.value = "အကောင့် စစ်ဆေးနေပါသည်..."
+
+            val loginRes = com.example.data.remote.CloudApiClient.login(username.trim(), password)
+            if (loginRes.isFailure) {
+                val err = loginRes.exceptionOrNull()?.message ?: "Login failed"
+                cloudLoginStatus.value = null
+                authState.value = AuthState.Error(err)
+                onResult(false, err)
+                return@launch
+            }
+
+            val (token, user) = loginRes.getOrThrow()
+            com.example.data.remote.CloudApiClient.saveAuth(context, token, user)
+            cloudUser.value = user
+
+            cloudLoginStatus.value = "သတ်မှတ်ထားသော Router ကို ရှာဖွေနေပါသည်..."
+            val routersRes = com.example.data.remote.CloudApiClient.getCustomerRouters(context)
+            if (routersRes.isFailure) {
+                val err = routersRes.exceptionOrNull()?.message ?: "Failed to fetch routers"
+                cloudLoginStatus.value = null
+                authState.value = AuthState.Error(err)
+                onResult(false, err)
+                return@launch
+            }
+
+            val routers = routersRes.getOrThrow()
+            assignedRouters.value = routers
+            if (routers.isEmpty()) {
+                val err = "ဤအကောင့်တွင် ချိတ်ဆက်ထားသော Router မရှိသေးပါ။ ကျေးဇူးပြု၍ Admin ထံ ဆက်သွယ်ပါ။"
+                cloudLoginStatus.value = null
+                authState.value = AuthState.Error(err)
+                onResult(false, err)
+                return@launch
+            }
+
+            val router = (if (selectedRouterId != null) routers.firstOrNull { it.id == selectedRouterId } else null) ?: routers.first()
+            activeRouterName.value = router.name
+            cloudLoginStatus.value = "${router.name} သို့ ချိတ်ဆက်နေပါသည်..."
+
+            val localHost = router.localAddress.substringBefore(":").ifBlank { "10.10.10.1" }
+            val isLocalReachable = com.example.data.remote.CloudApiClient.isLocalRouterReachable(localHost, 8728)
+
+            var connectRes: Result<Unit>
+            if (isLocalReachable) {
+                connectRes = repository.mikrotikClient.connect(localHost, router.apiUser, router.apiPass)
+                if (connectRes.isSuccess) {
+                    connectionMode.value = "local"
+                } else {
+                    val remoteHost = router.remoteAddress.ifBlank { "3.84.81.152:${router.remotePort}" }
+                    connectRes = repository.mikrotikClient.connect(remoteHost, router.apiUser, router.apiPass)
+                    if (connectRes.isSuccess) {
+                        connectionMode.value = "cloud_remote"
+                    }
+                }
+            } else {
+                val remoteHost = router.remoteAddress.ifBlank { "3.84.81.152:${router.remotePort}" }
+                connectRes = repository.mikrotikClient.connect(remoteHost, router.apiUser, router.apiPass)
+                if (connectRes.isSuccess) {
+                    connectionMode.value = "cloud_remote"
+                } else {
+                    connectRes = repository.mikrotikClient.connect(localHost, router.apiUser, router.apiPass)
+                    if (connectRes.isSuccess) {
+                        connectionMode.value = "local"
+                    }
+                }
+            }
+
+            cloudLoginStatus.value = null
+            if (connectRes.isSuccess) {
+                authState.value = AuthState.Success
+                startPolling()
+                fetchHotspotNetworkInfo()
+                viewModelScope.launch {
+                    try {
+                        isSyncingVouchers.value = true
+                        repository.syncProfilesFromRouter()
+                        repository.syncVouchersFromRouter()
+                        val topo = repository.getNetworkTopology()
+                        networkTopology.value = topo
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    } finally {
+                        isSyncingVouchers.value = false
+                    }
+                }
+                onResult(true, null)
+            } else {
+                val err = connectRes.exceptionOrNull()?.message ?: "Failed to connect to router ${router.name}"
+                authState.value = AuthState.Error(err)
+                onResult(false, err)
+            }
+        }
+    }
+
+    fun disconnectFromRouter(context: Context? = null) {
+        pollingJob?.cancel()
+        viewModelScope.launch {
+            repository.mikrotikClient.disconnect()
+            if (context != null) {
+                com.example.data.remote.CloudApiClient.clearAuth(context)
+            }
+            cloudUser.value = null
+            activeRouterName.value = ""
+            authState.value = AuthState.Idle
+        }
+    }
+
+
     fun fetchHotspotNetworkInfo() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -255,7 +393,121 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 if (repository.mikrotikClient.isConnected() || repository.mikrotikClient.ensureConnected()) {
                     fetchRouterData()
                 }
-                delay(12000) // Poll every 12 seconds to keep router CPU low and socket clear for immediate commands
+                delay(6000) // Poll every 6 seconds for balanced speed and router load
+            }
+        }
+    }
+
+    fun fetchActiveUsersFast() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val users = repository.getActiveHotspotUsers()
+                activeUsers.value = users
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun onPortalFileSelected(context: Context, uri: android.net.Uri) {
+        selectedPortalFileUri.value = uri
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                var fileName = "unknown"
+                var fileSize = 0L
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    val sizeIdx = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                    if (cursor.moveToFirst()) {
+                        if (nameIdx >= 0) fileName = cursor.getString(nameIdx)
+                        if (sizeIdx >= 0) fileSize = cursor.getLong(sizeIdx)
+                    }
+                }
+                selectedPortalFileName.value = fileName
+                selectedPortalFileSize.value = fileSize
+
+                val isZip = fileName.endsWith(".zip", ignoreCase = true)
+                val isRsc = fileName.endsWith(".rsc", ignoreCase = true) || fileName.endsWith(".txt", ignoreCase = true)
+
+                if (isZip) {
+                    isRscFile.value = false
+                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
+                    var fileCount = 0
+                    var hasHtml = false
+                    java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(bytes)).use { zis ->
+                        var entry = zis.nextEntry
+                        while (entry != null) {
+                            if (!entry.isDirectory && !entry.name.contains("__MACOSX")) {
+                                fileCount++
+                                if (entry.name.endsWith(".html", ignoreCase = true)) hasHtml = true
+                            }
+                            entry = zis.nextEntry
+                        }
+                    }
+                    if (fileCount > 0) {
+                        isPortalValid.value = true
+                        selectedPortalFileValidation.value = "✓ Valid Captive Portal Archive ($fileCount files detected${if (hasHtml) ", login.html found" else ""})"
+                    } else {
+                        isPortalValid.value = false
+                        selectedPortalFileValidation.value = "✗ Empty zip archive or no valid portal files found."
+                    }
+                } else if (isRsc) {
+                    isRscFile.value = true
+                    val content = context.contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() } ?: ""
+                    val lineCount = content.lines().filter { it.isNotBlank() }.size
+                    selectedRscContent.value = content
+                    isPortalValid.value = lineCount > 0
+                    selectedPortalFileValidation.value = "✓ Valid RouterOS Script ($lineCount lines ready to execute)"
+                } else {
+                    isRscFile.value = false
+                    isPortalValid.value = false
+                    selectedPortalFileValidation.value = "✗ Unsupported file. Please choose a .zip portal or .rsc script."
+                }
+            } catch (e: Exception) {
+                isPortalValid.value = false
+                selectedPortalFileValidation.value = "✗ Error inspecting file: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    fun clearSelectedPortalFile() {
+        selectedPortalFileUri.value = null
+        selectedPortalFileName.value = null
+        selectedPortalFileSize.value = 0L
+        selectedPortalFileValidation.value = null
+        isPortalValid.value = false
+        isRscFile.value = false
+        selectedRscContent.value = null
+    }
+
+    fun uploadSelectedPortal(context: Context) {
+        val uri = selectedPortalFileUri.value ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            isUploadingPortal.value = true
+            isExecutingScript.value = true
+            val log = StringBuilder()
+            log.appendLine("➜ Starting captive portal upload to router storage...")
+            scriptExecutionOutput.value = log.toString()
+            try {
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
+                val res = repository.uploadPortalZip(bytes) { fileName: String, cur: Int, total: Int ->
+                    log.appendLine("  [$cur/$total] Uploading $fileName...")
+                    scriptExecutionOutput.value = log.toString()
+                }
+                if (res.isSuccess) {
+                    val count: Int = res.getOrThrow()
+                    log.appendLine("✓ Successfully uploaded $count portal files to router /hotspot directory!")
+                    log.appendLine("➜ Captive portal files are now active on MikroTik!")
+                    userMessage.value = "✓ Captive Portal uploaded successfully ($count files)!"
+                } else {
+                    log.appendLine("✗ Upload error: ${res.exceptionOrNull()?.message}")
+                    userMessage.value = "✗ Error uploading portal: ${res.exceptionOrNull()?.message}"
+                }
+            } catch (e: Exception) {
+                log.appendLine("✗ Upload failed: ${e.localizedMessage}")
+                userMessage.value = "✗ Upload failed: ${e.localizedMessage}"
+            } finally {
+                scriptExecutionOutput.value = log.toString()
+                isUploadingPortal.value = false
+                isExecutingScript.value = false
             }
         }
     }

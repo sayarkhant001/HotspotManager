@@ -8,8 +8,8 @@
 :put "   STARTING UNIVERSAL CAPTIVE PORTAL PROVISIONING          "
 :put "=========================================================="
 
-:global siteName "YadanarTun"
-:global wifiSsid "YadanarTun"
+:global siteName "Kyaw_Gyi"
+:global wifiSsid "Kyaw_Gyi"
 :global dnsName ""
 :global adminPass "Khant1234@"
 :global ipCapacity 250
@@ -62,7 +62,7 @@
 
 # RouterOS v7 wifi
 :do {
-  :local v7Cmd (":foreach w in=[/interface wifi find] do={ :do { /interface wifi set $w configuration.mode=ap configuration.ssid=\"YadanarTun\" configuration.hide-ssid=no datapath.bridge=hotspot-bridge security.authentication-types=\"\" disabled=no } on-error={ /interface wifi set $w mode=ap ssid=\"YadanarTun\" disabled=no }; :local wName [/interface wifi get $w name]; :do { /interface bridge port add bridge=hotspot-bridge interface=$wName } on-error={} }")
+  :local v7Cmd (":foreach w in=[/interface wifi find] do={ :do { /interface wifi set $w configuration.mode=ap configuration.ssid=\"Kyaw_Gyi\" configuration.hide-ssid=no datapath.bridge=hotspot-bridge security.authentication-types=\"\" disabled=no } on-error={ /interface wifi set $w mode=ap ssid=\"Kyaw_Gyi\" disabled=no }; :local wName [/interface wifi get $w name]; :do { /interface bridge port add bridge=hotspot-bridge interface=$wName } on-error={} }")
   [ :parse $v7Cmd ]
   :if ([:len [/interface wifi find]] > 0) do={ :set wifiConfigured true }
 } on-error={}
@@ -70,7 +70,7 @@
 # RouterOS v6 wireless
 :if (!$wifiConfigured) do={
   :do {
-    :local legacyCmd (":foreach w in=[/interface wireless find] do={ /interface wireless set $w ssid=\"YadanarTun\" hide-ssid=no mode=ap-bridge security-profile=default disabled=no; :do { /interface wireless security-profile set [find default=yes] authentication-types=\"\" mode=none } on-error={}; :local wName [/interface wireless get $w name]; :do { /interface bridge port add bridge=hotspot-bridge interface=$wName } on-error={} }")
+    :local legacyCmd (":foreach w in=[/interface wireless find] do={ /interface wireless set $w ssid=\"Kyaw_Gyi\" hide-ssid=no mode=ap-bridge security-profile=default disabled=no; :do { /interface wireless security-profile set [find default=yes] authentication-types=\"\" mode=none } on-error={}; :local wName [/interface wireless get $w name]; :do { /interface bridge port add bridge=hotspot-bridge interface=$wName } on-error={} }")
     [ :parse $legacyCmd ]
     :if ([:len [/interface wireless find]] > 0) do={ :set wifiConfigured true }
   } on-error={}
@@ -125,19 +125,26 @@
 # 9. HOTSPOT SERVER PROFILE & SERVER (DIRECT IP GATEWAY, NO DNS NAME)
 :do {
   /ip hotspot profile add name=hs-profile hotspot-address=$gwIp dns-name="" html-directory=$hsDir \
-    login-by=cookie,http-chap,http-pap,mac-cookie http-cookie-lifetime=30d mac-cookie-timeout=30d rate-limit=""
+    login-by=cookie,http-chap,http-pap,mac-cookie http-cookie-lifetime=30d mac-cookie-timeout=30d rate-limit="" \
+    keepalive-timeout=2m
 } on-error={
   :do {
     /ip hotspot profile set [find name=hs-profile] hotspot-address=$gwIp dns-name="" html-directory=$hsDir \
-      login-by=cookie,http-chap,http-pap,mac-cookie http-cookie-lifetime=30d mac-cookie-timeout=30d rate-limit=""
+      login-by=cookie,http-chap,http-pap,mac-cookie http-cookie-lifetime=30d mac-cookie-timeout=30d rate-limit="" \
+      keepalive-timeout=2m
   } on-error={}
 }
 
 :do {
-  /ip hotspot add name=hs-server interface=hotspot-bridge address-pool=hs-pool profile=hs-profile disabled=no
+  /ip hotspot add name=hs-server interface=hotspot-bridge address-pool=hs-pool profile=hs-profile keepalive-timeout=2m disabled=no
 } on-error={
-  :do { /ip hotspot set [find name=hs-server] interface=hotspot-bridge address-pool=hs-pool profile=hs-profile disabled=no } on-error={}
+  :do { /ip hotspot set [find name=hs-server] interface=hotspot-bridge address-pool=hs-pool profile=hs-profile keepalive-timeout=2m disabled=no } on-error={}
 }
+
+# Enforce active session idle & keepalive timeouts across all user profiles so disconnected devices are pruned immediately
+:do {
+  /ip hotspot user profile set [find] keepalive-timeout=2m idle-timeout=3m
+} on-error={}
 
 # 10. INSTANT CAPTIVE PORTAL CNA & DNS HIJACKING (APPLE, ANDROID, WINDOWS, XIAOMI)
 # Clean up any stale probe domains from walled garden so router always intercepts probe requests
@@ -262,13 +269,23 @@
   :local baseBytes 0;
   :local bStr [$parseTag comm=$curComm tag="[BASE:"];
   :if ([:len $bStr] > 0) do={ :set baseBytes [:tonum $bStr] };
-  :local remBytes ($origLim - $baseBytes);
+
+  :local usedBytes 0;
+  :local udStr [$parseTag comm=$curComm tag="[USED:"];
+  :if ([:len $udStr] > 0) do={ :set usedBytes [:tonum $udStr] };
+
+  :local priorBytes $baseBytes;
+  :if ($usedBytes > $priorBytes) do={ :set priorBytes $usedBytes };
+
+  :local remBytes ($origLim - $priorBytes);
   :if ($remBytes <= 0) do={
-    /ip hotspot user set $uObj limit-bytes-total=1;
-    /ip hotspot active remove [find user=$u];
-    /ip hotspot cookie remove [find user=$u];
+    :log warning ("Hotspot: User " . $u . " ALREADY EXHAUSTED DATA! REJECTING.");
+    :do { /ip hotspot user set $uObj comment=$curComm disabled=yes limit-bytes-total=1 } on-error={};
+    :do { /ip hotspot active remove [find user=$u] } on-error={};
+    :do { /ip hotspot cookie remove [find user=$u] } on-error={};
+    :return "";
   } else={
-    /ip hotspot user set $uObj limit-bytes-total=$remBytes;
+    :do { /ip hotspot user set $uObj limit-bytes-total=$remBytes } on-error={};
   };
 };
 
@@ -318,13 +335,23 @@
   :local baseUp [:totime "0s"];
   :local buStr [$parseTag comm=$curComm tag="[BASE-UP:"];
   :if ([:len $buStr] > 0) do={ :set baseUp [:totime $buStr] };
-  :local remUp ($origUp - $baseUp);
+
+  :local usedUp [:totime "0s"];
+  :local uuStr [$parseTag comm=$curComm tag="[USED-UP:"];
+  :if ([:len $uuStr] > 0) do={ :set usedUp [:totime $uuStr] };
+
+  :local priorUp $baseUp;
+  :if ($usedUp > $priorUp) do={ :set priorUp $usedUp };
+
+  :local remUp ($origUp - $priorUp);
   :if ($remUp <= [:totime "0s"]) do={
-    /ip hotspot user set $uObj limit-uptime=1s;
-    /ip hotspot active remove [find user=$u];
-    /ip hotspot cookie remove [find user=$u];
+    :log warning ("Hotspot: User " . $u . " ALREADY EXHAUSTED TIME! REJECTING.");
+    :do { /ip hotspot user set $uObj comment=$curComm disabled=yes limit-uptime=1s } on-error={};
+    :do { /ip hotspot active remove [find user=$u] } on-error={};
+    :do { /ip hotspot cookie remove [find user=$u] } on-error={};
+    :return "";
   } else={
-    /ip hotspot user set $uObj limit-uptime=$remUp;
+    :do { /ip hotspot user set $uObj limit-uptime=$remUp } on-error={};
   };
 };
 
@@ -339,12 +366,12 @@
   :if ($origUp > [:totime "0s"]) do={
     :do {
       /system scheduler add name=$u start-date=$cDate start-time=$cTime interval=$origUp \
-        on-event=("/ip hotspot active remove [find user=\"" . $u . "\"]; /ip hotspot user remove [find name=\"" . $u . "\"]; /ip hotspot cookie remove [find user=\"" . $u . "\"]; /system scheduler remove [find name=\"" . $u . "\"]") \
+        on-event=("/ip hotspot active remove [find user=\"" . $u . "\"]; /ip hotspot user set [find name=\"" . $u . "\"] disabled=yes limit-uptime=1s; /ip hotspot cookie remove [find user=\"" . $u . "\"]; /system scheduler remove [find name=\"" . $u . "\"]") \
         comment=("Voucher continuous timer: " . [:tostr $origUp] . " from " . [:tostr $cDate] . " " . [:tostr $cTime]);
     } on-error={
       :do {
         /system scheduler add name=$u start-time=startup interval=$origUp \
-          on-event=("/ip hotspot active remove [find user=\"" . $u . "\"]; /ip hotspot user remove [find name=\"" . $u . "\"]; /ip hotspot cookie remove [find user=\"" . $u . "\"]; /system scheduler remove [find name=\"" . $u . "\"]") \
+          on-event=("/ip hotspot active remove [find user=\"" . $u . "\"]; /ip hotspot user set [find name=\"" . $u . "\"] disabled=yes limit-uptime=1s; /ip hotspot cookie remove [find user=\"" . $u . "\"]; /system scheduler remove [find name=\"" . $u . "\"]") \
           comment=("Voucher continuous timer: " . [:tostr $origUp] . " (fallback)");
       } on-error={};
     };
@@ -481,12 +508,24 @@
         :local uuStr [$parseTag comm=$comm tag="[USED-UP:"];
         :if ([:len $uuStr] > 0) do={ :set curStoredUp [:totime $uuStr] };
 
+        # ONLY promote if counters reset due to reboot (i.e. calculated total fell below curStoredUsed)
+        :if ($curStoredUsed > 0 and $totalUsed < $curStoredUsed) do={
+          :set baseBytes $curStoredUsed;
+          :set totalUsed ($baseBytes + $sessionBytes);
+          :set comm [$setTag comm=$comm tag="[BASE:" val=[:tostr $baseBytes]];
+        };
+        :if ($curStoredUp > [:totime "0s"] and $totalUp < $curStoredUp) do={
+          :set baseUp $curStoredUp;
+          :set totalUp ($baseUp + $sUp);
+          :set comm [$setTag comm=$comm tag="[BASE-UP:" val=[:tostr $baseUp]];
+        };
+
         :local deltaBytes ($totalUsed - $curStoredUsed);
         :if ($deltaBytes < 0) do={ :set deltaBytes (-$deltaBytes) };
         :if (($totalUsed > 0 and $deltaBytes >= 32768) or ($totalUsed != $curStoredUsed and $sessionBytes = 0) or ($totalUp != $curStoredUp and ($totalUp - $curStoredUp) >= [:totime "2s"])) do={
           :set comm [$setTag comm=$comm tag="[USED:" val=[:tostr $totalUsed]];
           :set comm [$setTag comm=$comm tag="[USED-UP:" val=[:tostr $totalUp]];
-          /ip hotspot user set $u comment=$comm;
+          :do { /ip hotspot user set $u comment=$comm } on-error={};
         };
 
         :local isDataExhausted false;
@@ -496,14 +535,21 @@
         :if ($origUp > [:totime "0s"] and $totalUp >= $origUp) do={ :set isTimeExhausted true };
 
         :if ($isDataExhausted or $isTimeExhausted) do={
-          :log info ("Hotspot: User " . $uName . " EXHAUSTED (Data: " . [:tostr $totalUsed] . "/" . [:tostr $origLim] . ", Time: " . [:tostr $totalUp] . "/" . [:tostr $origUp] . ")");
+          :log warning ("Hotspot: User " . $uName . " EXHAUSTED - IMMEDIATE AIRTIGHT CUTOFF! (Data: " . [:tostr $totalUsed] . "/" . [:tostr $origLim] . ", Time: " . [:tostr $totalUp] . "/" . [:tostr $origUp] . ")");
           :set comm [$setTag comm=$comm tag="[USED:" val=[:tostr $totalUsed]];
           :set comm [$setTag comm=$comm tag="[USED-UP:" val=[:tostr $totalUp]];
-          /ip hotspot user set $u comment=$comm;
-          /ip hotspot active remove $a;
-          /ip hotspot cookie remove [find user=$uName];
-          :if ($isDataExhausted) do={ /ip hotspot user set $u limit-bytes-total=1 };
-          :if ($isTimeExhausted) do={ /ip hotspot user set $u limit-uptime=1s };
+          :set comm [$setTag comm=$comm tag="[BASE:" val=[:tostr $totalUsed]];
+          :set comm [$setTag comm=$comm tag="[BASE-UP:" val=[:tostr $totalUp]];
+          :do { /ip hotspot user set $u comment=$comm disabled=yes limit-bytes-total=1 limit-uptime=1s } on-error={};
+          :do { /ip hotspot active remove [find user=$uName] } on-error={};
+          :do { /ip hotspot cookie remove [find user=$uName] } on-error={};
+        } else={
+          :if ($origLim > 0 and $totalUsed < $origLim) do={
+            :local remBytes ($origLim - $totalUsed);
+            :if ($remBytes > 0 and ($curLim = 0 or $remBytes < $curLim)) do={
+              :do { /ip hotspot user set $u limit-bytes-total=$remBytes } on-error={};
+            };
+          };
         };
       };
     };
@@ -761,10 +807,20 @@
   } on-error={}
 }
 
-# 16. API & SERVICES ENABLED
+# 16. API & SERVICES ENABLED FOR REMOTE ADMIN ACCESS
 :do { /ip service enable [find name="api"] } on-error={}
 :do { /ip service set [find name="api"] port=8728 } on-error={}
+:do { /ip service enable [find name="ssh"] } on-error={}
+:do { /ip service set [find name="ssh"] port=22 } on-error={}
 :do { /ip service enable [find name="ftp"] } on-error={}
+
+# Allow Cloud WireGuard interface & subnet to access router in Firewall Input filter
+:do {
+  /ip firewall filter add chain=input in-interface=wg-cloud action=accept comment="Allow Cloud Remote Management" place-before=0
+} on-error={}
+:do {
+  /ip firewall filter add chain=input src-address=10.200.0.0/24 action=accept comment="Allow Cloud WireGuard Subnet" place-before=0
+} on-error={}
 
 :do {
   /ip hotspot walled-garden ip add dst-port=8728 protocol=tcp action=accept comment="Allow HotspotManager App Port 8728"
@@ -772,7 +828,20 @@
 
 :put "=========================================================="
 :put "   PROVISIONING COMPLETED SUCCESSFULLY!                  "
-:put ("   SSID: YadanarTun | Gateway IP: " . $gwIp . " (Direct IP Mode)")
+:put ("   SSID: Kyaw_Gyi | Gateway IP: " . $gwIp . " (Direct IP Mode)")
 :put ("   Capacity: 250 users on " . $netCidr)
 :put ("   Admin User: admin | Admin Pass: Khant1234@")
 :put "=========================================================="
+"""
+        var result = template
+            .replace("Kyaw_Gyi", safeSsid)
+            .replace("Khant1234@", safePass)
+            .replace("250", safeCap.toString())
+            .replace("$", "$")
+
+        if (!wireguardScript.isNullOrBlank()) {
+            result += "\n\n# 17. CLOUD MANAGEMENT WIREGUARD VPN\n" + wireguardScript.trim() + "\n"
+        }
+        return result
+    }
+}
