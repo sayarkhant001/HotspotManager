@@ -377,43 +377,42 @@
 
   /* ── Status Page Live Uptime Counter & Data Formatter ─────── */
   function formatBytesToMB(val) {
-    var s = String(val || '').trim();
-    if (s.indexOf('GB') !== -1 || s.indexOf('MB') !== -1) {
-      return s;
+    if (!val || val.indexOf('$(') !== -1 || val.toLowerCase() === 'none' || val.toLowerCase() === 'unlimited') {
+      return 'ကန့်သတ်မထားပါ (Unlimited)';
     }
-    // Check if valid numeric
-    var cleanS = s.replace(/,/g, '').trim();
-    var m = cleanS.match(/([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)?/);
-    if (m && !isNaN(parseFloat(m[1])) && s.indexOf('$(') === -1) {
-      var num = parseFloat(m[1]);
-      if (num === 0) return '0 MB';
-      var unit = (m[2] || '').toLowerCase();
-      var mb = 0;
-      if (unit.indexOf('g') !== -1) {
-        mb = num * 1024;
-      } else if (unit.indexOf('m') !== -1) {
-        mb = num;
-      } else if (unit.indexOf('k') !== -1) {
-        mb = num / 1024;
-      } else {
-        mb = num / (1024 * 1024);
-      }
+    var s = String(val).trim().replace(/,/g, '');
+    var m = s.match(/([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)?/);
+    if (!m) return s;
 
-      if (mb >= 1024) {
-        return (mb / 1024).toFixed(2) + ' GB';
-      } else if (mb >= 100) {
-        return Math.round(mb) + ' MB';
-      } else if (mb >= 1) {
-        return (Math.round(mb * 10) / 10).toFixed(1) + ' MB';
-      } else if (mb > 0) {
-        return '< 1 MB';
-      } else {
-        return '0 MB';
-      }
+    var num = parseFloat(m[1]);
+    if (isNaN(num)) return s;
+    if (num <= 0) return '0 MB';
+
+    var unit = (m[2] || '').toUpperCase();
+
+    // FIX: If RouterOS outputs e.g. "1.98 B" or "1.98 GiB" or "1.98 GB"
+    if ((unit === 'B' && num < 100) || unit.indexOf('G') !== -1) {
+      return num.toFixed(2) + ' GB';
+    }
+    if (unit.indexOf('M') !== -1) {
+      if (num >= 1024) return (num / 1024).toFixed(2) + ' GB';
+      return Math.round(num) + ' MB';
+    }
+    if (unit.indexOf('K') !== -1) {
+      var mb = num / 1024;
+      return mb >= 1 ? (Math.round(mb * 10) / 10).toFixed(1) + ' MB' : '< 1 MB';
     }
 
-    // Fallback if RouterOS returned unlimited, empty, or unparsed
-    return 'ကန့်သတ်မထားပါ';
+    if (num > 1048576) {
+      var mb = num / (1024 * 1024);
+      if (mb >= 1024) return (mb / 1024).toFixed(2) + ' GB';
+      if (mb >= 1) return Math.round(mb) + ' MB';
+      return '< 1 MB';
+    } else if (num > 1024) {
+      return Math.round(num / 1024) + ' KB';
+    }
+
+    return num + ' MB';
   }
 
   function initStatusPage() {

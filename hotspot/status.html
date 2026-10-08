@@ -159,23 +159,43 @@
       }
 
       function formatDataBytes(val, rawIn, rawOut) {
-        var s = String(val || '').trim();
-        var num = parseFloat(s.replace(/,/g, ''));
+        if (!val || val.indexOf('$(') !== -1 || val.toLowerCase() === 'none' || val.toLowerCase() === 'unlimited') {
+          return 'ကန့်သတ်မထားပါ (Unlimited)';
+        }
+        var s = String(val).trim().replace(/,/g, '');
+        var m = s.match(/([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)?/);
+        if (!m) return s;
 
-        // If RouterOS returned valid numeric bytes for remain-bytes-total
-        if (!isNaN(num) && num > 0 && s.indexOf('$(') === -1) {
-          var mb = num / (1024 * 1024);
-          if (mb >= 1024) {
-            return (mb / 1024).toFixed(2) + ' GB';
-          } else if (mb >= 1) {
-            return Math.round(mb) + ' MB';
-          } else {
-            return '< 1 MB';
-          }
+        var num = parseFloat(m[1]);
+        if (isNaN(num)) return s;
+        if (num <= 0) return '0 MB';
+
+        var unit = (m[2] || '').toUpperCase();
+
+        // FIX: If RouterOS outputs e.g. "1.98 B" or "1.98 GiB" or "1.98 GB"
+        if ((unit === 'B' && num < 100) || unit.indexOf('G') !== -1) {
+          return num.toFixed(2) + ' GB';
+        }
+        if (unit.indexOf('M') !== -1) {
+          if (num >= 1024) return (num / 1024).toFixed(2) + ' GB';
+          return Math.round(num) + ' MB';
+        }
+        if (unit.indexOf('K') !== -1) {
+          var mb = num / 1024;
+          return mb >= 1 ? (Math.round(mb * 10) / 10).toFixed(1) + ' MB' : '< 1 MB';
         }
 
-        // If unlimited or not configured with limit-bytes-total
-        return 'ကန့်သတ်မထားပါ (Unlimited)';
+        // If raw bytes number without unit prefix (e.g. 2088136116 or 314572800):
+        if (num > 1048576) {
+          var mb = num / (1024 * 1024);
+          if (mb >= 1024) return (mb / 1024).toFixed(2) + ' GB';
+          if (mb >= 1) return Math.round(mb) + ' MB';
+          return '< 1 MB';
+        } else if (num > 1024) {
+          return Math.round(num / 1024) + ' KB';
+        }
+
+        return num + ' MB';
       }
 
       var rawIn = document.getElementById('raw_bytes_in') ? document.getElementById('raw_bytes_in').textContent : '0';

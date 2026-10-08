@@ -3,14 +3,14 @@
 <div align="center">
 
 ![HotspotManager Banner](https://img.shields.io/badge/MikroTik-RouterOS_v7-red?style=for-the-badge&logo=mikrotik)
-![Android Version](https://img.shields.io/badge/Android_App-v1.4.8-green?style=for-the-badge&logo=android)
+![Android Version](https://img.shields.io/badge/Android_App-v1.4.9-green?style=for-the-badge&logo=android)
 ![SSID](https://img.shields.io/badge/SSID-Hide%20Wifi-blue?style=for-the-badge&logo=wi-fi)
 
 <h3>High-Performance MikroTik Hotspot System with Real-Time Profile Alignment & Luxury Captive Portal</h3>
 
 <p>
-  <a href="https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.4.8.apk">
-    <img src="https://img.shields.io/badge/Download_APK-v1.4.8_(Direct)-success?style=for-the-badge&logo=android" alt="Download APK" />
+  <a href="https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.4.9.apk">
+    <img src="https://img.shields.io/badge/Download_APK-v1.4.9_(Direct)-success?style=for-the-badge&logo=android" alt="Download APK" />
   </a>
 </p>
 
@@ -20,13 +20,23 @@
 
 ## 📱 App Download for Users
 
-- **Direct Download Link:** [HotspotManager-v1.4.8.apk](https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.4.8.apk)
-- **Version:** v1.4.8 (versionCode: 25)
-- **What's New in v1.4.8:**
-  - 🔄 **Reboot-Resilient Quota & Time Persistence:** Real-time persistence of client data consumption (`[USED:...]` and `[ORIG-LIMIT:...]`) and continuous calendar validity (`[ACT:...]`) ensures router reboots and power outages never reset client quota or refund consumed data.
-  - 🌐 **Expanded Ruijie & AP Network Topology Engine:** Enhanced device model detection covering Ruijie Reyee EW7200BE, RAP outdoor/wall APs, and accurate active client session mapping.
-  - ⚡ **Seamless MAC Roaming & Fast CNA Popups:** Integrated walled-garden bypass for instant captive portal popups on iOS, Android, and Windows devices with 30-day session remembering.
-  - 🛡️ **Non-Disruptive Advance Mode & Zero Voucher Disruption:** Safely queries live RouterOS v7 state without disturbing active users or resetting vouchers.
+- **Direct Download Link:** [HotspotManager-v1.4.9.apk](https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.4.9.apk)
+- **Version:** v1.4.9 (versionCode: 26)
+- **What's New in v1.4.9 (Latest Update):**
+  - 🎯 **Active Sessions Quota Removal & Architectural Cleanup:**
+    - The redundant and desynced `Remaining Quota` column has been completely removed from the **Active Sessions** table across both the Mobile App and the Cloud Web Dashboard.
+    - **Active Sessions** now strictly and cleanly displays live session activity: real-time session traffic (`↓ Download • ↑ Upload`) and session uptime.
+    - **Vouchers & Profiles** is established as the single, authoritative source of truth for all quota limits, consumed data, and remaining allowance.
+  - 🌐 **Captive Portal `status.html` Quota Unit Fix:**
+    - Resolved the remaining data unit display issue where large quotas were mistakenly formatted with byte suffix (e.g. `1.98 B` now accurately displays as `1.98 GB`).
+    - Smart unit normalization across GB, MB, and KB guarantees crystal-clear remaining quota readability for all connected users.
+  - 🔑 **Seamless Re-login (Fixed Premature "Traffic Limit Reached" Bug):**
+    - Corrected kernel `limit-bytes-total` handling in RouterOS scripts (`voucher-activate` and `hs-quota-save`).
+    - Users with remaining data allowance will never be falsely rejected with "Traffic limit is reached" when disconnecting, logging out, and logging back in.
+  - ⚡ **Power Outage & Reboot Protection:**
+    - Fixed counter preservation logic to prevent premature deduction or lost quota allowances after router power cuts and reboots.
+  - ☁️ **Cloud Controller Flex-Login:**
+    - Added flexible credential support allowing administrative access with both custom cloud passwords and MikroTik router credentials.
 
 ---
 
