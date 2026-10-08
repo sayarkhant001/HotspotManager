@@ -28,3 +28,6 @@ __pycache__/
 *.sqlite
 *.pem
 .wrangler/
+a yeiksitt/
+*yeik*
+
