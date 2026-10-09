@@ -24,6 +24,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
 import com.example.utils.DeviceModelDetector
+import com.example.utils.AirMetroBridgePair
+import com.example.utils.AirMetroPairManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -91,13 +95,19 @@ fun NetworkTopologyScreen(
     val ipBindings by viewModel.ipBindings.collectAsStateWithLifecycle()
     val strings = LanguageManager.strings
 
+    val context = LocalContext.current
     var apToAllowlist by remember { mutableStateOf<AccessPointDevice?>(null) }
     var apToUndo by remember { mutableStateOf<AccessPointDevice?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedApForDetails by remember { mutableStateOf<AccessPointDevice?>(null) }
     var apToRename by remember { mutableStateOf<AccessPointDevice?>(null) }
-    var isListView by remember { mutableStateOf(false) }
-    var isCompactMode by remember { mutableStateOf(true) }
+    var pairToEdit by remember { mutableStateOf<AirMetroBridgePair?>(null) }
+
+    // View modes: 0 = Visual Tree, 1 = Grid Cards, 2 = AirMetro Pair Mode
+    var viewMode by remember { mutableIntStateOf(0) }
+    var isCompactMode by remember { mutableStateOf(false) }
+    var columnCount by remember { mutableIntStateOf(2) }
+    var selectedFilterCategory by remember { mutableStateOf("All") }
     var expandedApMacs by remember { mutableStateOf(setOf<String>()) }
 
     fun toggleApExpansion(mac: String) {
@@ -120,6 +130,27 @@ fun NetworkTopologyScreen(
 
     // Zoom state
     var scale by remember { mutableFloatStateOf(1f) }
+
+    val airMetroPairs = remember(topology.accessPoints, context) {
+        AirMetroPairManager.buildPairs(context, topology.accessPoints)
+    }
+
+    val filteredAps = remember(topology.accessPoints, selectedFilterCategory) {
+        when (selectedFilterCategory) {
+            "AirMetro" -> topology.accessPoints.filter {
+                DeviceModelDetector.isAirMetroOrBridge(it.name, it.name, it.model, it.macAddress)
+            }
+            "Outdoor" -> topology.accessPoints.filter {
+                val n = "${it.name} ${it.model}".uppercase()
+                n.contains("OD") || n.contains("6260") || n.contains("6262") || n.contains("6202")
+            }
+            "Wi-Fi APs" -> topology.accessPoints.filter {
+                !DeviceModelDetector.isAirMetroOrBridge(it.name, it.name, it.model, it.macAddress)
+            }
+            "Online" -> topology.accessPoints.filter { it.isOnline }
+            else -> topology.accessPoints
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.fetchNetworkTopology()
@@ -151,7 +182,7 @@ fun NetworkTopologyScreen(
                     }
                 },
                 actions = {
-                    // Density toggle: Small (Fit Screen / Unscrollable) vs Expanded
+                    // Density toggle: Fit Screen vs Expanded
                     IconButton(onClick = { isCompactMode = !isCompactMode }) {
                         Icon(
                             imageVector = if (isCompactMode) Icons.Default.UnfoldMore else Icons.Default.FitScreen,
@@ -159,12 +190,16 @@ fun NetworkTopologyScreen(
                             tint = if (isCompactMode) Color(0xFF10B981) else MaterialTheme.colorScheme.primary
                         )
                     }
-                    // Layout toggle: Tree vs Cards
-                    IconButton(onClick = { isListView = !isListView }) {
+                    // View Mode Switcher: Tree -> Cards -> AirMetro Pair Mode
+                    IconButton(onClick = { viewMode = (viewMode + 1) % 3 }) {
                         Icon(
-                            imageVector = if (isListView) Icons.Default.AccountTree else Icons.Default.ViewAgenda,
-                            contentDescription = "Toggle View",
-                            tint = Color(0xFF10B981)
+                            imageVector = when (viewMode) {
+                                1 -> Icons.Default.ViewAgenda
+                                2 -> Icons.Default.Sensors
+                                else -> Icons.Default.AccountTree
+                            },
+                            contentDescription = "Switch View Mode",
+                            tint = if (viewMode == 2) Color(0xFF6366F1) else Color(0xFF10B981)
                         )
                     }
                     // Add Device
@@ -197,30 +232,24 @@ fun NetworkTopologyScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            val transformState = rememberTransformableState { zoomChange, _, _ ->
-                scale = (scale * zoomChange).coerceIn(0.6f, 2.0f)
-            }
-
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .transformable(state = transformState)
                     .graphicsLayer(
                         scaleX = scale,
-                        scaleY = scale
+                        scaleY = scale,
+                        transformOrigin = TransformOrigin(0.5f, 0f)
                     )
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (isCompactMode) {
-                    // COMPACT MODE: Unified Sleek Gateway & Internet Bar (~48dp)
                     CompactGatewayNode(
                         topology = topology,
                         strings = strings
                     )
                 } else {
-                    // EXPANDED MODE: Full Large Internet Cloud + Large Gateway Card
                     Spacer(modifier = Modifier.height(4.dp))
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -261,132 +290,337 @@ fun NetworkTopologyScreen(
                 val aps = topology.accessPoints
 
                 if (aps.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // Toolbar Strip (Compact & Unscrollable)
+                    // Toolbar Control Strip
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 5.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF10B981))
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "${aps.size} Devices Detected",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                            // Row 1: Status & View Mode Selectors
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Small (Fit Screen) vs Expand Toggle Pill
-                                Surface(
-                                    onClick = { isCompactMode = !isCompactMode },
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = if (isCompactMode) Color(0xFF10B981).copy(alpha = 0.15f) else Color.Transparent
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isCompactMode) Icons.Default.FitScreen else Icons.Default.UnfoldMore,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(13.dp),
-                                            tint = if (isCompactMode) Color(0xFF059669) else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(Modifier.width(2.dp))
-                                        Text(
-                                            if (isCompactMode) "Small" else "Expand",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isCompactMode) Color(0xFF059669) else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF10B981))
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "${aps.size} Devices",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (airMetroPairs.isNotEmpty()) {
+                                        Spacer(Modifier.width(4.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = Color(0xFF6366F1).copy(alpha = 0.15f)
+                                        ) {
+                                            Text(
+                                                text = "${airMetroPairs.size} Pairs",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF4F46E5),
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                            )
+                                        }
                                     }
                                 }
 
-                                // Tree / Cards Layout Toggle Pill
-                                Surface(
-                                    onClick = { isListView = !isListView },
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = Color(0xFF10B981).copy(alpha = 0.15f)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                    // Tree Mode Pill
+                                    Surface(
+                                        onClick = { viewMode = 0 },
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = if (viewMode == 0) Color(0xFF10B981).copy(alpha = 0.18f) else Color.Transparent
                                     ) {
-                                        Icon(
-                                            imageVector = if (isListView) Icons.Default.ViewAgenda else Icons.Default.AccountTree,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(13.dp),
-                                            tint = Color(0xFF059669)
-                                        )
-                                        Spacer(Modifier.width(2.dp))
-                                        Text(
-                                            if (isListView) "Cards" else "Tree",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF059669)
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.AccountTree,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(13.dp),
+                                                tint = if (viewMode == 0) Color(0xFF059669) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(Modifier.width(2.dp))
+                                            Text(
+                                                "Tree",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                fontWeight = if (viewMode == 0) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (viewMode == 0) Color(0xFF059669) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    // Cards Mode Pill
+                                    Surface(
+                                        onClick = { viewMode = 1 },
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = if (viewMode == 1) Color(0xFF10B981).copy(alpha = 0.18f) else Color.Transparent
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ViewAgenda,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(13.dp),
+                                                tint = if (viewMode == 1) Color(0xFF059669) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(Modifier.width(2.dp))
+                                            Text(
+                                                "Cards",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                fontWeight = if (viewMode == 1) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (viewMode == 1) Color(0xFF059669) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    // Pair Mode Pill
+                                    Surface(
+                                        onClick = { viewMode = 2 },
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = if (viewMode == 2) Color(0xFF6366F1).copy(alpha = 0.22f) else Color.Transparent
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Sensors,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(13.dp),
+                                                tint = if (viewMode == 2) Color(0xFF4F46E5) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(Modifier.width(2.dp))
+                                            Text(
+                                                "Pairs",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                fontWeight = if (viewMode == 2) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (viewMode == 2) Color(0xFF4F46E5) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    // Column Adaptability (1 / 2 / 3 Cols)
+                                    if (viewMode != 2) {
+                                        Surface(
+                                            onClick = { columnCount = if (columnCount >= 3) 1 else columnCount + 1 },
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = MaterialTheme.colorScheme.surface
+                                        ) {
+                                            Text(
+                                                text = "${columnCount} Col",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF059669),
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                    }
+
+                                    // Add Device Button
+                                    Surface(
+                                        onClick = { showAddDialog = true },
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color(0xFF10B981)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Add,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(13.dp),
+                                                tint = Color.White
+                                            )
+                                            Spacer(Modifier.width(2.dp))
+                                            Text(
+                                                "Add",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            // Row 2: Category Filter Chips & Zoom Controls
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    val cats = listOf(
+                                        "All" to "All (${aps.size})",
+                                        "AirMetro" to "📡 AirMetros (${aps.count { DeviceModelDetector.isAirMetroOrBridge(it.name, it.name, it.model, it.macAddress) }})",
+                                        "Wi-Fi APs" to "Wi-Fi APs (${aps.count { !DeviceModelDetector.isAirMetroOrBridge(it.name, it.name, it.model, it.macAddress) }})",
+                                        "Outdoor" to "Outdoor OD (${aps.count { "${it.name} ${it.model}".uppercase().let { s -> s.contains("OD") || s.contains("6260") || s.contains("6262") || s.contains("6202") } }})",
+                                        "Online" to "🟢 Online (${aps.count { it.isOnline }})"
+                                    )
+                                    items(cats) { (catKey, catLabel) ->
+                                        val isSel = selectedFilterCategory == catKey
+                                        Surface(
+                                            onClick = { selectedFilterCategory = catKey },
+                                            shape = RoundedCornerShape(5.dp),
+                                            color = if (isSel) Color(0xFF10B981).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface,
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                0.8.dp,
+                                                if (isSel) Color(0xFF10B981) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            )
+                                        ) {
+                                            Text(
+                                                text = catLabel,
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+                                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSel) Color(0xFF047857) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
                                     }
                                 }
 
-                                // Add Device Button
-                                Surface(
-                                    onClick = { showAddDialog = true },
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = Color(0xFF10B981)
+                                Spacer(Modifier.width(4.dp))
+
+                                // Quick Zoom Control
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                    IconButton(
+                                        onClick = { scale = (scale - 0.1f).coerceIn(0.6f, 1.8f) },
+                                        modifier = Modifier.size(20.dp)
                                     ) {
-                                        Icon(
-                                            Icons.Default.Add,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(13.dp),
-                                            tint = Color.White
-                                        )
-                                        Spacer(Modifier.width(2.dp))
-                                        Text(
-                                            "Add",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
-                                        )
+                                        Icon(Icons.Default.Remove, contentDescription = "Zoom Out", modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Text(
+                                        text = "${(scale * 100).toInt()}%",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.clickable { scale = 1f }
+                                    )
+                                    IconButton(
+                                        onClick = { scale = (scale + 0.1f).coerceIn(0.6f, 1.8f) },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = "Zoom In", modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
-                    if (!isListView) {
-                        // VISUAL TREE VIEW (Unscrollable & Smallable)
-                        BranchingLines(apCount = aps.size, isCompact = isCompactMode)
+                    // VIEW 1: AIRMETRO PAIR MODE
+                    if (viewMode == 2) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFF6366F1).copy(alpha = 0.08f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6366F1).copy(alpha = 0.25f)),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Sensors,
+                                    contentDescription = null,
+                                    tint = Color(0xFF4F46E5),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = "📡 AirMetro Wireless Bridge PtP / PtMP Pairs",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF4F46E5)
+                                    )
+                                    Text(
+                                        text = "Data transfer between AirMetros is wireless backhaul — excluded from hotspot voucher data usage.",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
 
-                        val chunkedAps = aps.chunked(2)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        if (airMetroPairs.isNotEmpty()) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                airMetroPairs.forEach { pair ->
+                                    AirMetroPairCard(
+                                        pair = pair,
+                                        onOpenBaseDetails = { selectedApForDetails = pair.baseDevice },
+                                        onOpenCpeDetails = { pair.cpeDevice?.let { selectedApForDetails = it } },
+                                        onEditPair = { pairToEdit = pair }
+                                    )
+                                }
+                            }
+                        } else {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                modifier = Modifier.fillMaxWidth().padding(16.dp)
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.padding(16.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.SensorsOff,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.outline,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Text("No AirMetro Pairs Detected", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                                    Text("Connect Ruijie AirMetro550G-B, 460G, or EST350 bridges to automatically pair them, or tap 'Add' to allowlist a bridge.", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    } else if (viewMode == 0) {
+                        // VIEW 2: VISUAL TREE VIEW (Freely Scrollable & Adaptable)
+                        BranchingLines(apCount = filteredAps.size, isCompact = isCompactMode)
+
+                        val chunkedAps = remember(filteredAps, columnCount) {
+                            filteredAps.chunked(columnCount.coerceIn(1, 4))
+                        }
+
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
-                            verticalArrangement = Arrangement.spacedBy(if (isCompactMode) 6.dp else 12.dp)
+                            verticalArrangement = Arrangement.spacedBy(if (isCompactMode) 6.dp else 10.dp)
                         ) {
                             chunkedAps.forEachIndexed { rowIndex, rowAps ->
                                 if (rowIndex > 0) {
@@ -449,64 +683,88 @@ fun NetworkTopologyScreen(
                                             )
                                         }
                                     }
-                                    if (rowAps.size == 1) {
-                                        Spacer(modifier = Modifier.weight(1f))
+                                    // Fill empty slots in row
+                                    val emptySlots = columnCount.coerceIn(1, 4) - rowAps.size
+                                    if (emptySlots > 0) {
+                                        repeat(emptySlots) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
                                     }
                                 }
                             }
                         }
                     } else {
-                        // DETAILED / COMPACT CARD LIST VIEW
+                        // VIEW 3: CARDS GRID VIEW (Freely Scrollable & Adaptable)
+                        val chunkedAps = remember(filteredAps, columnCount) {
+                            filteredAps.chunked(columnCount.coerceIn(1, 4))
+                        }
+
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                             verticalArrangement = Arrangement.spacedBy(if (isCompactMode) 6.dp else 10.dp)
                         ) {
-                            aps.forEach { ap ->
-                                val clientCount = remember(activeUsers, ap, topology) {
-                                    if (!ap.isOnline) 0 else {
-                                        val onlineAps = topology.accessPoints.filter { it.isOnline }
-                                        if (onlineAps.size <= 1) {
-                                            activeUsers.size
-                                        } else {
-                                            val apNameNorm = ap.name.replace(" ", "").lowercase()
-                                            val directMatches = activeUsers.filter { u ->
-                                                val uNorm = u.user.lowercase()
-                                                val cNorm = u.comment.lowercase()
-                                                (apNameNorm.length >= 3 && (uNorm.contains(apNameNorm) || cNorm.contains(apNameNorm))) ||
-                                                (ap.connectedClientMacs.isNotEmpty() && u.macAddress.uppercase() in ap.connectedClientMacs.map { it.uppercase() })
-                                            }
-                                            val unassigned = activeUsers.filter { u ->
-                                                onlineAps.none { other ->
-                                                    val oNorm = other.name.replace(" ", "").lowercase()
-                                                    (oNorm.length >= 3 && (u.user.lowercase().contains(oNorm) || u.comment.lowercase().contains(oNorm))) ||
-                                                    (other.connectedClientMacs.isNotEmpty() && u.macAddress.uppercase() in other.connectedClientMacs.map { it.uppercase() })
+                            chunkedAps.forEach { rowAps ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    rowAps.forEach { ap ->
+                                        val clientCount = remember(activeUsers, ap, topology) {
+                                            if (!ap.isOnline) 0 else {
+                                                val onlineAps = topology.accessPoints.filter { it.isOnline }
+                                                if (onlineAps.size <= 1) {
+                                                    activeUsers.size
+                                                } else {
+                                                    val apNameNorm = ap.name.replace(" ", "").lowercase()
+                                                    val directMatches = activeUsers.filter { u ->
+                                                        val uNorm = u.user.lowercase()
+                                                        val cNorm = u.comment.lowercase()
+                                                        (apNameNorm.length >= 3 && (uNorm.contains(apNameNorm) || cNorm.contains(apNameNorm))) ||
+                                                        (ap.connectedClientMacs.isNotEmpty() && u.macAddress.uppercase() in ap.connectedClientMacs.map { it.uppercase() })
+                                                    }
+                                                    val unassigned = activeUsers.filter { u ->
+                                                        onlineAps.none { other ->
+                                                            val oNorm = other.name.replace(" ", "").lowercase()
+                                                            (oNorm.length >= 3 && (u.user.lowercase().contains(oNorm) || u.comment.lowercase().contains(oNorm))) ||
+                                                            (other.connectedClientMacs.isNotEmpty() && u.macAddress.uppercase() in other.connectedClientMacs.map { it.uppercase() })
+                                                        }
+                                                    }
+                                                    val apIdx = onlineAps.indexOfFirst { it.macAddress == ap.macAddress }
+                                                    val partitioned = unassigned.filter { u ->
+                                                        val h = Math.abs(u.macAddress.ifBlank { u.user }.hashCode())
+                                                        (h % onlineAps.size) == apIdx
+                                                    }
+                                                    directMatches.size + partitioned.size
                                                 }
                                             }
-                                            val apIdx = onlineAps.indexOfFirst { it.macAddress == ap.macAddress }
-                                            val partitioned = unassigned.filter { u ->
-                                                val h = Math.abs(u.macAddress.ifBlank { u.user }.hashCode())
-                                                (h % onlineAps.size) == apIdx
-                                            }
-                                            directMatches.size + partitioned.size
+                                        }
+                                        val isExpanded = expandedApMacs.contains(ap.macAddress.uppercase())
+                                        val todayBytes = ap.dailyBytesIn + ap.dailyBytesOut
+
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            ApListCard(
+                                                ap = ap,
+                                                clientCount = clientCount,
+                                                isCompact = isCompactMode,
+                                                isExpanded = isExpanded,
+                                                onToggleExpand = { toggleApExpansion(ap.macAddress) },
+                                                todayBytes = todayBytes,
+                                                strings = strings,
+                                                onClick = { selectedApForDetails = ap },
+                                                onAllowlist = { apToAllowlist = ap },
+                                                onUndo = { apToUndo = ap },
+                                                onRename = { apToRename = ap }
+                                            )
+                                        }
+                                    }
+                                    val emptySlots = columnCount.coerceIn(1, 4) - rowAps.size
+                                    if (emptySlots > 0) {
+                                        repeat(emptySlots) {
+                                            Spacer(modifier = Modifier.weight(1f))
                                         }
                                     }
                                 }
-                                val isExpanded = expandedApMacs.contains(ap.macAddress.uppercase())
-                                val todayBytes = ap.dailyBytesIn + ap.dailyBytesOut
-
-                                ApListCard(
-                                    ap = ap,
-                                    clientCount = clientCount,
-                                    isCompact = isCompactMode,
-                                    isExpanded = isExpanded,
-                                    onToggleExpand = { toggleApExpansion(ap.macAddress) },
-                                    todayBytes = todayBytes,
-                                    strings = strings,
-                                    onClick = { selectedApForDetails = ap },
-                                    onAllowlist = { apToAllowlist = ap },
-                                    onUndo = { apToUndo = ap },
-                                    onRename = { apToRename = ap }
-                                )
                             }
                         }
                     }
@@ -535,7 +793,7 @@ fun NetworkTopologyScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Connect Ruijie APs (EST310, EST350, EW series) to Hotspot bridge or tap 'Add' above to manually allowlist an AP.",
+                                text = "Connect Ruijie APs (AirMetro, EST series, EW series) to Hotspot bridge or tap 'Add' above to manually allowlist an AP.",
                                 textAlign = TextAlign.Center,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -749,6 +1007,27 @@ fun NetworkTopologyScreen(
                 onUnbanUser = { mac, bindingId -> viewModel.unbanMac(mac, bindingId) },
                 onWhitelistClient = { mac, ip, comment -> viewModel.whitelistDevice(mac, ip, comment) },
                 onUndoClientWhitelist = { bindingId, mac -> viewModel.removeIpBinding(bindingId, mac) }
+            )
+        }
+
+        // AirMetro Bridge Pair Edit Dialog
+        if (pairToEdit != null) {
+            EditAirMetroPairDialog(
+                pair = pairToEdit!!,
+                allBridgeDevices = topology.accessPoints.filter {
+                    DeviceModelDetector.isAirMetroOrBridge(it.name, it.name, it.model, it.macAddress)
+                },
+                onDismiss = { pairToEdit = null },
+                onSavePair = { baseMac, cpeMac, customTitle ->
+                    AirMetroPairManager.savePairing(context, baseMac, cpeMac, customTitle)
+                    pairToEdit = null
+                    viewModel.fetchNetworkTopology()
+                },
+                onUnpair = { baseMac, cpeMac ->
+                    AirMetroPairManager.removePairing(context, baseMac, cpeMac)
+                    pairToEdit = null
+                    viewModel.fetchNetworkTopology()
+                }
             )
         }
     }
@@ -1230,10 +1509,11 @@ fun ApDeviceNode(
 
                     // Today's Consumption
                     if (todayBytes > 0L) {
+                        val isBridge = DeviceModelDetector.isAirMetroOrBridge(ap.name, ap.name, ap.model, ap.macAddress)
                         Text(
-                            text = "Today: ${formatDataBytes(todayBytes)} (reset at 12 AM)",
+                            text = if (isBridge) "📡 Backhaul: ${formatDataBytes(todayBytes)} (Excluded from vouchers)" else "Today: ${formatDataBytes(todayBytes)} (reset at 12 AM)",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isBridge) Color(0xFF4F46E5) else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                     }
@@ -1536,10 +1816,16 @@ fun ApListCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val isBridgeDev = remember(ap) { DeviceModelDetector.isAirMetroOrBridge(ap.name, ap.name, ap.model, ap.macAddress) }
                         Text(
-                            text = if (todayBytes > 0L) "Today: ${formatDataBytes(todayBytes)} (from 12 AM)" else "Live connected device",
+                            text = when {
+                                isBridgeDev && todayBytes > 0L -> "📡 Backhaul: ${formatDataBytes(todayBytes)} (Excluded from vouchers)"
+                                isBridgeDev -> "📡 Wireless Bridge Backhaul Link"
+                                todayBytes > 0L -> "Today: ${formatDataBytes(todayBytes)} (from 12 AM)"
+                                else -> "Live connected device"
+                            },
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isBridgeDev) Color(0xFF4F46E5) else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Button(
@@ -2066,6 +2352,39 @@ fun ApDetailsBottomSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            val isBridgeDevice = remember(ap) {
+                DeviceModelDetector.isAirMetroOrBridge(ap.name, ap.name, ap.model, ap.macAddress)
+            }
+            if (isBridgeDevice) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF6366F1).copy(alpha = 0.12f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6366F1).copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF6366F1).copy(alpha = 0.2f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Sensors, contentDescription = null, tint = Color(0xFF4F46E5), modifier = Modifier.size(20.dp))
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text("Wireless Bridge Backhaul Link", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color(0xFF4F46E5))
+                            Text("Transit data passing through this bridge is wireless backhaul and is excluded from hotspot voucher usage totals.", style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             // Real-Time Speed & Daily Usage Dashboard
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -2142,8 +2461,8 @@ fun ApDetailsBottomSheet(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
-                            Text("Data Consumed Today", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color(0xFF6D28D9))
-                            Text("Starts at 12:00 AM • Resets daily at 12:00 AM", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(if (isBridgeDevice) "Backhaul Transit Data" else "Data Consumed Today", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color(0xFF6D28D9))
+                            Text(if (isBridgeDevice) "Bridge backhaul • Excluded from vouchers" else "Starts at 12:00 AM • Resets daily at 12:00 AM", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     Text(
@@ -2394,3 +2713,554 @@ fun ApDetailsBottomSheet(
         }
     }
 }
+
+@Composable
+fun AirMetroPairCard(
+    pair: AirMetroBridgePair,
+    onOpenBaseDetails: () -> Unit,
+    onOpenCpeDetails: () -> Unit,
+    onEditPair: () -> Unit
+) {
+    val baseModel = remember(pair.baseDevice) {
+        DeviceModelDetector.detectApOrClient(
+            pair.baseDevice.name,
+            pair.baseDevice.name,
+            pair.baseDevice.model,
+            pair.baseDevice.macAddress
+        )
+    }
+    val cpeModel = remember(pair.cpeDevice) {
+        pair.cpeDevice?.let {
+            DeviceModelDetector.detectApOrClient(it.name, it.name, it.model, it.macAddress)
+        }
+    }
+
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        border = androidx.compose.foundation.BorderStroke(
+            1.2.dp,
+            if (pair.isLinked) Color(0xFF6366F1).copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            // Header: Pair title, link badge, and edit button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFF6366F1).copy(alpha = 0.15f),
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Sensors,
+                                contentDescription = null,
+                                tint = Color(0xFF4F46E5),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = pair.pairTitle,
+                            style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.sp),
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = if (pair.cpeDevice != null) "PtP / PtMP Wireless Bridge Link" else "Standalone AirMetro Bridge",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = when {
+                            pair.cpeDevice == null -> Color(0xFFF59E0B).copy(alpha = 0.15f)
+                            pair.isLinked -> Color(0xFF10B981).copy(alpha = 0.15f)
+                            else -> Color(0xFFEF4444).copy(alpha = 0.15f)
+                        }
+                    ) {
+                        Text(
+                            text = when {
+                                pair.cpeDevice == null -> "⚠️ Standalone"
+                                pair.isLinked -> "🟢 Linked & Active"
+                                else -> "🔴 Link Down"
+                            },
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = when {
+                                pair.cpeDevice == null -> Color(0xFFD97706)
+                                pair.isLinked -> Color(0xFF059669)
+                                else -> Color(0xFFDC2626)
+                            },
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+
+                    Spacer(Modifier.width(4.dp))
+
+                    IconButton(
+                        onClick = onEditPair,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit Pair",
+                            tint = Color(0xFF6366F1),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // Body: Base Node ↔ Link Beam ↔ CPE Node
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // 1. Base Node
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (pair.baseDevice.isOnline) Color(0xFF10B981).copy(alpha = 0.4f) else Color(0xFFEF4444).copy(alpha = 0.4f)
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onOpenBaseDetails() }
+                ) {
+                    Column(
+                        modifier = Modifier.padding(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(contentAlignment = Alignment.TopEnd) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.White,
+                                shadowElevation = 1.dp,
+                                modifier = Modifier.size(42.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(3.dp)) {
+                                    if (baseModel.imageResId != 0) {
+                                        Image(
+                                            painter = painterResource(id = baseModel.imageResId),
+                                            contentDescription = baseModel.modelName,
+                                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                            contentScale = ContentScale.Fit
+                                        )
+                                    } else {
+                                        Icon(Icons.Default.Sensors, contentDescription = null, tint = Color(0xFF6366F1), modifier = Modifier.size(24.dp))
+                                    }
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(9.dp)
+                                    .clip(CircleShape)
+                                    .background(if (pair.baseDevice.isOnline) Color(0xFF10B981) else Color(0xFFEF4444))
+                                    .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                            )
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+
+                        Text(
+                            text = pair.baseDevice.name,
+                            style = MaterialTheme.typography.titleSmall.copy(fontSize = 11.sp),
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "Base / Master",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF4F46E5)
+                        )
+                        Text(
+                            text = baseModel.modelName,
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = pair.baseDevice.ipAddress.ifBlank { "DHCP" },
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 8.5.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (pair.baseDevice.currentRxBps > 0L || pair.baseDevice.currentTxBps > 0L) {
+                            Text(
+                                text = "↓${formatSpeed(pair.baseDevice.currentRxBps)}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0284C7)
+                            )
+                        }
+                    }
+                }
+
+                // 2. Wireless Beam in Center
+                Column(
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SwapHoriz,
+                        contentDescription = null,
+                        tint = if (pair.isLinked) Color(0xFF4F46E5) else MaterialTheme.colorScheme.outlineVariant,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                        text = "Bridge Link",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF6366F1)
+                    )
+                    if (pair.totalRxBps > 0L || pair.totalTxBps > 0L) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFF6366F1).copy(alpha = 0.12f),
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
+                            Text(
+                                text = "${formatSpeed(pair.totalRxBps + pair.totalTxBps)}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF4F46E5),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
+
+                // 3. CPE Node
+                if (pair.cpeDevice != null) {
+                    val cpe = pair.cpeDevice
+                    val cModel = cpeModel ?: baseModel
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (cpe.isOnline) Color(0xFF10B981).copy(alpha = 0.4f) else Color(0xFFEF4444).copy(alpha = 0.4f)
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onOpenCpeDetails() }
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(contentAlignment = Alignment.TopEnd) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.White,
+                                    shadowElevation = 1.dp,
+                                    modifier = Modifier.size(42.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(3.dp)) {
+                                        if (cModel.imageResId != 0) {
+                                            Image(
+                                                painter = painterResource(id = cModel.imageResId),
+                                                contentDescription = cModel.modelName,
+                                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                                contentScale = ContentScale.Fit
+                                            )
+                                        } else {
+                                            Icon(Icons.Default.Sensors, contentDescription = null, tint = Color(0xFF6366F1), modifier = Modifier.size(24.dp))
+                                        }
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(9.dp)
+                                        .clip(CircleShape)
+                                        .background(if (cpe.isOnline) Color(0xFF10B981) else Color(0xFFEF4444))
+                                        .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                                )
+                            }
+
+                            Spacer(Modifier.height(4.dp))
+
+                            Text(
+                                text = cpe.name,
+                                style = MaterialTheme.typography.titleSmall.copy(fontSize = 11.sp),
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "CPE / Station",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF059669)
+                            )
+                            Text(
+                                text = cModel.modelName,
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = cpe.ipAddress.ifBlank { "DHCP" },
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 8.5.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (cpe.currentRxBps > 0L || cpe.currentTxBps > 0L) {
+                                Text(
+                                    text = "↓${formatSpeed(cpe.currentRxBps)}",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0284C7)
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // Unpaired CPE placeholder
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onEditPair() }
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Link,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.size(30.dp)
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "No CPE Assigned",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "Tap to link a CPE",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 8.5.sp),
+                                color = Color(0xFF6366F1)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Footer transit traffic notice
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = Color(0xFF6366F1),
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = "Wireless backhaul transit data is excluded from user voucher data usage.",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 8.5.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun EditAirMetroPairDialog(
+    pair: AirMetroBridgePair,
+    allBridgeDevices: List<AccessPointDevice>,
+    onDismiss: () -> Unit,
+    onSavePair: (baseMac: String, cpeMac: String, customTitle: String) -> Unit,
+    onUnpair: (baseMac: String, cpeMac: String) -> Unit
+) {
+    var title by remember { mutableStateOf(pair.pairTitle) }
+    var selectedBaseMac by remember { mutableStateOf(pair.baseDevice.macAddress.uppercase()) }
+    var selectedCpeMac by remember { mutableStateOf(pair.cpeDevice?.macAddress?.uppercase() ?: "") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Sensors, contentDescription = null, tint = Color(0xFF6366F1), modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Configure AirMetro Pair", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Pair a Base Station (e.g. 550G-B) with a CPE Station (e.g. 460G) to display link health and ensure backhaul traffic is excluded from voucher accounting.",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Pair Title / Location") },
+                    placeholder = { Text("e.g. Main Tower ↔ Site 2") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Base Station Selection
+                Column {
+                    Text(
+                        text = "📡 Base Station (Master)",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4F46E5)
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    allBridgeDevices.forEach { dev ->
+                        val isSel = selectedBaseMac == dev.macAddress.uppercase()
+                        Surface(
+                            onClick = { selectedBaseMac = dev.macAddress.uppercase() },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSel) Color(0xFF6366F1).copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSel) Color(0xFF6366F1) else Color.Transparent
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(dev.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                    Text("${dev.model} • ${dev.ipAddress}", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                if (isSel) {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF6366F1), modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // CPE Station Selection
+                Column {
+                    Text(
+                        text = "🎯 CPE Station (Slave)",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF059669)
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    allBridgeDevices.filter { it.macAddress.uppercase() != selectedBaseMac }.forEach { dev ->
+                        val isSel = selectedCpeMac == dev.macAddress.uppercase()
+                        Surface(
+                            onClick = { selectedCpeMac = dev.macAddress.uppercase() },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSel) Color(0xFF10B981).copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSel) Color(0xFF10B981) else Color.Transparent
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(dev.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                    Text("${dev.model} • ${dev.ipAddress}", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                if (isSel) {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (selectedBaseMac.isNotBlank() && selectedCpeMac.isNotBlank()) {
+                        onSavePair(selectedBaseMac, selectedCpeMac, title.trim())
+                    }
+                },
+                enabled = selectedBaseMac.isNotBlank() && selectedCpeMac.isNotBlank() && selectedBaseMac != selectedCpeMac,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1))
+            ) {
+                Text("Save Pair", color = Color.White)
+            }
+        },
+        dismissButton = {
+            Row {
+                if (pair.cpeDevice != null) {
+                    TextButton(
+                        onClick = {
+                            onUnpair(pair.baseDevice.macAddress, pair.cpeDevice.macAddress)
+                        }
+                    ) {
+                        Text("Unpair", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
+            }
+        }
+    )
+}
+

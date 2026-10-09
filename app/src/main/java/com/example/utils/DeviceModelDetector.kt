@@ -379,7 +379,7 @@ object DeviceModelDetector {
             modelName = "Reyee RG-RAP6262",
             shortName = "RAP6262",
             deviceType = "AX3000 Outdoor Omni AP",
-            imageResId = R.drawable.img_ruijie_rap6260,
+            imageResId = R.drawable.img_ruijie_rap6262,
             defaultPrefix = "C0:A4:76:"
         ),
         HardwarePreset(
@@ -399,7 +399,7 @@ object DeviceModelDetector {
             modelName = "Reyee RG-AirMetro550G-B",
             shortName = "AirMetro550G-B",
             deviceType = "Long-Range Base Station Bridge",
-            imageResId = R.drawable.img_ruijie_est350,
+            imageResId = R.drawable.img_ruijie_airmetro550,
             defaultPrefix = "C0:A4:76:"
         ),
         HardwarePreset(
@@ -408,7 +408,7 @@ object DeviceModelDetector {
             modelName = "Reyee RG-AirMetro460G",
             shortName = "AirMetro460G",
             deviceType = "Gigabit CPE Bridge (Up to 15km)",
-            imageResId = R.drawable.img_ruijie_est350,
+            imageResId = R.drawable.img_ruijie_airmetro460,
             defaultPrefix = "C0:A4:76:"
         ),
         HardwarePreset(
@@ -417,7 +417,7 @@ object DeviceModelDetector {
             modelName = "Reyee RG-AirMetro460F",
             shortName = "AirMetro460F",
             deviceType = "Fast Ethernet CPE Bridge",
-            imageResId = R.drawable.img_ruijie_est350,
+            imageResId = R.drawable.img_ruijie_airmetro460,
             defaultPrefix = "C0:A4:76:"
         ),
 
@@ -657,6 +657,22 @@ object DeviceModelDetector {
         return false
     }
 
+    fun isAirMetro(name: String, hostName: String = "", comment: String = "", macAddress: String = ""): Boolean {
+        val raw = "$name $hostName $comment".uppercase()
+        val norm = raw.replace(Regex("[^A-Z0-9]"), "")
+        return norm.contains("AIRMETRO") || norm.contains("550G") || norm.contains("460G") || norm.contains("460F")
+    }
+
+    fun isAirMetroOrBridge(name: String, hostName: String = "", comment: String = "", macAddress: String = ""): Boolean {
+        if (isAirMetro(name, hostName, comment, macAddress)) return true
+        val raw = "$name $hostName $comment".uppercase()
+        val norm = raw.replace(Regex("[^A-Z0-9]"), "")
+        return norm.contains("EST350") || norm.contains("EST310") || norm.contains("EST450") ||
+               norm.contains("EST330") || norm.contains("EST100") || norm.contains("EST302") ||
+               (norm.contains("BRIDGE") && !norm.contains("CLIENT")) ||
+               norm.contains("CPE210") || norm.contains("CPE510") || norm.contains("CPE710")
+    }
+
     fun detectApOrClient(
         name: String,
         hostName: String = "",
@@ -679,7 +695,9 @@ object DeviceModelDetector {
         if (norm.contains("AIRMETRO") || norm.contains("550G") || norm.contains("460G") || norm.contains("460F") ||
             norm.contains("EST") || (isRuijie && norm.contains("BRIDGE"))
         ) {
-            val isAirMetro = norm.contains("AIRMETRO") || norm.contains("550G") || norm.contains("460G") || norm.contains("460F")
+            val isAirMetro550 = norm.contains("550G")
+            val isAirMetro460 = norm.contains("460G") || norm.contains("460F")
+            val isAirMetro = norm.contains("AIRMETRO") || isAirMetro550 || isAirMetro460
             val model = when {
                 norm.contains("550G") -> "Reyee RG-AirMetro550G-B"
                 norm.contains("460F") -> "Reyee RG-AirMetro460F"
@@ -692,8 +710,12 @@ object DeviceModelDetector {
                 norm.contains("302") -> "Reyee RG-EST302"
                 else -> "Reyee RG-EST310 V2"
             }
-            val is350Class = isAirMetro || norm.contains("450G") || norm.contains("350G") || norm.contains("350")
-            val img = if (is350Class) R.drawable.img_ruijie_est350 else R.drawable.img_ruijie_est310
+            val img = when {
+                isAirMetro550 -> R.drawable.img_ruijie_airmetro550
+                isAirMetro460 || isAirMetro -> R.drawable.img_ruijie_airmetro460
+                norm.contains("450G") || norm.contains("350G") || norm.contains("350") -> R.drawable.img_ruijie_est350
+                else -> R.drawable.img_ruijie_est310
+            }
             return DeviceModelInfo(
                 brand = "Ruijie / Reyee",
                 modelName = model,
@@ -795,11 +817,16 @@ object DeviceModelDetector {
                 norm.contains("6262") -> "Reyee RG-RAP6262(H)"
                 else -> "Reyee RG-RAP6260(H)"
             }
+            val img = when {
+                isOmni -> R.drawable.img_ruijie_rap6202
+                norm.contains("6262") -> R.drawable.img_ruijie_rap6262
+                else -> R.drawable.img_ruijie_rap6260
+            }
             return DeviceModelInfo(
                 brand = "Ruijie / Reyee",
                 modelName = model,
                 deviceType = if (isOmni) "Outdoor Omnidirectional AP" else "Outdoor High-Power AP",
-                imageResId = if (isOmni) R.drawable.img_ruijie_rap6202 else R.drawable.img_ruijie_rap6260,
+                imageResId = img,
                 isApOrBridge = true
             )
         }

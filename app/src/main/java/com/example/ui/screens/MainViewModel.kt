@@ -289,7 +289,10 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
             maxOf(dbBytes, liveBytes) / (1024.0 * 1024.0)
         }
         val remainingActiveMb = if (filter == "Today" || filter == "All" || filter == "Last 7 Days" || filter == "Last 30 Days") {
-            actives.filter { !voucherCodes.contains(it.user) }.sumOf { a ->
+            actives.filter { a ->
+                !voucherCodes.contains(a.user) &&
+                !com.example.utils.DeviceModelDetector.isAirMetroOrBridge(a.user, a.hostName, a.comment, a.macAddress)
+            }.sumOf { a ->
                 val bin = a.bytesIn.toLongOrNull() ?: 0L
                 val bout = a.bytesOut.toLongOrNull() ?: 0L
                 (bin + bout) / (1024.0 * 1024.0)
