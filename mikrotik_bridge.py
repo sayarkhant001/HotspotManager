@@ -52,9 +52,9 @@ def get_vps_ssh():
     ssh.connect(VPS_HOST, username=VPS_USER, key_filename=VPS_KEY_PATH, timeout=10)
     return ssh
 
-def execute_on_vps_python(py_code):
+def execute_on_vps_python(py_code, timeout=60):
     ssh = get_vps_ssh()
-    stdin, stdout, stderr = ssh.exec_command("/opt/hotspot-cloud/venv/bin/python3 -", timeout=30)
+    stdin, stdout, stderr = ssh.exec_command("/opt/hotspot-cloud/venv/bin/python3 -", timeout=timeout)
     stdin.write(py_code)
     stdin.channel.shutdown_write()
     out = stdout.read().decode('utf-8')
@@ -263,6 +263,36 @@ else:
 """
     return execute_on_vps_python(py_code).strip()
 
+def audit_router(router_id, auto_fix=True):
+    """Audits router economic policies and power-cut persistence via VPS enforcer."""
+    py_code = f"""
+import sys, json
+sys.path.append('/opt/hotspot-cloud')
+import cloud_config_enforcer
+res = cloud_config_enforcer.audit_router_by_id({router_id}, auto_fix={auto_fix})
+print(json.dumps(res))
+"""
+    raw = execute_on_vps_python(py_code)
+    try:
+        return json.loads(raw.strip())
+    except Exception:
+        return {"raw": raw}
+
+def audit_all_routers(auto_fix=True):
+    """Audits all online routers for economic policies and power-cut persistence."""
+    py_code = f"""
+import sys, json
+sys.path.append('/opt/hotspot-cloud')
+import cloud_config_enforcer
+res = cloud_config_enforcer.audit_all_online_routers(auto_fix={auto_fix})
+print(json.dumps(res))
+"""
+    raw = execute_on_vps_python(py_code)
+    try:
+        return json.loads(raw.strip())
+    except Exception:
+        return {"raw": raw}
+
 def add_ip_binding(mac_address="", address="", binding_type="bypassed", comment="", router_id=None):
     """Adds an IP binding (bypassed, regular, blocked) to RouterOS."""
     if router_id:
@@ -417,9 +447,14 @@ def main():
     upg_p = subparsers.add_parser("upgrade", help="Download and install RouterOS update (auto-reboot)")
     upg_p.add_argument("--router", type=int, required=True, help="Router ID")
 
-    # upgrade-boot
-    boot_p = subparsers.add_parser("upgrade-boot", help="Upgrade RouterBOOT hardware firmware")
-    boot_p.add_argument("--router", type=int, required=True, help="Router ID")
+    # audit
+    aud_p = subparsers.add_parser("audit", help="Audit and enforce economic & power-cut configs on router")
+    aud_p.add_argument("--router", type=int, required=True, help="Router ID")
+    aud_p.add_argument("--no-fix", action="store_true", help="Audit only without applying fixes")
+
+    # audit-all
+    aud_all_p = subparsers.add_parser("audit-all", help="Audit and enforce configs on all online routers")
+    aud_all_p.add_argument("--no-fix", action="store_true", help="Audit only without applying fixes")
 
     args = parser.parse_args()
 
@@ -491,6 +526,14 @@ def main():
     elif args.command == "upgrade-boot":
         res = upgrade_routerboard(args.router)
         print(res)
+
+    elif args.command == "audit":
+        res = audit_router(args.router, auto_fix=(not args.no_fix))
+        print(json.dumps(res, indent=2))
+
+    elif args.command == "audit-all":
+        res = audit_all_routers(auto_fix=(not args.no_fix))
+        print(json.dumps(res, indent=2))
 
     else:
         parser.print_help()
