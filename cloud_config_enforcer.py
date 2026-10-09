@@ -37,11 +37,12 @@ def generate_enforcement_rsc(host):
 # 3. Enforce Strict Voucher Economics Across All User Profiles
 # - keepalive-timeout=2m: Detects disconnected/powered-off devices rapidly to stop usage counting
 # - idle-timeout=3m: Prevents abandoned devices from holding active leases
-# - mac-cookie-timeout=1d: Disallows weeks of free cookie roaming
+# - mac-cookie-timeout=30d: Preserves seamless auto-reconnect for up to 30-day vouchers without daily login prompts
 # - status-autorefresh=1m: Keeps browser captive portal in sync
 # - shared-users=1: Prevents voucher sharing & multi-device leeching
 # - on-logout: Flushes consumed bytes to flash
-/ip hotspot user profile set [find] keepalive-timeout=2m idle-timeout=3m mac-cookie-timeout=1d status-autorefresh=1m
+:do {{ /ip hotspot profile set [find] mac-cookie-timeout=30d http-cookie-lifetime=30d keepalive-timeout=2m }} on-error={{}}
+/ip hotspot user profile set [find] keepalive-timeout=2m idle-timeout=3m mac-cookie-timeout=30d status-autorefresh=1m
 /ip hotspot user profile set [find name!="admin" and name!="manager"] shared-users=1
 /ip hotspot user profile set [find] on-logout="/system script run hs-quota-save"
 
@@ -97,7 +98,7 @@ class RouterAuditor:
                 ssh.close()
 
                 fixes.append("Power-cut quota protection verified: 2s realtime NVRAM persistence active ('hs-quota-saver') & boot restorer ('hs-quota-restorer').")
-                fixes.append("Voucher resale economics enforced: shared-users=1, keepalive=2m, idle=3m, mac-cookie=1d, on-logout auto-flush.")
+                fixes.append("Voucher resale economics enforced: shared-users=1, keepalive=2m, idle=3m, mac-cookie=30d, on-logout auto-flush.")
                 fixes.append("Captive portal DNS integrity cleaned & cloud heartbeat scheduler verified.")
             except Exception as fe:
                 issues.append(f"Remediation connection warning: {fe}")
