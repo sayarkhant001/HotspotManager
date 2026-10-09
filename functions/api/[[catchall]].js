@@ -1,6 +1,6 @@
 export async function onRequest(context) {
   const url = new URL(context.request.url);
-  const backendUrl = "http://3.84.81.152:8750" + url.pathname + url.search;
+  const backendUrl = "http://3-84-81-152.sslip.io:8750" + url.pathname + url.search;
   
   // Handle CORS preflight
   if (context.request.method === "OPTIONS") {
@@ -16,7 +16,7 @@ export async function onRequest(context) {
   }
 
   const reqHeaders = new Headers(context.request.headers);
-  reqHeaders.set("Host", "3.84.81.152:8750");
+  reqHeaders.set("Host", "3-84-81-152.sslip.io:8750");
 
   const init = {
     method: context.request.method,
