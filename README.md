@@ -20,9 +20,18 @@
 
 ## 📱 App Download for Users
 
-- **Direct Download Link:** [HotspotManager-v1.4.9.apk](https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.4.9.apk)
-- **Version:** v1.4.9 (versionCode: 26)
-- **What's New in v1.4.9 (Latest Update):**
+- **Direct Download Link:** [HotspotManager-v1.5.4.apk](https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.5.4.apk)
+- **Version:** v1.5.4 (versionCode: 31)
+- **What's New in v1.5.4 (Latest Update):**
+  - 📡 **AirMetro PtP/PtMP Pair Mode & Bridge Link Health:**
+    - Live paired bridge monitor: Base Station (Master) ↔ Wireless Link Beam ↔ CPE Station (Slave).
+    - Custom pair editor allows naming, pairing, and unpairing bridge links (persisted across app restarts).
+    - Wireless backhaul transit data between AirMetros is automatically excluded from captive portal voucher consumption calculations.
+  - 🖼️ **Real Commercial Hardware Photos:**
+    - High-definition product photos for Ruijie Reyee AirMetro550G-B, AirMetro460G, EST350 V2, RAP62-OD, RAP72Pro-OD, RAP6260, and RAP6262.
+  - 📜 **Unbounded Fluid AP Scrolling & Responsive Layouts:**
+    - Removed previous 6-row scroll ceiling; all access points and client lists scroll freely.
+    - Added 1 / 2 / 3 column responsive toggle and quick filter chips (All, AirMetros, Wi-Fi APs, Outdoor OD, Online).
   - 🎯 **Active Sessions Quota Removal & Architectural Cleanup:**
     - The redundant and desynced `Remaining Quota` column has been completely removed from the **Active Sessions** table across both the Mobile App and the Cloud Web Dashboard.
     - **Active Sessions** now strictly and cleanly displays live session activity: real-time session traffic (`↓ Download • ↑ Upload`) and session uptime.
