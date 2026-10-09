@@ -1,0 +1,7 @@
+{
+  "versionName": "1.5.4",
+  "versionCode": 31,
+  "releaseTitle": "Hotspot Manager v1.5.4",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.5.4.apk",
+  "releaseNotes": "• AirMetro PtP/PtMP Pair Mode & bridge link health\n• Excluded wireless bridge transit data from user voucher usage\n• Real commercial hardware photos for AirMetros and outdoor APs\n• Unbounded fluid AP scrolling & 1/2/3 column responsive layouts\n• Direct IP captive portal setup without DNS conflicts"
+}

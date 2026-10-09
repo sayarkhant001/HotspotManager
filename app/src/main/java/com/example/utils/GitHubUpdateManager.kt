@@ -30,6 +30,8 @@ data class AppReleaseInfo(
 
 object GitHubUpdateManager {
 
+    private const val RAW_VERSION_URL = "https://raw.githubusercontent.com/sayarkhant001/HotspotManager/main/version.json"
+
     // Repositories to check: primary HotspotManager, with fallback
     private val REPO_URLS = listOf(
         "https://api.github.com/repos/sayarkhant001/HotspotManager/releases/latest",
@@ -37,6 +39,34 @@ object GitHubUpdateManager {
     )
 
     suspend fun checkForUpdate(): AppReleaseInfo? = withContext(Dispatchers.IO) {
+        // 1. First check rate-limit-free version.json on raw.githubusercontent.com
+        try {
+            val vUrl = URL(RAW_VERSION_URL)
+            val vConn = (vUrl.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 5000
+                readTimeout = 5000
+                setRequestProperty("User-Agent", "HotspotManager-Android/${BuildConfig.VERSION_NAME}")
+            }
+            if (vConn.responseCode == 200) {
+                val txt = vConn.inputStream.bufferedReader().use { it.readText() }
+                val j = JSONObject(txt)
+                val vName = j.optString("versionName", "").trim()
+                val currentVersion = BuildConfig.VERSION_NAME.removePrefix("v").removePrefix("V").trim()
+                val isNewer = isVersionNewer(vName, currentVersion)
+                if (isNewer) {
+                    return@withContext AppReleaseInfo(
+                        versionName = vName,
+                        releaseTitle = j.optString("releaseTitle", "Version $vName"),
+                        releaseNotes = j.optString("releaseNotes", ""),
+                        downloadUrl = j.optString("downloadUrl", ""),
+                        isNewer = true
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 2. Fall back to GitHub Releases API
         for (apiUrl in REPO_URLS) {
             try {
                 val url = URL(apiUrl)

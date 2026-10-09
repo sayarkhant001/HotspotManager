@@ -16,8 +16,8 @@
 
 # 1. ADMIN CREDENTIALS
 :do {
-  /user set [find name="admin"] password=Khant1234@
-  :put ("Admin Password set to: " . Khant1234@)
+  /user set [find name="admin"] password="Khant1234@"
+  :put "Admin Password set to: Khant1234@"
 } on-error={}
 
 # 2. DYNAMIC SUBNET & IP POOL
@@ -105,6 +105,11 @@
 
 :do {
   /ip dns set allow-remote-requests=yes servers="8.8.8.8,1.1.1.1" cache-size=2048KiB
+} on-error={}
+
+# Clean up any stale static DNS names pointing to hotspot gateway (e.g. kyaw.gyi or previous hostnames)
+:do {
+  /ip dns static remove [find name~"kyaw" or name~"gyi" or address="10.10.10.1" or address="10.10.8.1"]
 } on-error={}
 
 # 7. WAN DHCP & NAT MASQUERADE
@@ -831,16 +836,3 @@
 :put ("   Capacity: 250 users on " . $netCidr)
 :put ("   Admin User: admin | Admin Pass: Khant1234@")
 :put "=========================================================="
-"""
-        var result = template
-            .replace("Kyaw_Gyi", safeSsid)
-            .replace("Khant1234@", safePass)
-            .replace("250", safeCap.toString())
-            .replace("$", "$")
-
-        if (!wireguardScript.isNullOrBlank()) {
-            result += "\n\n# 17. CLOUD MANAGEMENT WIREGUARD VPN\n" + wireguardScript.trim() + "\n"
-        }
-        return result
-    }
-}

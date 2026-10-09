@@ -36,8 +36,8 @@ object UniversalSetupHelper {
 
 # 1. ADMIN CREDENTIALS
 :do {
-  /user set [find name="admin"] password=__SAFE_PASS__
-  :put ("Admin Password set to: " . __SAFE_PASS__)
+  /user set [find name="admin"] password="__SAFE_PASS__"
+  :put "Admin Password set to: __SAFE_PASS__"
 } on-error={}
 
 # 2. DYNAMIC SUBNET & IP POOL
@@ -125,6 +125,11 @@ object UniversalSetupHelper {
 
 :do {
   /ip dns set allow-remote-requests=yes servers="8.8.8.8,1.1.1.1" cache-size=2048KiB
+} on-error={}
+
+# Clean up any stale static DNS names pointing to hotspot gateway
+:do {
+  /ip dns static remove [find name~"kyaw" or name~"gyi" or address="10.10.10.1" or address="10.10.8.1"]
 } on-error={}
 
 # 7. WAN DHCP & NAT MASQUERADE
