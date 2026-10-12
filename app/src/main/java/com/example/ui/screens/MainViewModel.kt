@@ -126,160 +126,181 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     // Date filter for historical metrics ("Today", "Yesterday", "Last 7 Days", "Last 30 Days", "All")
     val selectedDateFilter = MutableStateFlow("Today")
 
-    val filteredSessions: StateFlow<List<RouterSessionLog>> = combine(
-        allSessions,
-        selectedDateFilter
-    ) { sessions, filter ->
-        val myanmarTz = TimeZone.getTimeZone("Asia/Yangon")
-        val cal = Calendar.getInstance(myanmarTz)
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
-            timeZone = myanmarTz
+    // Router MMT Clock offset in milliseconds (difference between router clock and phone clock)
+    val routerClockOffsetMillis = MutableStateFlow(0L)
+
+    data class MmtDateBoundaries(
+        val todayStart: Long,
+        val todayEnd: Long,
+        val yesterdayStart: Long,
+        val yesterdayEnd: Long,
+        val sevenDaysAgo: Long,
+        val thirtyDaysAgo: Long,
+        val todayKey: String,
+        val yesterdayKey: String
+    )
+
+    fun getEffectiveMmtTimeMillis(): Long {
+        val offset = routerClockOffsetMillis.value
+        val routerTs = routerStats.value?.routerTimeMillis ?: 0L
+        return if (routerTs > 0L) {
+            System.currentTimeMillis() + offset
+        } else {
+            System.currentTimeMillis()
         }
-        val todayKey = dateFormat.format(cal.time)
+    }
 
-        cal.add(Calendar.DAY_OF_YEAR, -1)
-        val yesterdayKey = dateFormat.format(cal.time)
-
-        val cal7 = Calendar.getInstance(myanmarTz).apply {
-            add(Calendar.DAY_OF_YEAR, -7)
-        }
-        val sevenDaysAgoTime = cal7.timeInMillis
-
-        val cal30 = Calendar.getInstance(myanmarTz).apply {
-            add(Calendar.DAY_OF_YEAR, -30)
-        }
-        val thirtyDaysAgoTime = cal30.timeInMillis
-
-        val distinctSessions = sessions.distinctBy { Pair(it.macAddress, it.dateKey) }
-        when (filter) {
-            "Today" -> distinctSessions.filter { it.dateKey == todayKey }
-            "Yesterday" -> distinctSessions.filter { it.dateKey == yesterdayKey }
-            "Last 7 Days" -> distinctSessions.filter { it.sessionStartTime >= sevenDaysAgoTime }
-            "Last 30 Days" -> distinctSessions.filter { it.sessionStartTime >= thirtyDaysAgoTime }
-            else -> distinctSessions
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // Activated voucher sales amount strictly for used vouchers within date range
-    val activatedVoucherSales: StateFlow<Double> = combine(
-        vouchers,
-        selectedDateFilter,
-        activeUsers
-    ) { list, filter, actives ->
-        val activeCodes = actives.map { it.user }.toSet()
+    fun getMmtDateBoundaries(effectiveMillis: Long): MmtDateBoundaries {
         val myanmarTz = TimeZone.getTimeZone("Asia/Yangon")
         val cal = Calendar.getInstance(myanmarTz).apply {
+            timeInMillis = effectiveMillis
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
         val todayStart = cal.timeInMillis
+        val todayEnd = todayStart + (24 * 3600 * 1000L) - 1
 
         cal.add(Calendar.DAY_OF_YEAR, -1)
         val yesterdayStart = cal.timeInMillis
+        val yesterdayEnd = todayStart - 1
 
         val cal7 = Calendar.getInstance(myanmarTz).apply {
+            timeInMillis = effectiveMillis
             add(Calendar.DAY_OF_YEAR, -7)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
         }
         val sevenDaysAgo = cal7.timeInMillis
 
         val cal30 = Calendar.getInstance(myanmarTz).apply {
+            timeInMillis = effectiveMillis
             add(Calendar.DAY_OF_YEAR, -30)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
         }
         val thirtyDaysAgo = cal30.timeInMillis
 
-        val distinctVouchers = list.distinctBy { it.code }
-        val activated = distinctVouchers.filter { v ->
-            activeCodes.contains(v.code) || activeCodes.contains(v.username) ||
-            v.activatedAt != null || (v.isUsed && v.generatedAt > 0L)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = myanmarTz }
+        cal.timeInMillis = effectiveMillis
+        val todayKey = dateFormat.format(cal.time)
+        cal.add(Calendar.DAY_OF_YEAR, -1)
+        val yesterdayKey = dateFormat.format(cal.time)
+
+        return MmtDateBoundaries(
+            todayStart = todayStart,
+            todayEnd = todayEnd,
+            yesterdayStart = yesterdayStart,
+            yesterdayEnd = yesterdayEnd,
+            sevenDaysAgo = sevenDaysAgo,
+            thirtyDaysAgo = thirtyDaysAgo,
+            todayKey = todayKey,
+            yesterdayKey = yesterdayKey
+        )
+    }
+
+    val filteredSessions: StateFlow<List<RouterSessionLog>> = combine(
+        allSessions,
+        selectedDateFilter,
+        routerClockOffsetMillis
+    ) { sessions, filter, _ ->
+        val bounds = getMmtDateBoundaries(getEffectiveMmtTimeMillis())
+        val distinctSessions = sessions.distinctBy { Pair(it.macAddress, it.dateKey) }
+        when (filter) {
+            "Today" -> distinctSessions.filter { it.dateKey == bounds.todayKey }
+            "Yesterday" -> distinctSessions.filter { it.dateKey == bounds.yesterdayKey }
+            "Last 7 Days" -> distinctSessions.filter { it.sessionStartTime >= bounds.sevenDaysAgo }
+            "Last 30 Days" -> distinctSessions.filter { it.sessionStartTime >= bounds.thirtyDaysAgo }
+            else -> distinctSessions
         }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Activated voucher sales amount strictly for used vouchers on first activation
+    val activatedVoucherSales: StateFlow<Double> = combine(
+        vouchers,
+        selectedDateFilter,
+        routerClockOffsetMillis
+    ) { list, filter, _ ->
+        val bounds = getMmtDateBoundaries(getEffectiveMmtTimeMillis())
+        val distinctVouchers = list.distinctBy { it.code }
+
+        // A voucher represents an actual sale strictly when it has been activated.
+        // Unused vouchers in inventory are not sales.
+        val activated = distinctVouchers.filter { v ->
+            v.activatedAt != null || (v.isUsed && (v.bytesIn + v.bytesOut > 0L || v.generatedAt > 0L))
+        }
+
         val filtered = when (filter) {
             "Today" -> activated.filter { v ->
-                val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (isActiveNow) System.currentTimeMillis() else v.generatedAt)
-                isActiveNow || act >= todayStart
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                act in bounds.todayStart..bounds.todayEnd
             }
             "Yesterday" -> activated.filter { v ->
-                val act = v.activatedAt ?: v.generatedAt
-                act in yesterdayStart until todayStart
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                act in bounds.yesterdayStart..bounds.yesterdayEnd
             }
             "Last 7 Days" -> activated.filter { v ->
-                val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (isActiveNow) System.currentTimeMillis() else v.generatedAt)
-                isActiveNow || act >= sevenDaysAgo
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                act in bounds.sevenDaysAgo..bounds.todayEnd
             }
             "Last 30 Days" -> activated.filter { v ->
-                val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (isActiveNow) System.currentTimeMillis() else v.generatedAt)
-                isActiveNow || act >= thirtyDaysAgo
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                act in bounds.thirtyDaysAgo..bounds.todayEnd
             }
             else -> activated
         }
         filtered.sumOf { it.price }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
-    // Data usage (in MB) strictly consumed by vouchers active/activated within selected date range
+    // Data usage (in MB) strictly consumed by vouchers within selected date range
     val dateFilteredVoucherDataMb: StateFlow<Double> = combine(
         vouchers,
         selectedDateFilter,
-        activeUsers
-    ) { list, filter, actives ->
+        activeUsers,
+        routerClockOffsetMillis
+    ) { list, filter, actives, _ ->
+        val bounds = getMmtDateBoundaries(getEffectiveMmtTimeMillis())
         val activeCodes = actives.map { it.user }.toSet()
-        val myanmarTz = TimeZone.getTimeZone("Asia/Yangon")
-        val cal = Calendar.getInstance(myanmarTz).apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
+        val activeBytesMap = actives.associate { a ->
+            val bin = a.bytesIn.toLongOrNull() ?: 0L
+            val bout = a.bytesOut.toLongOrNull() ?: 0L
+            a.user to (bin + bout)
         }
-        val todayStart = cal.timeInMillis
-
-        cal.add(Calendar.DAY_OF_YEAR, -1)
-        val yesterdayStart = cal.timeInMillis
-
-        val cal7 = Calendar.getInstance(myanmarTz).apply {
-            add(Calendar.DAY_OF_YEAR, -7)
-        }
-        val sevenDaysAgo = cal7.timeInMillis
-
-        val cal30 = Calendar.getInstance(myanmarTz).apply {
-            add(Calendar.DAY_OF_YEAR, -30)
-        }
-        val thirtyDaysAgo = cal30.timeInMillis
 
         val distinctVouchers = list.distinctBy { it.code }
         val activated = distinctVouchers.filter { v ->
             activeCodes.contains(v.code) || activeCodes.contains(v.username) ||
             v.activatedAt != null || (v.isUsed && v.generatedAt > 0L) || (v.bytesIn + v.bytesOut) > 0L
         }
+
         val filtered = when (filter) {
             "Today" -> activated.filter { v ->
                 val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (isActiveNow) System.currentTimeMillis() else v.generatedAt)
-                isActiveNow || act >= todayStart
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                isActiveNow || (act in bounds.todayStart..bounds.todayEnd)
             }
             "Yesterday" -> activated.filter { v ->
-                val act = v.activatedAt ?: v.generatedAt
-                act in yesterdayStart until todayStart
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                act in bounds.yesterdayStart..bounds.yesterdayEnd
             }
             "Last 7 Days" -> activated.filter { v ->
                 val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (isActiveNow) System.currentTimeMillis() else v.generatedAt)
-                isActiveNow || act >= sevenDaysAgo
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                isActiveNow || (act in bounds.sevenDaysAgo..bounds.todayEnd)
             }
             "Last 30 Days" -> activated.filter { v ->
                 val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (isActiveNow) System.currentTimeMillis() else v.generatedAt)
-                isActiveNow || act >= thirtyDaysAgo
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                isActiveNow || (act in bounds.thirtyDaysAgo..bounds.todayEnd)
             }
             else -> activated
         }
-        val activeBytesMap = actives.associate { a ->
-            val bin = a.bytesIn.toLongOrNull() ?: 0L
-            val bout = a.bytesOut.toLongOrNull() ?: 0L
-            a.user to (bin + bout)
-        }
+
         val voucherCodes = mutableSetOf<String>()
         val voucherMb = filtered.sumOf { v ->
             voucherCodes.add(v.code)
@@ -288,6 +309,7 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
             val dbBytes = v.bytesIn + v.bytesOut
             maxOf(dbBytes, liveBytes) / (1024.0 * 1024.0)
         }
+
         val remainingActiveMb = if (filter == "Today" || filter == "All" || filter == "Last 7 Days" || filter == "Last 30 Days") {
             actives.filter { a ->
                 !voucherCodes.contains(a.user) &&
@@ -298,73 +320,40 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 (bin + bout) / (1024.0 * 1024.0)
             }
         } else 0.0
+
         voucherMb + remainingActiveMb
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
     val dateFilteredVoucherCount: StateFlow<Int> = combine(
         vouchers,
         selectedDateFilter,
-        activeUsers
-    ) { list, filter, actives ->
-        val activeCodes = actives.map { it.user }.toSet()
-        val myanmarTz = TimeZone.getTimeZone("Asia/Yangon")
-        val cal = Calendar.getInstance(myanmarTz).apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        val todayStart = cal.timeInMillis
-
-        cal.add(Calendar.DAY_OF_YEAR, -1)
-        val yesterdayStart = cal.timeInMillis
-
-        val cal7 = Calendar.getInstance(myanmarTz).apply {
-            add(Calendar.DAY_OF_YEAR, -7)
-        }
-        val sevenDaysAgo = cal7.timeInMillis
-
-        val cal30 = Calendar.getInstance(myanmarTz).apply {
-            add(Calendar.DAY_OF_YEAR, -30)
-        }
-        val thirtyDaysAgo = cal30.timeInMillis
-
+        routerClockOffsetMillis
+    ) { list, filter, _ ->
+        val bounds = getMmtDateBoundaries(getEffectiveMmtTimeMillis())
         val distinctVouchers = list.distinctBy { it.code }
         val activated = distinctVouchers.filter { v ->
-            activeCodes.contains(v.code) || activeCodes.contains(v.username) ||
-            v.activatedAt != null || (v.isUsed && v.generatedAt > 0L) || (v.bytesIn + v.bytesOut) > 0L
+            v.activatedAt != null || (v.isUsed && (v.bytesIn + v.bytesOut > 0L || v.generatedAt > 0L))
         }
         val filtered = when (filter) {
             "Today" -> activated.filter { v ->
-                val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (isActiveNow) System.currentTimeMillis() else v.generatedAt)
-                isActiveNow || act >= todayStart
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                act in bounds.todayStart..bounds.todayEnd
             }
             "Yesterday" -> activated.filter { v ->
-                val act = v.activatedAt ?: v.generatedAt
-                act in yesterdayStart until todayStart
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                act in bounds.yesterdayStart..bounds.yesterdayEnd
             }
             "Last 7 Days" -> activated.filter { v ->
-                val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (isActiveNow) System.currentTimeMillis() else v.generatedAt)
-                isActiveNow || act >= sevenDaysAgo
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                act in bounds.sevenDaysAgo..bounds.todayEnd
             }
             "Last 30 Days" -> activated.filter { v ->
-                val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (isActiveNow) System.currentTimeMillis() else v.generatedAt)
-                isActiveNow || act >= thirtyDaysAgo
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                act in bounds.thirtyDaysAgo..bounds.todayEnd
             }
             else -> activated
         }
-        val voucherCodes = mutableSetOf<String>()
-        filtered.forEach { v ->
-            voucherCodes.add(v.code)
-            voucherCodes.add(v.username)
-        }
-        val uncountedActives = if (filter == "Today" || filter == "All" || filter == "Last 7 Days" || filter == "Last 30 Days") {
-            actives.count { !voucherCodes.contains(it.user) }
-        } else 0
-        filtered.size + uncountedActives
+        filtered.size
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val isSyncingVouchers = MutableStateFlow(false)
@@ -886,6 +875,9 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 val stats = repository.getRouterStats()
                 if (stats != null) {
                     routerStats.value = stats
+                    if (stats.routerTimeMillis > 0L) {
+                        routerClockOffsetMillis.value = stats.routerTimeMillis - System.currentTimeMillis()
+                    }
                     val loadFloat = stats.cpuLoad.replace("%", "").trim().toFloatOrNull() ?: 0f
                     val cur = cpuLoadHistory.value.toMutableList()
                     cur.add(loadFloat)

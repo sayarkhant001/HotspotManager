@@ -3,7 +3,7 @@
 
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <title>Yadanar Tun WiFi – အခြေအနေ</title>
+  <title>Kyaw Gyi WiFi – အခြေအနေ</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
@@ -27,16 +27,16 @@
   <div class="portal-container">
     <div class="glass-card" style="text-align: center;">
 
-      <!-- Brand Header -->
+      <!-- Brand Header: Kyaw Gyi WiFi -->
       <div class="brand-header" style="margin-bottom: 18px;">
-        <h1 class="brand-title">ရတနာထွန်း WiFi</h1>
+        <h1 class="brand-title">ကျော်ကြီး WiFi</h1>
         <p class="brand-sub">
           <span class="live-dot"></span>
           အင်တာနက် ချိတ်ဆက်ထားသည်
         </p>
       </div>
 
-      <!-- Active User Card -->
+      <!-- Active User Card with Dynamic Profile Badge -->
       <div
         style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 12px 16px; margin-bottom: 16px; text-align: left; display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 12px;">
@@ -52,40 +52,37 @@
             <div style="font-size: 15px; font-weight: 700; color: #FFFFFF;" id="display_username">$(username)</div>
           </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <span class="live-dot" style="margin: 0;"></span>
-          <span style="font-size: 11.5px; font-weight: 700; color: #10B981;">အသုံးပြုနေဆဲ</span>
+        <div id="badge_profile_plan"
+          style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 10px; padding: 5px 11px; text-align: right;">
+          <div style="font-size: 9.5px; color: #6EE7B7; font-weight: 600; text-transform: uppercase;">ပက်ကေ့ဂျ်</div>
+          <div style="font-size: 12.5px; font-weight: 700; color: #A7F3D0;" id="profile_plan_name">3 GB (1 Day)</div>
         </div>
       </div>
 
-      <!-- Live Session Stats 2x2 -->
+      <!-- Live Session Stats 2x2 Grid -->
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;">
         <div
           style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; text-align: left;">
           <div style="font-size: 11px; color: var(--text-dim);">အသုံးပြုချိန်</div>
-          <div style="font-size: 14px; font-weight: 700; color: #10B981; margin-top: 2px;" id="stat_uptime">$(uptime)
-          </div>
+          <div style="font-size: 14px; font-weight: 700; color: #10B981; margin-top: 2px;" id="stat_uptime">$(uptime)</div>
         </div>
 
         <div
           style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; text-align: left;">
           <div style="font-size: 11px; color: var(--text-dim);">ကျန်ရှိချိန်</div>
-          <div style="font-size: 14px; font-weight: 700; color: #F59E0B; margin-top: 2px;" id="stat_timeleft">
-            $(session-time-left)</div>
+          <div style="font-size: 14px; font-weight: 700; color: #F59E0B; margin-top: 2px;" id="stat_timeleft">$(session-time-left)</div>
         </div>
 
         <div
           style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; text-align: left;">
           <div style="font-size: 11px; color: var(--text-dim);">အသုံးပြုပြီး</div>
-          <div style="font-size: 14px; font-weight: 700; color: #38BDF8; margin-top: 2px;" id="stat_data_used">
-            $(bytes-in-nice) / $(bytes-out-nice)</div>
+          <div style="font-size: 14px; font-weight: 700; color: #38BDF8; margin-top: 2px;" id="stat_data_used">$(bytes-in-nice) / $(bytes-out-nice)</div>
         </div>
 
         <div
           style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; text-align: left;">
           <div style="font-size: 11px; color: var(--text-dim);">ကျန်ရှိဒေတာ</div>
-          <div style="font-size: 14px; font-weight: 700; color: #A7F3D0; margin-top: 2px;" id="stat_data_remaining">
-            $(remain-bytes-total)</div>
+          <div style="font-size: 14px; font-weight: 700; color: #A7F3D0; margin-top: 2px;" id="stat_data_remaining">$(remain-bytes-total)</div>
         </div>
       </div>
 
@@ -115,38 +112,148 @@
         </button>
       </form>
 
+      <!-- Status Check Info Link -->
       <div
         style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 10px 14px; margin-top: 14px; text-align: left; font-size: 11.5px; color: #CBD5E1; line-height: 1.5;">
-        လက်ကျန်အချိန်နှင့် ဒေတာကို <strong style="color: #FBBF24;">http://10.10.10.1</strong> တွင် အချိန်မရွေး
-        စစ်ဆေးနိုင်ပါသည်။
+        လက်ကျန်အချိန်နှင့် ဒေတာကို <strong style="color: #FBBF24;">http://10.10.10.1</strong> တွင် အချိန်မရွေး စစ်ဆေးနိုင်ပါသည်။
       </div>
 
       <p class="footer-copy">
-        Yadanar Tun WiFi &bull; မြန်နှုန်းမြင့် ကွန်ရက် ဝန်ဆောင်မှု
+        Kyaw Gyi WiFi &bull; High Speed Internet
       </p>
 
     </div>
   </div>
 
-  <script src="js/main.js"></script>
   <script>
     (function () {
+      // 1. Session Persistence
       var u = "$(username)";
       if (u && u.indexOf('$(') === -1 && u !== '') {
         try {
-          localStorage.setItem('yadanartun_wifi_voucher', u.trim().toUpperCase());
-          localStorage.setItem('yadanartun_wifi_voucher_time', Date.now().toString());
-          localStorage.setItem('yadanartun_wifi_auth_type', 'voucher');
+          localStorage.setItem('kyawgyi_wifi_voucher', u.trim().toUpperCase());
+          localStorage.setItem('kyawgyi_wifi_voucher_time', Date.now().toString());
+          localStorage.setItem('kyawgyi_wifi_auth_type', 'voucher');
         } catch (e) { }
       }
 
-      function formatTimeLeft(val) {
-        if (!val || val.indexOf('$(') !== -1 || val.toLowerCase() === 'none' || val === '0s' || val === '0') {
+      // 2. Parse Byte Values cleanly
+      function parseBytes(val) {
+        if (!val || val.indexOf('$(') !== -1) return 0;
+        var s = String(val).trim().replace(/,/g, '');
+        // RouterOS notation: 'B' = Billion bytes / Gigabytes
+        if (/^[0-9]+(?:\.[0-9]+)?\s*b$/i.test(s)) {
+          var n = parseFloat(s);
+          return isNaN(n) ? 0 : n * 1073741824;
+        }
+        if (/\b(?:gb|gib)\b/i.test(s)) {
+          var n = parseFloat(s);
+          return isNaN(n) ? 0 : n * 1073741824;
+        }
+        if (/\b(?:mb|mib)\b/i.test(s)) {
+          var n = parseFloat(s);
+          return isNaN(n) ? 0 : n * 1048576;
+        }
+        if (/\b(?:kb|kib)\b/i.test(s)) {
+          var n = parseFloat(s);
+          return isNaN(n) ? 0 : n * 1024;
+        }
+        var n = parseFloat(s);
+        return isNaN(n) ? 0 : n;
+      }
+
+      // 3. Robust Data Formatter (Fixes '2.91 B' -> '2.91 GB')
+      function formatDataBytes(val) {
+        if (!val || val.indexOf('$(') !== -1 || val.toLowerCase() === 'none' || val.toLowerCase() === 'unlimited') {
           return 'ကန့်သတ်မထားပါ (Unlimited)';
         }
+        var s = String(val).trim().replace(/,/g, '');
+
+        // 1. Direct Regex conversion for RouterOS 'B' notation (Billion bytes = GB)
+        // e.g. "2.91 B", "2.91b", "3 B" -> "2.91 GB", "3.00 GB"
+        if (/^[0-9]+(?:\.[0-9]+)?\s*b$/i.test(s)) {
+          var n = parseFloat(s);
+          if (!isNaN(n)) {
+            return (n < 10 ? n.toFixed(2) : n.toFixed(1)) + ' GB';
+          }
+        }
+
+        // 2. Explicit GB / GiB check
+        if (/\b(?:gb|gib)\b/i.test(s)) {
+          var n = parseFloat(s);
+          if (!isNaN(n)) return (n < 10 ? n.toFixed(2) : n.toFixed(1)) + ' GB';
+          return s;
+        }
+
+        // 3. MB / MiB check
+        if (/\b(?:mb|mib)\b/i.test(s)) {
+          var n = parseFloat(s);
+          if (!isNaN(n)) {
+            if (n >= 1024) return (n / 1024).toFixed(2) + ' GB';
+            return Math.round(n) + ' MB';
+          }
+          return s;
+        }
+
+        // 4. KB / KiB check
+        if (/\b(?:kb|kib)\b/i.test(s)) {
+          var n = parseFloat(s);
+          if (!isNaN(n)) {
+            var mb = n / 1024;
+            return mb >= 1 ? mb.toFixed(1) + ' MB' : '< 1 MB';
+          }
+          return s;
+        }
+
+        // 5. Raw numeric bytes (e.g. 3221225472 or 95420416)
+        var num = parseFloat(s);
+        if (!isNaN(num)) {
+          if (num >= 1073741824) {
+            return (num / 1073741824).toFixed(2) + ' GB';
+          } else if (num >= 1048576) {
+            var mb = num / 1048576;
+            return (mb >= 10 ? Math.round(mb) : mb.toFixed(1)) + ' MB';
+          } else if (num >= 1024) {
+            return Math.round(num / 1024) + ' KB';
+          } else if (num > 0) {
+            return '< 1 MB';
+          } else {
+            return '0 MB';
+          }
+        }
+
+        return s;
+      }
+
+      // 4. Format Used Bytes Cleanly
+      function formatUsedBytes(rawIn, rawOut, niceFallback) {
+        var inB = parseBytes(rawIn);
+        var outB = parseBytes(rawOut);
+        var total = inB + outB;
+        if (total > 0) {
+          return formatDataBytes(total.toString());
+        }
+        if (niceFallback && niceFallback.indexOf('$(') === -1) {
+          var parts = niceFallback.split('/');
+          if (parts.length === 2) {
+            var p1 = parseBytes(parts[0]);
+            var p2 = parseBytes(parts[1]);
+            var sum = p1 + p2;
+            if (sum > 0) return formatDataBytes(sum.toString());
+            return formatDataBytes(parts[1].trim()) || formatDataBytes(parts[0].trim());
+          }
+          return formatDataBytes(niceFallback);
+        }
+        return '0 MB';
+      }
+
+      // 5. Format Remaining Time
+      function formatTimeLeft(val) {
+        if (!val || val.indexOf('$(') !== -1 || val.toLowerCase() === 'none' || val === '0s' || val === '0') {
+          return '24h (၁ ရက်)';
+        }
         var s = String(val).trim();
-        // Convert format like 23h5m4s to 23h 5m
-        var m = s.match(/(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/);
+        var m = s.match(/(?:(\d+)\s*w)?\s*(?:(\d+)\s*d)?\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?/i);
         if (m) {
           var w = m[1] ? m[1] + 'w ' : '';
           var d = m[2] ? m[2] + 'd ' : '';
@@ -158,85 +265,92 @@
         return s;
       }
 
-      function formatDataBytes(val) {
-        if (!val || val.indexOf('$(') !== -1 || val.toLowerCase() === 'none' || val.toLowerCase() === 'unlimited') {
-          return 'ကန့်သတ်မထားပါ (Unlimited)';
-        }
-        var s = String(val).trim().replace(/,/g, '');
-        var m = s.match(/([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)?/);
-        if (!m) return s;
+      // 6. Dynamic Package Badge Resolver
+      function updatePlanBadge(uName, usedBytes, remBytes) {
+        var el = document.getElementById('profile_plan_name');
+        if (!el) return;
 
-        var num = parseFloat(m[1]);
-        if (isNaN(num)) return s;
-        if (num <= 0) return '0 MB';
+        var totalBytes = usedBytes + remBytes;
+        var totalMb = totalBytes / 1048576;
+        var u = String(uName || '').toUpperCase();
 
-        var unit = (m[2] || '').toUpperCase();
+        // Check if username has explicit tier code
+        if (u.indexOf('40G') !== -1) { el.textContent = '40G (30 Day)'; return; }
+        if (u.indexOf('30D') !== -1 || u.indexOf('MONTH') !== -1) { el.textContent = '30Day (30 GB)'; return; }
+        if (u.indexOf('750') !== -1) { el.textContent = '500 Ks (750 MB)'; return; }
+        if (u.indexOf('1.7G') !== -1) { el.textContent = '1000 Ks (1.7 GB)'; return; }
 
-        // 1. If RouterOS outputs e.g. "2.1 B", "2.1b", "2.1 GiB", "2.1 GB"
-        // (A user never uses literally 2.1 single bytes; B here denotes Gigabytes/Billion bytes)
-        if ((unit === 'B' && num < 100) || unit.indexOf('G') !== -1) {
-          return num.toFixed(2) + ' GB';
+        // Accurately map by total data allowance
+        if (totalMb >= 35000) {
+          el.textContent = '40G (30 Day)';
+        } else if (totalMb >= 25000) {
+          el.textContent = '30Day (30 GB)';
+        } else if (totalMb >= 18000) {
+          el.textContent = '20 GB Plan';
+        } else if (totalMb >= 12000) {
+          el.textContent = '15 GB Plan';
+        } else if (totalMb >= 8500) {
+          el.textContent = '10 GB Plan';
+        } else if (totalMb >= 6000) {
+          el.textContent = '7 GB Plan';
+        } else if (totalMb >= 4500) {
+          el.textContent = '5 GB Plan';
+        } else if (totalMb >= 3500) {
+          el.textContent = '4 GB Plan';
+        } else if (totalMb >= 2400) {
+          el.textContent = '3 GB (1 Day)';
+        } else if (totalMb >= 1800) {
+          el.textContent = '1000 Ks (2 GB)';
+        } else if (totalMb >= 1300) {
+          el.textContent = '1000 Ks (1.7 GB)';
+        } else if (totalMb >= 850) {
+          el.textContent = '500 Ks (1 GB)';
+        } else if (totalMb >= 400) {
+          el.textContent = '500 Ks (750 MB)';
+        } else if (totalMb >= 30) {
+          el.textContent = 'Test Plan (50 MB)';
+        } else {
+          el.textContent = 'Standard Plan';
         }
-        if (unit.indexOf('M') !== -1) {
-          if (num >= 1024) return (num / 1024).toFixed(2) + ' GB';
-          return Math.round(num) + ' MB';
-        }
-        if (unit.indexOf('K') !== -1) {
-          var mb = num / 1024;
-          return mb >= 1 ? (Math.round(mb * 10) / 10).toFixed(1) + ' MB' : '< 1 MB';
-        }
-
-        // 2. If raw bytes number without unit prefix (e.g. 2147483648 or 786432000):
-        if (num >= 1073741824) {
-          return (num / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-        } else if (num >= 1048576) {
-          var mb = num / (1024 * 1024);
-          return (mb >= 10 ? Math.round(mb) : mb.toFixed(1)) + ' MB';
-        } else if (num >= 1024) {
-          return Math.round(num / 1024) + ' KB';
-        } else if (num > 0) {
-          return Math.round(num) + ' B';
-        }
-
-        return num + ' MB';
       }
 
-      function formatUsedBytes(rawIn, rawOut, niceFallback) {
-        var inNum = parseFloat(String(rawIn).replace(/,/g, '')) || 0;
-        var outNum = parseFloat(String(rawOut).replace(/,/g, '')) || 0;
-        var total = inNum + outNum;
-        if (total > 0) {
-          return formatDataBytes(total.toString());
+      // 7. Apply All Formatters
+      function applyFormatters() {
+        var rawIn = document.getElementById('raw_bytes_in') ? document.getElementById('raw_bytes_in').textContent : '0';
+        var rawOut = document.getElementById('raw_bytes_out') ? document.getElementById('raw_bytes_out').textContent : '0';
+        var uNameEl = document.getElementById('display_username');
+        var uName = uNameEl ? uNameEl.textContent.trim() : '';
+
+        // Format Used Data
+        var usedEl = document.getElementById('stat_data_used');
+        if (usedEl) {
+          usedEl.textContent = formatUsedBytes(rawIn, rawOut, usedEl.textContent);
         }
-        if (niceFallback && niceFallback.indexOf('$(') === -1) {
-          var parts = niceFallback.split('/');
-          if (parts.length === 2) {
-            var p1 = formatDataBytes(parts[0].trim());
-            var p2 = formatDataBytes(parts[1].trim());
-            return p1 + ' / ' + p2;
-          }
-          return formatDataBytes(niceFallback);
+
+        // Format Remaining Data
+        var remEl = document.getElementById('stat_data_remaining');
+        if (remEl) {
+          remEl.textContent = formatDataBytes(remEl.textContent);
         }
-        return '0 MB';
+
+        // Format Remaining Time
+        var timeEl = document.getElementById('stat_timeleft');
+        if (timeEl) {
+          timeEl.textContent = formatTimeLeft(timeEl.textContent);
+        }
+
+        // Calculate and Update Package Badge
+        var usedBytes = (parseBytes(rawIn) + parseBytes(rawOut)) || (usedEl ? parseBytes(usedEl.textContent) : 0);
+        var remBytes = remEl ? parseBytes(remEl.textContent) : 0;
+        updatePlanBadge(uName, usedBytes, remBytes);
       }
 
-      var rawIn = document.getElementById('raw_bytes_in') ? document.getElementById('raw_bytes_in').textContent : '0';
-      var rawOut = document.getElementById('raw_bytes_out') ? document.getElementById('raw_bytes_out').textContent : '0';
-      
-      var usedEl = document.getElementById('stat_data_used');
-      if (usedEl) {
-        usedEl.textContent = formatUsedBytes(rawIn, rawOut, usedEl.textContent);
+      // Execute immediately and on DOM events
+      applyFormatters();
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applyFormatters);
       }
-
-      var remEl = document.getElementById('stat_data_remaining');
-      if (remEl) {
-        remEl.textContent = formatDataBytes(remEl.textContent);
-      }
-
-      var timeEl = document.getElementById('stat_timeleft');
-      if (timeEl) {
-        timeEl.textContent = formatTimeLeft(timeEl.textContent);
-      }
+      window.addEventListener('load', applyFormatters);
     })();
   </script>
 </body>

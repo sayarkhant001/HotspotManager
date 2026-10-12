@@ -426,6 +426,30 @@ class AppRepository(
                     val t = dateFormat.parse(rawDate)?.time
                     if (t != null) return t
                 } catch (_: Exception) {}
+
+                val spaceIdx = rawDate.indexOf(' ')
+                val dPart = if (spaceIdx > 0) rawDate.substring(0, spaceIdx).trim() else rawDate
+                val tPart = if (spaceIdx > 0) rawDate.substring(spaceIdx + 1).trim() else ""
+                val p = dPart.split('/')
+                if (p.size == 3) {
+                    val mName = p[0].lowercase(Locale.US)
+                    val mNum = when (mName) {
+                        "jan" -> 1; "feb" -> 2; "mar" -> 3; "apr" -> 4; "may" -> 5; "jun" -> 6
+                        "jul" -> 7; "aug" -> 8; "sep" -> 9; "oct" -> 10; "nov" -> 11; "dec" -> 12
+                        else -> 1
+                    }
+                    val d = p[1].toIntOrNull() ?: 1
+                    val y = p[2].toIntOrNull() ?: 2026
+                    val tp = tPart.split(':')
+                    val h = tp.getOrNull(0)?.toIntOrNull() ?: 0
+                    val mi = tp.getOrNull(1)?.toIntOrNull() ?: 0
+                    val s = tp.getOrNull(2)?.toIntOrNull() ?: 0
+                    val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Yangon")).apply {
+                        set(y, mNum - 1, d, h, mi, s)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    return cal.timeInMillis
+                }
             }
             return null
         }
@@ -775,6 +799,30 @@ class AppRepository(
                 }.parse(rawDate)?.time
                 if (t != null) return t
             } catch (_: Exception) {}
+
+            val spaceIdx = rawDate.indexOf(' ')
+            val dPart = if (spaceIdx > 0) rawDate.substring(0, spaceIdx).trim() else rawDate
+            val tPart = if (spaceIdx > 0) rawDate.substring(spaceIdx + 1).trim() else ""
+            val p = dPart.split('/')
+            if (p.size == 3) {
+                val mName = p[0].lowercase(Locale.US)
+                val mNum = when (mName) {
+                    "jan" -> 1; "feb" -> 2; "mar" -> 3; "apr" -> 4; "may" -> 5; "jun" -> 6
+                    "jul" -> 7; "aug" -> 8; "sep" -> 9; "oct" -> 10; "nov" -> 11; "dec" -> 12
+                    else -> 1
+                }
+                val d = p[1].toIntOrNull() ?: 1
+                val y = p[2].toIntOrNull() ?: 2026
+                val tp = tPart.split(':')
+                val h = tp.getOrNull(0)?.toIntOrNull() ?: 0
+                val mi = tp.getOrNull(1)?.toIntOrNull() ?: 0
+                val s = tp.getOrNull(2)?.toIntOrNull() ?: 0
+                val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Yangon")).apply {
+                    set(y, mNum - 1, d, h, mi, s)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                return cal.timeInMillis
+            }
         }
         return null
     }

@@ -258,6 +258,17 @@ object UniversalSetupHelper {
 };
 
 :local uProf [/ip hotspot user get @DOL@uObj profile];
+
+# STRICT 1-DAY EXCLUSION: If 1-day profile has old usage [BASE:] or was marked [EXPIRED:], cut off immediately
+:if (@DOL@uProf = "1000Ks" or @DOL@uProf = "500Ks" or @DOL@uProf = "1GB_1H" or @DOL@uProf = "2GB" or @DOL@uProf = "4GB" or @DOL@uProf = "default" or @DOL@uProf = "test") do={
+  :if ([:find @DOL@curComm "[BASE:"] >= 0 or [:find @DOL@curComm "[EXPIRED:"] >= 0) do={
+    :log warning ("Hotspot: Overdue 1-day voucher " . @DOL@u . " attempted login! Kicking.");
+    /ip hotspot active remove [find user=@DOL@u];
+    /ip hotspot cookie remove [find user=@DOL@u];
+    /ip hotspot user set @DOL@uObj disabled=yes limit-bytes-total=1 limit-uptime=1s;
+    :return "";
+  };
+};
 :local curLim [/ip hotspot user get @DOL@uObj limit-bytes-total];
 :local curUp [/ip hotspot user get @DOL@uObj limit-uptime];
 

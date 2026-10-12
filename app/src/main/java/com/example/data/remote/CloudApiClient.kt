@@ -249,4 +249,22 @@ object CloudApiClient {
             false
         }
     }
+
+    suspend fun getServerTime(): Long? = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$serverUrl/api/time")
+                .get()
+                .build()
+            client.newCall(request).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val s = resp.body?.string().orEmpty()
+                    val obj = JSONObject(s)
+                    val ts = obj.optLong("timestamp", 0L)
+                    if (ts > 0L) return@withContext ts
+                }
+            }
+        } catch (_: Exception) {}
+        null
+    }
 }

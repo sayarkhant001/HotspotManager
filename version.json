@@ -1,7 +1,7 @@
 {
-  "versionName": "1.5.4",
-  "versionCode": 31,
-  "releaseTitle": "Hotspot Manager v1.5.4",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/releases/download/v1.5.4/HotspotManager-v1.5.4.apk",
-  "releaseNotes": "• AirMetro PtP/PtMP Pair Mode & bridge link health\n• Excluded wireless bridge transit data from user voucher usage\n• Real commercial hardware photos for AirMetros and outdoor APs\n• Unbounded fluid AP scrolling & 1/2/3 column responsive layouts\n• Direct IP captive portal setup without DNS conflicts"
+  "versionName": "1.5.5",
+  "versionCode": 32,
+  "releaseTitle": "Hotspot Manager v1.5.5",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/releases/download/v1.5.5/HotspotManager-v1.5.5.apk",
+  "releaseNotes": "• Tied all data usage metrics and date filters strictly to Router/VPS MMT clock (Asia/Yangon UTC+6:30) independent of phone clock\n• Fixed sales revenue calculation: each voucher counted exactly once on first activation\n• Airtight 1-day voucher lifetime lockout while preserving 30-day vouchers 100%\n• Captive portal mixed-case character input (0-9, a-z, A-Z) without keyboard locking"
 }

@@ -150,7 +150,7 @@
     if (!vInput) return;
 
     function formatVoucherValue() {
-      var val = vInput.value.replace(/[\s]/g, '').toUpperCase();
+      var val = vInput.value.replace(/[\s]/g, '');
       vInput.value = val;
       if (clearBtn) {
         clearBtn.style.display = val.length > 0 ? 'flex' : 'none';
@@ -175,7 +175,7 @@
       pasteBtn.addEventListener('click', function () {
         navigator.clipboard.readText().then(function (text) {
           if (text) {
-            vInput.value = text.trim().toUpperCase();
+            vInput.value = text.trim();
             formatVoucherValue();
             vInput.focus();
           }
@@ -191,7 +191,7 @@
     var q = parseQueryParams();
     var prefill = q.voucher || q.code || q.username || getStoredVoucher();
     if (prefill) {
-      vInput.value = prefill.toUpperCase();
+      vInput.value = prefill;
       formatVoucherValue();
     }
   }
@@ -307,7 +307,7 @@
       // Priority B: Saved Voucher code
       var autoVoucher = q.voucher || q.code || storedVoucher;
       if (autoVoucher) {
-        var cleanCode = autoVoucher.trim().replace(/[\s]/g, '').toUpperCase();
+        var cleanCode = autoVoucher.trim().replace(/[\s]/g, '');
         if (cleanCode.length >= 3) {
           uField.value = cleanCode;
           pField.value = cleanCode;
@@ -337,7 +337,7 @@
       var isVoucher = gid('tab_voucher') && gid('tab_voucher').classList.contains('active');
 
       if (isVoucher) {
-        var code = (vInput ? vInput.value : '').trim().replace(/[\s]/g, '').toUpperCase();
+        var code = (vInput ? vInput.value : '').trim().replace(/[\s]/g, '');
         if (!code) {
           e.preventDefault();
           showError('ကျေးဇူးပြု၍ ဘောင်ချာကုဒ်နံပါတ် ရိုက်ထည့်ပါ');

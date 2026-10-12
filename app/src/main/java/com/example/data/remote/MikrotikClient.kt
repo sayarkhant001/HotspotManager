@@ -26,7 +26,11 @@ data class RouterStats(
     val totalMemory: String,
     val uptime: String,
     val boardName: String,
-    val version: String
+    val version: String,
+    val routerTimeMillis: Long = 0L,
+    val clockTime: String = "",
+    val clockDate: String = "",
+    val timeZoneName: String = "Asia/Yangon"
 )
 
 data class InterfaceMetrics(
@@ -468,13 +472,31 @@ class MikrotikClient {
                 )
                 if (res.isNotEmpty()) {
                     val data = res[0]
+                    var rTime = ""
+                    var rDate = ""
+                    var rTz = "Asia/Yangon"
+                    var rMillis = 0L
+                    try {
+                        val clk = conn.execute("/system/clock/print")
+                        if (clk.isNotEmpty()) {
+                            rTime = clk[0]["time"].orEmpty()
+                            rDate = clk[0]["date"].orEmpty()
+                            rTz = clk[0]["time-zone-name"] ?: "Asia/Yangon"
+                            rMillis = parseRouterClockToMillis(rDate, rTime)
+                        }
+                    } catch (_: Exception) {}
+
                     RouterStats(
                         cpuLoad = data["cpu-load"] ?: "0",
                         freeMemory = data["free-memory"] ?: "0",
                         totalMemory = data["total-memory"] ?: "0",
                         uptime = data["uptime"] ?: "0",
                         boardName = data["board-name"] ?: "Unknown",
-                        version = data["version"] ?: "Unknown"
+                        version = data["version"] ?: "Unknown",
+                        routerTimeMillis = rMillis,
+                        clockTime = rTime,
+                        clockDate = rDate,
+                        timeZoneName = rTz
                     )
                 } else null
             } catch (e: Exception) {
@@ -482,6 +504,45 @@ class MikrotikClient {
                 null
             }
         }
+    }
+
+    fun parseRouterClockToMillis(dateStr: String, timeStr: String): Long {
+        if (dateStr.isBlank() || timeStr.isBlank()) return 0L
+        val myanmarTz = java.util.TimeZone.getTimeZone("Asia/Yangon")
+        val combined = "${dateStr.trim()} ${timeStr.trim()}"
+        val fmt1 = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).apply { timeZone = myanmarTz }
+        try {
+            val t = fmt1.parse(combined)?.time
+            if (t != null) return t
+        } catch (_: Exception) {}
+
+        val fmt2 = java.text.SimpleDateFormat("MMM/dd/yyyy HH:mm:ss", java.util.Locale.US).apply { timeZone = myanmarTz }
+        try {
+            val t = fmt2.parse(combined)?.time
+            if (t != null) return t
+        } catch (_: Exception) {}
+
+        val parts = dateStr.trim().split('/')
+        if (parts.size == 3) {
+            val monthName = parts[0].lowercase(java.util.Locale.US)
+            val monthNum = when (monthName) {
+                "jan" -> 1; "feb" -> 2; "mar" -> 3; "apr" -> 4; "may" -> 5; "jun" -> 6
+                "jul" -> 7; "aug" -> 8; "sep" -> 9; "oct" -> 10; "nov" -> 11; "dec" -> 12
+                else -> 1
+            }
+            val day = parts[1].toIntOrNull() ?: 1
+            val year = parts[2].toIntOrNull() ?: 2026
+            val timeParts = timeStr.trim().split(':')
+            val h = timeParts.getOrNull(0)?.toIntOrNull() ?: 0
+            val m = timeParts.getOrNull(1)?.toIntOrNull() ?: 0
+            val s = timeParts.getOrNull(2)?.toIntOrNull() ?: 0
+            val cal = java.util.Calendar.getInstance(myanmarTz).apply {
+                set(year, monthNum - 1, day, h, m, s)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }
+            return cal.timeInMillis
+        }
+        return 0L
     }
 
     suspend fun getInterfaceMetrics(): InterfaceMetrics = withContext(Dispatchers.IO) {

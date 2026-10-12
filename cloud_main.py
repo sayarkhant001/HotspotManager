@@ -1691,3 +1691,13 @@ def list_router_audits(current_user: dict = Depends(get_current_user)):
     rows = [dict(r) for r in c.fetchall()]
     conn.close()
     return {"audits": rows}
+
+@app.get("/api/time")
+def get_server_time():
+    now = time.time()
+    return {
+        "timestamp": int(now * 1000),
+        "timezone": "Asia/Yangon",
+        "gmt_offset": "+06:30"
+    }
+
