@@ -128,3 +128,13 @@ data class NetworkTopologyData(
     val hotspotIp: String = "192.168.100.1",
     val accessPoints: List<AccessPointDevice> = emptyList()
 )
+
+@Serializable
+data class ProfileUsageStat(
+    val profileName: String,
+    val vouchersSold: Int,
+    val totalRevenue: Double,
+    val dataUsedMb: Double,
+    val dataUsedFormatted: String
+)
+

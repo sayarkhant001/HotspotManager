@@ -2,7 +2,7 @@
 <html lang="my">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <title>Yadanar Tun WiFi – အင်တာနက် အသုံးပြုရန်</title>
+  <title>Kyaw Gyi WiFi – အင်တာနက် အသုံးပြုရန်</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
@@ -46,16 +46,16 @@
             <polygon class="gem-pulse" points="27,45 37,45 42,50 32,60 22,50" fill="url(#gemGrad)" stroke="#FEF3C7" stroke-width="1.2" stroke-linejoin="round"/>
           </svg>
         </div>
-        <h1 class="brand-title">ရတနာထွန်း WiFi</h1>
+        <h1 class="brand-title">ကျော်ကြီး WiFi</h1>
         <p class="brand-sub">
           <span class="live-dot"></span>
           အင်တာနက် ချိတ်ဆက်ရန်
         </p>
       </div>
 
-      <!-- RouterOS Form -->
+      <!-- Real RouterOS Form (Submits to link-login-only) -->
       <form id="login_form" name="sendin" method="post" action="$(link-login-only)">
-        <input type="hidden" name="dst" value="$(link-status)" />
+        <input type="hidden" name="dst" value="$(link-orig)" />
         <input type="hidden" name="popup" value="false" />
         <input type="hidden" name="username" id="username_field" />
         <input type="hidden" name="password" id="password_field" value="" />
@@ -116,6 +116,8 @@
               id="account_input"
               autocomplete="username"
               placeholder="အသုံးပြုသူအမည် (Username)"
+              autocorrect="off"
+              autocapitalize="none"
               spellcheck="false"
             />
           </div>
@@ -137,7 +139,7 @@
         </div>
 
         <!-- Error Message Alert -->
-        <div class="msg-alert hide" id="login_msg">$(if error)<span>&#9888;</span> <span>$(error)</span>$(endif)</div>
+        <div class="msg-alert $(if !error)hide$(endif)" id="login_msg">$(if error)<span>&#9888;</span> <span>$(error)</span>$(endif)</div>
 
         <!-- Connect Action Button -->
         <button class="btn-connect" type="submit" id="login_btn">
@@ -152,13 +154,20 @@
         </button>
       </form>
 
+      <!-- Auto-Login Cancel / New Voucher Banner (Shows only if auto-reconnecting) -->
+      <div id="cancel_auto_bar" style="display:none; margin-top: 10px; text-align: center;">
+        <button type="button" id="cancel_auto_btn" style="background: none; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #38BDF8; font-size: 12px; padding: 6px 14px; cursor: pointer; font-family: inherit;">
+          ✕ ဘောင်ချာအသစ် ရိုက်ထည့်မည်
+        </button>
+      </div>
+
       <!-- Login Address Info -->
       <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 10px 14px; margin-top: 16px; text-align: left; font-size: 11.5px; color: #CBD5E1; line-height: 1.5;">
         <span style="color: #38BDF8; font-weight: 700;">🌐 လော့ဂ်အင်လိပ်စာ:</span> <a href="http://10.10.10.1" style="color: #38BDF8; font-weight: 700; text-decoration: none;">http://10.10.10.1</a>
       </div>
 
       <p class="footer-copy">
-        Yadanar Tun WiFi &bull; မြန်နှုန်းမြင့် ကွန်ရက် ဝန်ဆောင်မှု
+        Kyaw Gyi WiFi &bull; မြန်နှုန်းမြင့် ကွန်ရက် ဝန်ဆောင်မှု
       </p>
 
     </div>

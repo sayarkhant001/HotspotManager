@@ -1,21 +1,22 @@
 /* ─────────────────────────────────────────────────────────────
-   Yadanar Tun WiFi – main.js
-   Supports 4 to 12+ digit vouchers, account auth, persistent session remembering,
-   seamless auto-login after router restarts/reconnects, and quota/expiration detection.
+   Kyaw Gyi WiFi – Production main.js
+   Supports 0-9, capital & small letters freely.
+   Bulletproof auto-login loop protection, instant quota/expiration wipe,
+   and seamless error recovery.
    ─────────────────────────────────────────────────────────── */
 
 (function () {
   'use strict';
 
-  var STORAGE_KEY = 'yadanartun_wifi_voucher';
-  var STORAGE_TIME_KEY = 'yadanartun_wifi_voucher_time';
-  var STORAGE_AUTH_TYPE_KEY = 'yadanartun_wifi_auth_type';
-  var STORAGE_ACC_USER_KEY = 'yadanartun_wifi_account_user';
-  var STORAGE_ACC_PASS_KEY = 'yadanartun_wifi_account_pass';
+  var STORAGE_KEY = 'kyawgyi_wifi_voucher';
+  var STORAGE_TIME_KEY = 'kyawgyi_wifi_voucher_time';
+  var STORAGE_AUTH_TYPE_KEY = 'kyawgyi_wifi_auth_type';
+  var STORAGE_ACC_USER_KEY = 'kyawgyi_wifi_account_user';
+  var STORAGE_ACC_PASS_KEY = 'kyawgyi_wifi_account_pass';
 
   function gid(id) { return document.getElementById(id); }
 
-  /* ── LocalStorage Caching ────────────────────────────────── */
+  /* ── LocalStorage Management ─────────────────────────────── */
   function saveVoucher(code) {
     if (!code) return;
     try {
@@ -42,19 +43,13 @@
       localStorage.removeItem(STORAGE_AUTH_TYPE_KEY);
       localStorage.removeItem(STORAGE_ACC_USER_KEY);
       localStorage.removeItem(STORAGE_ACC_PASS_KEY);
-      // Clean legacy keys if any
-      localStorage.removeItem('kyawgyi_wifi_voucher');
-      localStorage.removeItem('kyawgyi_wifi_voucher_time');
-      localStorage.removeItem('kyawgyi_wifi_auth_type');
-      localStorage.removeItem('kyawgyi_wifi_account_user');
-      localStorage.removeItem('kyawgyi_wifi_account_pass');
+      localStorage.removeItem('yadanartun_wifi_voucher');
+      localStorage.removeItem('yadanartun_wifi_voucher_time');
+      localStorage.removeItem('yadanartun_wifi_auth_type');
       localStorage.removeItem('yt_wifi_voucher');
       localStorage.removeItem('yt_wifi_voucher_time');
+      sessionStorage.removeItem('kyawgyi_auto_tried');
     } catch (e) {}
-  }
-
-  function clearStoredVoucher() {
-    clearStoredCredentials();
   }
 
   function getStoredVoucher() {
@@ -62,12 +57,8 @@
       var code = localStorage.getItem(STORAGE_KEY);
       var time = localStorage.getItem(STORAGE_TIME_KEY);
       if (!code) {
-        code = localStorage.getItem('kyawgyi_wifi_voucher');
-        time = localStorage.getItem('kyawgyi_wifi_voucher_time');
-      }
-      if (!code) {
-        code = localStorage.getItem('yt_wifi_voucher');
-        time = localStorage.getItem('yt_wifi_voucher_time');
+        code = localStorage.getItem('yadanartun_wifi_voucher');
+        time = localStorage.getItem('yadanartun_wifi_voucher_time');
       }
       if (!code) return '';
       // Retain voucher for up to 30 days
@@ -86,10 +77,6 @@
       var user = localStorage.getItem(STORAGE_ACC_USER_KEY);
       var pass = localStorage.getItem(STORAGE_ACC_PASS_KEY) || '';
       var time = localStorage.getItem(STORAGE_TIME_KEY);
-      if (!user) {
-        user = localStorage.getItem('kyawgyi_wifi_account_user');
-        pass = localStorage.getItem('kyawgyi_wifi_account_pass') || '';
-      }
       if (!user) return null;
       if (time && (Date.now() - parseInt(time, 10)) > 30 * 24 * 3600 * 1000) {
         clearStoredCredentials();
@@ -103,7 +90,7 @@
 
   function getStoredAuthType() {
     try {
-      return localStorage.getItem(STORAGE_AUTH_TYPE_KEY) || localStorage.getItem('kyawgyi_wifi_auth_type') || 'voucher';
+      return localStorage.getItem(STORAGE_AUTH_TYPE_KEY) || 'voucher';
     } catch (e) {
       return 'voucher';
     }
@@ -124,130 +111,130 @@
     return params;
   }
 
-  /* ── Router Error Check ──────────────────────────────────── */
   function getRouterError() {
     var msgBox = gid('login_msg');
     if (msgBox) {
-      var txt = msgBox.textContent || msgBox.innerText || '';
-      txt = txt.trim();
-      // If template variable was not replaced or empty
-      if (txt && txt.indexOf('$(') === -1 && txt !== '') {
-        return txt;
+      var raw = msgBox.textContent || msgBox.innerText || '';
+      var cleaned = raw.replace(/^[⚠️\s\u26A0]+/, '').trim();
+      if (cleaned.length > 0 && cleaned.indexOf('$(') === -1) {
+        return cleaned;
       }
     }
     var q = parseQueryParams();
-    if (q.error) {
-      return q.error;
-    }
-    return '';
+    if (q.error) return q.error;
+    return null;
   }
 
-  /* ── Voucher Input Logic (Supports 4 to 12 Digits) ───────── */
-  function initVoucherInput() {
+  /* ── UI Tab Setup ────────────────────────────────────────── */
+  function setupTabs() {
+    var btnVoucher = gid('tab_voucher');
+    var btnAccount = gid('tab_account');
+    var pnlVoucher = gid('panel_voucher');
+    var pnlAccount = gid('panel_account');
+    var vInput = gid('voucher_input');
+    var aInput = gid('account_input');
+
+    if (!btnVoucher || !btnAccount) return;
+
+    function selectTab(type) {
+      if (type === 'voucher') {
+        btnVoucher.classList.add('active');
+        btnAccount.classList.remove('active');
+        if (pnlVoucher) pnlVoucher.classList.remove('hide');
+        if (pnlAccount) pnlAccount.classList.add('hide');
+        if (vInput) vInput.focus();
+      } else {
+        btnAccount.classList.add('active');
+        btnVoucher.classList.remove('active');
+        if (pnlAccount) pnlAccount.classList.remove('hide');
+        if (pnlVoucher) pnlVoucher.classList.add('hide');
+        if (aInput) aInput.focus();
+      }
+    }
+
+    btnVoucher.addEventListener('click', function () { selectTab('voucher'); });
+    btnAccount.addEventListener('click', function () { selectTab('account'); });
+
+    var authType = getStoredAuthType();
+    if (authType === 'account') {
+      selectTab('account');
+    }
+  }
+
+  /* ── Input Actions (Clear, Paste, Toggle Password) ───────── */
+  function setupInputs() {
     var vInput = gid('voucher_input');
     var clearBtn = gid('clear_voucher_btn');
     var pasteBtn = gid('paste_voucher_btn');
-    if (!vInput) return;
+    var togglePassBtn = gid('toggle_password_btn');
+    var passField = gid('account_password');
 
-    function formatVoucherValue() {
-      var val = vInput.value.replace(/[\s]/g, '');
-      vInput.value = val;
-      if (clearBtn) {
-        clearBtn.style.display = val.length > 0 ? 'flex' : 'none';
+    if (vInput) {
+      function syncClearBtn() {
+        if (!clearBtn) return;
+        clearBtn.style.display = vInput.value.length > 0 ? 'inline-flex' : 'none';
       }
-      if (pasteBtn) {
-        pasteBtn.style.display = val.length === 0 ? 'flex' : 'none';
-      }
-    }
 
-    vInput.addEventListener('input', formatVoucherValue);
-
-    if (clearBtn) {
-      clearBtn.addEventListener('click', function () {
-        vInput.value = '';
-        clearStoredVoucher();
-        formatVoucherValue();
-        vInput.focus();
+      vInput.addEventListener('input', function () {
+        syncClearBtn();
       });
-    }
 
-    if (pasteBtn && navigator.clipboard && navigator.clipboard.readText) {
-      pasteBtn.addEventListener('click', function () {
-        navigator.clipboard.readText().then(function (text) {
-          if (text) {
-            vInput.value = text.trim();
-            formatVoucherValue();
-            vInput.focus();
-          }
-        }).catch(function () {
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+          vInput.value = '';
+          clearStoredCredentials();
+          syncClearBtn();
           vInput.focus();
         });
+      }
+
+      if (pasteBtn) {
+        pasteBtn.addEventListener('click', function () {
+          if (navigator.clipboard && navigator.clipboard.readText) {
+            navigator.clipboard.readText().then(function (clip) {
+              if (clip) {
+                vInput.value = clip.trim();
+                syncClearBtn();
+                vInput.focus();
+              }
+            }).catch(function () {
+              vInput.focus();
+            });
+          } else {
+            vInput.focus();
+          }
+        });
+      }
+
+      syncClearBtn();
+    }
+
+    if (togglePassBtn && passField) {
+      togglePassBtn.addEventListener('click', function () {
+        if (passField.type === 'password') {
+          passField.type = 'text';
+          togglePassBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+        } else {
+          passField.type = 'password';
+          togglePassBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+        }
       });
-    } else if (pasteBtn) {
-      pasteBtn.style.display = 'none';
-    }
-
-    // Prefill from URL (?voucher=XXXX or ?code=XXXX) or LocalStorage
-    var q = parseQueryParams();
-    var prefill = q.voucher || q.code || q.username || getStoredVoucher();
-    if (prefill) {
-      vInput.value = prefill;
-      formatVoucherValue();
     }
   }
 
-  /* ── Password Visibility Toggle ──────────────────────────── */
-  function initPasswordToggle() {
-    var toggleBtn = gid('toggle_password_btn');
-    var passInput = gid('account_password');
-    if (!toggleBtn || !passInput) return;
-
-    toggleBtn.addEventListener('click', function () {
-      var isPassword = passInput.type === 'password';
-      passInput.type = isPassword ? 'text' : 'password';
-      toggleBtn.innerHTML = isPassword
-        ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
-        : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
-    });
-  }
-
-  /* ── Tab Switching (Voucher vs Account) ────────────────────── */
-  function initTabs() {
-    var tabVoucher = gid('tab_voucher');
-    var tabAccount = gid('tab_account');
-    var panelVoucher = gid('panel_voucher');
-    var panelAccount = gid('panel_account');
-    if (!tabVoucher || !tabAccount || !panelVoucher || !panelAccount) return;
-
-    tabVoucher.addEventListener('click', function () {
-      tabVoucher.classList.add('active');
-      tabAccount.classList.remove('active');
-      panelVoucher.classList.remove('hide');
-      panelAccount.classList.add('hide');
-      var vIn = gid('voucher_input');
-      if (vIn) vIn.focus();
-    });
-
-    tabAccount.addEventListener('click', function () {
-      tabAccount.classList.add('active');
-      tabVoucher.classList.remove('active');
-      panelAccount.classList.remove('hide');
-      panelVoucher.classList.add('hide');
-      var aIn = gid('account_input');
-      if (aIn) aIn.focus();
-    });
-  }
-
-  /* ── Login Form & Intelligent Auto-Reconnect ──────────────── */
-  function initLoginForm() {
+  /* ── Main Login & Form Logic ─────────────────────────────── */
+  function setupLoginForm() {
     var form = gid('login_form');
+    var uField = gid('username_field');
+    var pField = gid('password_field');
     var vInput = gid('voucher_input');
     var aInput = gid('account_input');
     var pInput = gid('account_password');
-    var uField = gid('username_field');
-    var pField = gid('password_field');
     var msgBox = gid('login_msg');
     var submitBtn = gid('login_btn');
+    var cancelAutoBar = gid('cancel_auto_bar');
+    var cancelAutoBtn = gid('cancel_auto_btn');
+
     if (!form || !uField || !pField) return;
 
     function showError(text) {
@@ -256,9 +243,47 @@
       msgBox.classList.remove('hide');
     }
 
+    var autoTimer = null;
+
+    function cancelAutoLogin() {
+      if (autoTimer) {
+        clearTimeout(autoTimer);
+        autoTimer = null;
+      }
+      clearStoredCredentials();
+      if (cancelAutoBar) cancelAutoBar.style.display = 'none';
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span class="btn-shimmer"></span><span class="btn-text">ချိတ်ဆက်မည်</span>';
+      }
+      if (vInput) {
+        vInput.value = '';
+        vInput.focus();
+      }
+    }
+
+    if (cancelAutoBtn) {
+      cancelAutoBtn.addEventListener('click', cancelAutoLogin);
+    }
+
+    // Cancel auto-login immediately if user touches voucher input or presses a key
+    if (vInput) {
+      vInput.addEventListener('keydown', function () {
+        if (autoTimer) {
+          clearTimeout(autoTimer);
+          autoTimer = null;
+          if (cancelAutoBar) cancelAutoBar.style.display = 'none';
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span class="btn-shimmer"></span><span class="btn-text">ချိတ်ဆက်မည်</span>';
+          }
+        }
+      });
+    }
+
     var routerErr = getRouterError();
 
-    // 1. If router returned an error (e.g., quota reached, uptime expired, user deleted)
+    // 1. If router returned an error (quota reached, expired, invalid code)
     if (routerErr) {
       clearStoredCredentials();
       if (vInput) vInput.value = '';
@@ -279,65 +304,70 @@
       return;
     }
 
-    // 2. Intelligent Auto-Login after Router Restart or Network Reconnect
-    // If no error occurred and client has saved credentials, automatically log them in without prompting!
+    // 2. Intelligent Auto-Reconnection (Protected against infinite loops)
     var q = parseQueryParams();
     var authType = getStoredAuthType();
     var storedVoucher = getStoredVoucher();
     var storedAccount = getStoredAccount();
+    var autoTried = sessionStorage.getItem('kyawgyi_auto_tried') === '1';
 
-    if (!q.manual) {
-      // Priority A: Saved Account credentials
+    // If query contains voucher/code param, always pre-fill
+    var explicitCode = q.voucher || q.code;
+    if (explicitCode && vInput) {
+      vInput.value = explicitCode.trim();
+    } else if (storedVoucher && vInput && !vInput.value) {
+      vInput.value = storedVoucher;
+    }
+
+    // Auto-connect ONLY if NOT already tried in this session and NOT explicitly manual
+    if (!q.manual && !autoTried) {
       if (authType === 'account' && storedAccount && storedAccount.user) {
+        sessionStorage.setItem('kyawgyi_auto_tried', '1');
         uField.value = storedAccount.user;
         pField.value = storedAccount.pass;
-        saveAccount(storedAccount.user, storedAccount.pass);
 
         if (submitBtn) {
           submitBtn.disabled = true;
-          submitBtn.innerHTML = '<span class="live-pulse" style="margin-right:8px;"></span> အကောင့်ဖြင့် အလိုအလျောက် ပြန်လည်ချိတ်ဆက်နေပါသည်...';
+          submitBtn.innerHTML = '<span class="live-pulse" style="margin-right:8px;"></span> အကောင့်ဖြင့် ပြန်လည်ချိတ်ဆက်နေပါသည်...';
         }
+        if (cancelAutoBar) cancelAutoBar.style.display = 'block';
 
-        setTimeout(function () {
+        autoTimer = setTimeout(function () {
           form.submit();
-        }, 150);
+        }, 1200);
         return;
       }
 
-      // Priority B: Saved Voucher code
-      var autoVoucher = q.voucher || q.code || storedVoucher;
-      if (autoVoucher) {
-        var cleanCode = autoVoucher.trim().replace(/[\s]/g, '');
-        if (cleanCode.length >= 3) {
-          uField.value = cleanCode;
-          pField.value = cleanCode;
-          saveVoucher(cleanCode);
+      var codeToTry = explicitCode || storedVoucher;
+      if (codeToTry && codeToTry.length >= 3) {
+        sessionStorage.setItem('kyawgyi_auto_tried', '1');
+        uField.value = codeToTry.trim();
+        pField.value = codeToTry.trim();
 
-          if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="live-pulse" style="margin-right:8px;"></span> ဘောင်ချာဖြင့် အလိုအလျောက် ပြန်လည်ချိတ်ဆက်နေပါသည်...';
-          }
-
-          setTimeout(function () {
-            form.submit();
-          }, 150);
-          return;
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<span class="live-pulse" style="margin-right:8px;"></span> ပြန်လည်ချိတ်ဆက်နေပါသည်...';
         }
-      }
-    }
+        if (cancelAutoBar) cancelAutoBar.style.display = 'block';
 
-    // Prefill account input if available for convenience
-    if (storedAccount && aInput) {
-      aInput.value = storedAccount.user;
-      if (pInput) pInput.value = storedAccount.pass;
+        autoTimer = setTimeout(function () {
+          form.submit();
+        }, 1200);
+        return;
+      }
     }
 
     // 3. Normal Manual Submission
     form.addEventListener('submit', function (e) {
+      if (autoTimer) {
+        clearTimeout(autoTimer);
+        autoTimer = null;
+      }
+
       var isVoucher = gid('tab_voucher') && gid('tab_voucher').classList.contains('active');
 
       if (isVoucher) {
-        var code = (vInput ? vInput.value : '').trim().replace(/[\s]/g, '');
+        var code = (vInput ? vInput.value : '').trim();
         if (!code) {
           e.preventDefault();
           showError('ကျေးဇူးပြု၍ ဘောင်ချာကုဒ်နံပါတ် ရိုက်ထည့်ပါ');
@@ -352,6 +382,7 @@
         }
 
         saveVoucher(code);
+        sessionStorage.setItem('kyawgyi_auto_tried', '1');
         uField.value = code;
         pField.value = code;
       } else {
@@ -364,6 +395,7 @@
           return;
         }
         saveAccount(user, pass);
+        sessionStorage.setItem('kyawgyi_auto_tried', '1');
         uField.value = user;
         pField.value = pass;
       }
@@ -375,78 +407,16 @@
     });
   }
 
-  /* ── Status Page Live Uptime Counter & Data Formatter ─────── */
-  function formatBytesToMB(val) {
-    if (!val || val.indexOf('$(') !== -1 || val.toLowerCase() === 'none' || val.toLowerCase() === 'unlimited') {
-      return 'ကန့်သတ်မထားပါ (Unlimited)';
-    }
-    var s = String(val).trim().replace(/,/g, '');
-    var m = s.match(/([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)?/);
-    if (!m) return s;
-
-    var num = parseFloat(m[1]);
-    if (isNaN(num)) return s;
-    if (num <= 0) return '0 MB';
-
-    var unit = (m[2] || '').toUpperCase();
-
-    // FIX: If RouterOS outputs e.g. "1.98 B" or "1.98 GiB" or "1.98 GB"
-    if ((unit === 'B' && num < 100) || unit.indexOf('G') !== -1) {
-      return num.toFixed(2) + ' GB';
-    }
-    if (unit.indexOf('M') !== -1) {
-      if (num >= 1024) return (num / 1024).toFixed(2) + ' GB';
-      return Math.round(num) + ' MB';
-    }
-    if (unit.indexOf('K') !== -1) {
-      var mb = num / 1024;
-      return mb >= 1 ? (Math.round(mb * 10) / 10).toFixed(1) + ' MB' : '< 1 MB';
-    }
-
-    if (num > 1048576) {
-      var mb = num / (1024 * 1024);
-      if (mb >= 1024) return (mb / 1024).toFixed(2) + ' GB';
-      if (mb >= 1) return Math.round(mb) + ' MB';
-      return '< 1 MB';
-    } else if (num > 1024) {
-      return Math.round(num / 1024) + ' KB';
-    }
-
-    return num + ' MB';
-  }
-
-  function initStatusPage() {
-    var uptimeEl = gid('stat_uptime');
-    if (uptimeEl && uptimeEl.textContent.indexOf('$(') !== -1) {
-      uptimeEl.textContent = 'အသုံးပြုနေဆဲ';
-    }
-
-    var timeleftEl = gid('stat_timeleft');
-    if (timeleftEl && (timeleftEl.textContent.indexOf('$(') !== -1 || timeleftEl.textContent.trim() === 'none' || timeleftEl.textContent.trim() === '0s')) {
-      timeleftEl.textContent = 'ကန့်သတ်မထားပါ';
-    }
-
-    var remainingEl = gid('stat_data_remaining');
-    if (remainingEl && remainingEl.textContent.indexOf('GB') === -1 && remainingEl.textContent.indexOf('MB') === -1) {
-      remainingEl.textContent = formatBytesToMB(remainingEl.textContent);
-    }
-  }
-
-  /* ── DOM Ready Init ───────────────────────────────────────── */
+  // DOM Ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
-      initTabs();
-      initVoucherInput();
-      initPasswordToggle();
-      initLoginForm();
-      initStatusPage();
+      setupTabs();
+      setupInputs();
+      setupLoginForm();
     });
   } else {
-    initTabs();
-    initVoucherInput();
-    initPasswordToggle();
-    initLoginForm();
-    initStatusPage();
+    setupTabs();
+    setupInputs();
+    setupLoginForm();
   }
 })();
-

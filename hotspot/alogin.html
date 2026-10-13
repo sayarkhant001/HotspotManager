@@ -2,21 +2,19 @@
 <html lang="my">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <title>Yadanar Tun WiFi – အင်တာနက် ချိတ်ဆက်နေပါသည်...</title>
+  <title>Kyaw Gyi WiFi – အင်တာနက် ချိတ်ဆက်နေပါသည်...</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta http-equiv="refresh" content="2; url=$(link-status)" />
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23060913'/%3E%3Cpath d='M14 24 Q32 10 50 24' stroke='%2300F2FE' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M20 32 Q32 20 44 32' stroke='%2338BDF8' stroke-width='3.5' fill='none' stroke-linecap='round'/%3E%3Cpolygon points='27,43 37,43 41,47 32,56 23,47' fill='%23F59E0B'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="css/style.css" />
-  <script src="js/main.js"></script>
   <script>
     (function() {
       var u = "$(username)";
       if (u && u.indexOf('$(') === -1 && u !== '') {
         try {
-          localStorage.setItem('yadanartun_wifi_voucher', u.trim().toUpperCase());
-          localStorage.setItem('yadanartun_wifi_voucher_time', Date.now().toString());
-          localStorage.setItem('yadanartun_wifi_auth_type', 'voucher');
+          localStorage.setItem('kyawgyi_wifi_voucher', u.trim());
+          localStorage.setItem('kyawgyi_wifi_voucher_time', Date.now().toString());
+          localStorage.setItem('kyawgyi_wifi_auth_type', 'voucher');
         } catch(e) {}
       }
     })();
@@ -42,20 +40,20 @@
       </div>
 
       <h1 class="brand-title" style="font-size: 22px;">အင်တာနက် ချိတ်ဆက်မှု အောင်မြင်ပါသည်</h1>
-      <p class="brand-subtitle" style="margin-bottom: 20px; color: #A7F3D0;">
+      <p class="brand-sub" style="margin-bottom: 20px; color: #A7F3D0;">
         အသုံးပြုမှု အခြေအနေသို့ ခေတ္တအတွင်း ရောက်ရှိပါမည်...
       </p>
 
       <div style="background: rgba(255,255,255,0.06); border-radius: 100px; height: 6px; overflow: hidden; margin: 18px 0;">
-        <div style="height: 100%; width: 100%; background: linear-gradient(90deg, #00F2FE, #4FACFE); border-radius: 100px; animation: progress 2s ease forwards;"></div>
+        <div style="height: 100%; width: 100%; background: linear-gradient(90deg, #00F2FE, #4FACFE); border-radius: 100px;"></div>
       </div>
 
-      <a href="$(link-status)" class="btn-connect" style="text-decoration:none; margin-top:14px;">
+      <a href="$(link-status)" class="btn-connect" style="text-decoration:none; margin-top:14px; display:inline-flex;">
         ချက်ချင်း သွားမည် (Continue)
       </a>
 
       <p class="footer-copy">
-        Yadanar Tun WiFi &bull; မြန်နှုန်းမြင့် ကွန်ရက်
+        Kyaw Gyi WiFi &bull; မြန်နှုန်းမြင့် ကွန်ရက်
       </p>
 
     </div>

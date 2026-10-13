@@ -13,6 +13,7 @@ import com.example.data.repository.AppRepository
 import com.example.domain.models.RouterSessionLog
 import com.example.domain.models.UserProfile
 import com.example.domain.models.Voucher
+import com.example.domain.models.ProfileUsageStat
 import com.example.utils.AppReleaseInfo
 import com.example.utils.GitHubUpdateManager
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -356,7 +357,90 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         filtered.size
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    val profileUsageBreakdown: StateFlow<List<ProfileUsageStat>> = combine(
+
+        vouchers,
+        selectedDateFilter,
+        activeUsers,
+        routerClockOffsetMillis
+    ) { list, filter, actives, _ ->
+        val bounds = getMmtDateBoundaries(getEffectiveMmtTimeMillis())
+        val activeCodes = actives.map { it.user }.toSet()
+        val activeBytesMap = actives.associate { a ->
+            val bin = a.bytesIn.toLongOrNull() ?: 0L
+            val bout = a.bytesOut.toLongOrNull() ?: 0L
+            a.user to (bin + bout)
+        }
+
+        val distinctVouchers = list.distinctBy { it.code }
+        val activated = distinctVouchers.filter { v ->
+            activeCodes.contains(v.code) || activeCodes.contains(v.username) ||
+            v.activatedAt != null || (v.isUsed && v.generatedAt > 0L) || (v.bytesIn + v.bytesOut) > 0L
+        }
+
+        val filtered = when (filter) {
+            "Today" -> activated.filter { v ->
+                val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                isActiveNow || (act in bounds.todayStart..bounds.todayEnd)
+            }
+            "Yesterday" -> activated.filter { v ->
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                act in bounds.yesterdayStart..bounds.yesterdayEnd
+            }
+            "Last 7 Days" -> activated.filter { v ->
+                val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                isActiveNow || (act in bounds.sevenDaysAgo..bounds.todayEnd)
+            }
+            "Last 30 Days" -> activated.filter { v ->
+                val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
+                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
+                isActiveNow || (act in bounds.thirtyDaysAgo..bounds.todayEnd)
+            }
+            else -> activated
+        }
+
+        filtered.groupBy { v ->
+            val p = v.profileName.trim()
+            if (p.isBlank() || p.equals("default", ignoreCase = true)) {
+                when {
+                    v.comment.contains("1000Ks") || v.price == 1000.0 -> "1000Ks"
+                    v.comment.contains("500Ks") || v.price == 500.0 -> "500Ks"
+                    v.comment.contains("30Day") || v.price >= 20000.0 -> "30Day"
+                    v.comment.contains("40G") -> "40G_30D"
+                    v.comment.contains("50GB") -> "50GB-30000"
+                    else -> "1000Ks"
+                }
+            } else p
+        }.map { (profName, vList) ->
+            val count = vList.size
+            val rev = vList.sumOf { v ->
+                if (v.price > 0.0) v.price else com.example.utils.VoucherPrinter.resolveVoucherPrice(v)
+            }
+            val totalBytes = vList.sumOf { v ->
+                val liveBytes = activeBytesMap[v.code] ?: activeBytesMap[v.username] ?: 0L
+                val dbBytes = v.bytesIn + v.bytesOut
+                maxOf(dbBytes, liveBytes)
+            }
+            val mb = totalBytes / (1024.0 * 1024.0)
+            val formatted = if (mb >= 1024.0) {
+                "${Math.round((mb / 1024.0) * 100.0) / 100.0} GB"
+            } else {
+                "${Math.round(mb * 10.0) / 10.0} MB"
+            }
+            ProfileUsageStat(
+                profileName = profName,
+                vouchersSold = count,
+                totalRevenue = rev,
+                dataUsedMb = mb,
+                dataUsedFormatted = formatted
+            )
+        }.sortedByDescending { it.totalRevenue }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val isSyncingVouchers = MutableStateFlow(false)
+
 
     val profileVoucherCounts: StateFlow<Map<String, Int>> = vouchers.map { list ->
         list.groupingBy { it.profileName }.eachCount()

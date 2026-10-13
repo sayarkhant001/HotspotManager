@@ -2,12 +2,19 @@
 <html lang="my">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <title>Yadanar Tun WiFi – ချိတ်ဆက်မှု မအောင်မြင်ပါ</title>
+  <title>Kyaw Gyi WiFi – ချိတ်ဆက်မှု မအောင်မြင်ပါ</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23060913'/%3E%3Cpath d='M14 24 Q32 10 50 24' stroke='%2300F2FE' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M20 32 Q32 20 44 32' stroke='%2338BDF8' stroke-width='3.5' fill='none' stroke-linecap='round'/%3E%3Cpolygon points='27,43 37,43 41,47 32,56 23,47' fill='%23F59E0B'/%3E%3C/svg%3E" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <link rel="stylesheet" href="css/style.css" />
+  <script>
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch(e) {}
+  </script>
 </head>
 <body>
 
@@ -27,15 +34,12 @@
       </div>
 
       <h1 class="brand-title" style="font-size: 22px;">ချိတ်ဆက်မှု မအောင်မြင်ပါ</h1>
-      <p class="brand-subtitle" style="margin-bottom: 20px; color: #FCA5A5;">
-        အင်တာနက် အသုံးပြုရန် အချက်အလက် မှားယွင်းနေပါသည်
+      <p class="brand-sub" style="margin-bottom: 20px; color: #FCA5A5;">
+        $(if error)$(error)$(else)အချက်အလက် မှားယွင်းနေပါသည် သို့မဟုတ် ဒေတာ/သက်တမ်း ကုန်ဆုံးပါပြီ$(endif)
       </p>
 
       <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.30); border-radius: 14px; padding: 14px 16px; margin-bottom: 22px; color: #FECACA; font-size: 13.5px; line-height: 1.6;">
-        $(error)
-        <div style="margin-top: 8px; font-size: 12px; color: var(--text-dim);">
-          ကျေးဇူးပြု၍ ဘောင်ချာကုဒ် (၄ လုံးမှ ၁၂ လုံး) သို့မဟုတ် အကောင့်အချက်အလက်ကို ပြန်လည် စစ်ဆေးပေးပါရန်
-        </div>
+        ဘောင်ချာကုဒ် သက်တမ်း သို့မဟုတ် ဒေတာကုန်သွားပါက ဘောင်ချာအသစ် ဝယ်ယူထည့်သွင်းပေးပါရန်
       </div>
 
       <form action="$(link-login)" method="get">
@@ -44,12 +48,12 @@
             <polyline points="1 4 1 10 7 10"/>
             <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
           </svg>
-          ပြန်လည် ကြိုးစားမည် (Try Again)
+          ဘောင်ချာအသစ် ထည့်မည် (Login Again)
         </button>
       </form>
 
       <p class="footer-copy">
-        Yadanar Tun WiFi &bull; အကူအညီလိုအပ်ပါက ဆိုင်သို့ ဆက်သွယ်ပါ
+        Kyaw Gyi WiFi &bull; စိတ်ချယုံကြည်ရသော ဝန်ဆောင်မှု
       </p>
 
     </div>

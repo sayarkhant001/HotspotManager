@@ -41,8 +41,11 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     val activatedSales by viewModel.activatedVoucherSales.collectAsStateWithLifecycle()
     val voucherDataRawMb by viewModel.dateFilteredVoucherDataMb.collectAsStateWithLifecycle()
     val voucherCount by viewModel.dateFilteredVoucherCount.collectAsStateWithLifecycle()
+    val profileUsageBreakdown by viewModel.profileUsageBreakdown.collectAsStateWithLifecycle()
+    var showProfileBreakdown by remember { mutableStateOf(false) }
     val hwBytes by viewModel.routerHardwareTotalBytes.collectAsStateWithLifecycle()
     val cpuHistory by viewModel.cpuLoadHistory.collectAsStateWithLifecycle()
+
     val userMsg by viewModel.userMessage.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -314,16 +317,27 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             var showResetDialog by remember { mutableStateOf(false) }
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showProfileBreakdown = !showProfileBreakdown },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = strings.usageMetrics,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = strings.usageMetrics,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        if (showProfileBreakdown) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
                 TextButton(
                     onClick = { showResetDialog = true },
                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
@@ -410,7 +424,11 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 "${Math.round(totalDataRawMb * 10.0) / 10.0} MB"
             }
 
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showProfileBreakdown = !showProfileBreakdown }
+            ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -488,6 +506,113 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                         )
                     }
 
+                    // Profile-by-Profile Sales and Exact Starlink Consumption
+                    if (showProfileBreakdown) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = strings.profileSalesBreakdown,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                            Text(
+                                text = "Starlink MMT Sync ✓",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF4CAF50),
+                                fontSize = 10.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        if (profileUsageBreakdown.isEmpty()) {
+                            Text(
+                                text = strings.noSalesInPeriod,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        } else {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                profileUsageBreakdown.forEach { stat ->
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = MaterialTheme.colorScheme.primaryContainer
+                                                ) {
+                                                    Text(
+                                                        text = stat.profileName,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "${"%,d".format(java.util.Locale.US, stat.totalRevenue.toLong())} Ks",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "${strings.vouchersSoldLabel}: ${stat.vouchersSold}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = "${strings.exactDataConsumedLabel}: ${stat.dataUsedFormatted}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.tertiary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "▼ ${strings.profileSalesBreakdown}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
                 }
             }
 

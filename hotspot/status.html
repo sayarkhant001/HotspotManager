@@ -1,3 +1,27 @@
+$(if logged-in == 'no')
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta http-equiv="refresh" content="0; url=$(link-login)" />
+  <title>Kyaw Gyi WiFi – လော့ဂ်အင်</title>
+  <script>
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch(e) {}
+    window.location.replace("$(link-login)");
+  </script>
+</head>
+<body style="background:#060913; color:#94A3B8; font-family:sans-serif; text-align:center; padding-top:40px;">
+  <p>လော့ဂ်အင် စာမျက်နှာသို့ ကူးပြောင်းနေပါသည်...</p>
+  <p><a href="$(link-login)" style="color:#38BDF8;">ဒီနေရာကို နှိပ်ပါ (Login)</a></p>
+</body>
+</html>
+$(else)
 <!DOCTYPE html>
 <html lang="my">
 
@@ -55,7 +79,7 @@
         <div id="badge_profile_plan"
           style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 10px; padding: 5px 11px; text-align: right;">
           <div style="font-size: 9.5px; color: #6EE7B7; font-weight: 600; text-transform: uppercase;">ပက်ကေ့ဂျ်</div>
-          <div style="font-size: 12.5px; font-weight: 700; color: #A7F3D0;" id="profile_plan_name">3 GB (1 Day)</div>
+          <div style="font-size: 12.5px; font-weight: 700; color: #A7F3D0;" id="profile_plan_name">1,000 Ks (1.7 GB)</div>
         </div>
       </div>
 
@@ -99,7 +123,7 @@
       </div>
 
       <!-- Logout Form -->
-      <form action="$(link-logout)" name="logout" method="post" onsubmit="try { localStorage.clear(); } catch(e){}">
+      <form action="$(link-logout)" name="logout" method="post" onsubmit="try { localStorage.clear(); sessionStorage.clear(); } catch(e){}">
         <input type="hidden" name="erase-cookie" value="on" />
         <button type="submit"
           style="width: 100%; padding: 13px; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 14px; background: rgba(239, 68, 68, 0.12); color: #FCA5A5; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
@@ -127,21 +151,29 @@
 
   <script>
     (function () {
-      // 1. Session Persistence
+      // 0. Rigorous Login Validation
       var u = "$(username)";
-      if (u && u.indexOf('$(') === -1 && u !== '') {
+      var loggedIn = "$(logged-in)";
+      if (!u || u === '' || u.indexOf('$(') !== -1 || loggedIn === 'no') {
         try {
-          localStorage.setItem('kyawgyi_wifi_voucher', u.trim().toUpperCase());
-          localStorage.setItem('kyawgyi_wifi_voucher_time', Date.now().toString());
-          localStorage.setItem('kyawgyi_wifi_auth_type', 'voucher');
-        } catch (e) { }
+          localStorage.clear();
+          sessionStorage.clear();
+        } catch(e) {}
+        window.location.replace("$(link-login)");
+        return;
       }
+
+      // 1. Session Persistence
+      try {
+        localStorage.setItem('kyawgyi_wifi_voucher', u.trim());
+        localStorage.setItem('kyawgyi_wifi_voucher_time', Date.now().toString());
+        localStorage.setItem('kyawgyi_wifi_auth_type', 'voucher');
+      } catch (e) { }
 
       // 2. Parse Byte Values cleanly
       function parseBytes(val) {
         if (!val || val.indexOf('$(') !== -1) return 0;
         var s = String(val).trim().replace(/,/g, '');
-        // RouterOS notation: 'B' = Billion bytes / Gigabytes
         if (/^[0-9]+(?:\.[0-9]+)?\s*b$/i.test(s)) {
           var n = parseFloat(s);
           return isNaN(n) ? 0 : n * 1073741824;
@@ -162,30 +194,24 @@
         return isNaN(n) ? 0 : n;
       }
 
-      // 3. Robust Data Formatter (Fixes '2.91 B' -> '2.91 GB')
+      // 3. Robust Data Formatter
       function formatDataBytes(val) {
         if (!val || val.indexOf('$(') !== -1 || val.toLowerCase() === 'none' || val.toLowerCase() === 'unlimited') {
           return 'ကန့်သတ်မထားပါ (Unlimited)';
         }
         var s = String(val).trim().replace(/,/g, '');
 
-        // 1. Direct Regex conversion for RouterOS 'B' notation (Billion bytes = GB)
-        // e.g. "2.91 B", "2.91b", "3 B" -> "2.91 GB", "3.00 GB"
         if (/^[0-9]+(?:\.[0-9]+)?\s*b$/i.test(s)) {
           var n = parseFloat(s);
-          if (!isNaN(n)) {
-            return (n < 10 ? n.toFixed(2) : n.toFixed(1)) + ' GB';
-          }
+          if (!isNaN(n)) return (n < 10 ? n.toFixed(2) : n.toFixed(1)) + ' GB';
         }
 
-        // 2. Explicit GB / GiB check
         if (/\b(?:gb|gib)\b/i.test(s)) {
           var n = parseFloat(s);
           if (!isNaN(n)) return (n < 10 ? n.toFixed(2) : n.toFixed(1)) + ' GB';
           return s;
         }
 
-        // 3. MB / MiB check
         if (/\b(?:mb|mib)\b/i.test(s)) {
           var n = parseFloat(s);
           if (!isNaN(n)) {
@@ -195,7 +221,6 @@
           return s;
         }
 
-        // 4. KB / KiB check
         if (/\b(?:kb|kib)\b/i.test(s)) {
           var n = parseFloat(s);
           if (!isNaN(n)) {
@@ -205,7 +230,6 @@
           return s;
         }
 
-        // 5. Raw numeric bytes (e.g. 3221225472 or 95420416)
         var num = parseFloat(s);
         if (!isNaN(num)) {
           if (num >= 1073741824) {
@@ -221,7 +245,6 @@
             return '0 MB';
           }
         }
-
         return s;
       }
 
@@ -230,9 +253,7 @@
         var inB = parseBytes(rawIn);
         var outB = parseBytes(rawOut);
         var total = inB + outB;
-        if (total > 0) {
-          return formatDataBytes(total.toString());
-        }
+        if (total > 0) return formatDataBytes(total.toString());
         if (niceFallback && niceFallback.indexOf('$(') === -1) {
           var parts = niceFallback.split('/');
           if (parts.length === 2) {
@@ -274,13 +295,11 @@
         var totalMb = totalBytes / 1048576;
         var u = String(uName || '').toUpperCase();
 
-        // Check if username has explicit tier code
         if (u.indexOf('40G') !== -1) { el.textContent = '40G (30 Day)'; return; }
         if (u.indexOf('30D') !== -1 || u.indexOf('MONTH') !== -1) { el.textContent = '30Day (30 GB)'; return; }
         if (u.indexOf('750') !== -1) { el.textContent = '500 Ks (750 MB)'; return; }
-        if (u.indexOf('1.7G') !== -1) { el.textContent = '1000 Ks (1.7 GB)'; return; }
+        if (u.indexOf('1.7G') !== -1) { el.textContent = '1,000 Ks (1.7 GB)'; return; }
 
-        // Accurately map by total data allowance
         if (totalMb >= 35000) {
           el.textContent = '40G (30 Day)';
         } else if (totalMb >= 25000) {
@@ -300,9 +319,9 @@
         } else if (totalMb >= 2400) {
           el.textContent = '3 GB (1 Day)';
         } else if (totalMb >= 1800) {
-          el.textContent = '1000 Ks (2 GB)';
+          el.textContent = '1,000 Ks (2 GB)';
         } else if (totalMb >= 1300) {
-          el.textContent = '1000 Ks (1.7 GB)';
+          el.textContent = '1,000 Ks (1.7 GB)';
         } else if (totalMb >= 850) {
           el.textContent = '500 Ks (1 GB)';
         } else if (totalMb >= 400) {
@@ -310,7 +329,7 @@
         } else if (totalMb >= 30) {
           el.textContent = 'Test Plan (50 MB)';
         } else {
-          el.textContent = 'Standard Plan';
+          el.textContent = '1,000 Ks (1.7 GB)';
         }
       }
 
@@ -321,31 +340,26 @@
         var uNameEl = document.getElementById('display_username');
         var uName = uNameEl ? uNameEl.textContent.trim() : '';
 
-        // Format Used Data
         var usedEl = document.getElementById('stat_data_used');
         if (usedEl) {
           usedEl.textContent = formatUsedBytes(rawIn, rawOut, usedEl.textContent);
         }
 
-        // Format Remaining Data
         var remEl = document.getElementById('stat_data_remaining');
         if (remEl) {
           remEl.textContent = formatDataBytes(remEl.textContent);
         }
 
-        // Format Remaining Time
         var timeEl = document.getElementById('stat_timeleft');
         if (timeEl) {
           timeEl.textContent = formatTimeLeft(timeEl.textContent);
         }
 
-        // Calculate and Update Package Badge
         var usedBytes = (parseBytes(rawIn) + parseBytes(rawOut)) || (usedEl ? parseBytes(usedEl.textContent) : 0);
         var remBytes = remEl ? parseBytes(remEl.textContent) : 0;
         updatePlanBadge(uName, usedBytes, remBytes);
       }
 
-      // Execute immediately and on DOM events
       applyFormatters();
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', applyFormatters);
@@ -356,3 +370,4 @@
 </body>
 
 </html>
+$(endif)
