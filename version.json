@@ -1,7 +1,7 @@
 {
-  "versionName": "1.5.5",
-  "versionCode": 32,
-  "releaseTitle": "Hotspot Manager v1.5.5",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.5.5.apk",
-  "releaseNotes": "• Tied all data usage metrics and date filters strictly to Router/VPS MMT clock (Asia/Yangon UTC+6:30) independent of phone clock\n• Fixed sales revenue calculation: each voucher counted exactly once on first activation\n• Airtight 1-day voucher lifetime lockout while preserving 30-day vouchers 100%\n• Captive portal mixed-case character input (0-9, a-z, A-Z) without keyboard locking"
+  "versionName": "1.5.6",
+  "versionCode": 33,
+  "releaseTitle": "Hotspot Manager v1.5.6 - Pro Topology & Data Seller Hub",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.5.6.apk",
+  "releaseNotes": "• Network Topology Pro: Ultra-smooth zero-jank graph with live 5 GHz backhaul throughput meters\n• Enhanced AirMetro Pair Auto-Detect: Sequential MAC delta (<= 4) matching, confidence scores, and 1-tap Base/CPE swap\n• Exact Starlink GB Accounting: Continuous 2-decimal GB usage tracking with live active client counter\n• Per-Profile Activated Vouchers Modal: Tap any profile to inspect all active vouchers, IPs, MACs, and exact quota consumed\n• Mobile Data Seller Quick Dispense: 1-tap voucher selling with automatic Bluetooth thermal printer integration\n• Low Inventory Warnings: Real-time alert banner when voucher stock runs low for any profile\n• Customer Quota Lookup: Instant status, time left, and remaining data search by voucher code\n• New AP & Router Hardware Assets: High-resolution photorealistic imagery for Ruijie RAP2266, MikroTik hAP ax3, cAP ax, and RB5009\n• Captive Portal Direct IP Redirect: Clean login redirect without DNS dependency"
 }

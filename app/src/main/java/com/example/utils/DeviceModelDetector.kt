@@ -85,6 +85,12 @@ object DeviceModelDetector {
         "B4:B0:24", "8C:90:2D"
     )
 
+    private val MIKROTIK_OUIS = listOf(
+        "00:0C:42", "2C:C8:1B", "48:8F:5A", "48:A9:8A", "64:D1:54",
+        "74:4D:28", "CC:2D:E0", "D4:01:C3", "E4:8D:8C", "F4:1E:26", "B8:69:F4"
+    )
+
+
     // Predefined hardware catalog for quick selection in Topology & Allowlist
     val HARDWARE_PRESETS: List<HardwarePreset> = listOf(
         // --- 1. RG-EW Series: Wi-Fi 7, Wi-Fi 6 Gaming & Mesh ---
@@ -235,7 +241,17 @@ object DeviceModelDetector {
             defaultPrefix = "C0:A4:76:"
         ),
         HardwarePreset(
+            id = "rap2266",
+            brand = "Ruijie / Reyee",
+            modelName = "Reyee RG-RAP2266",
+            shortName = "RAP2266",
+            deviceType = "Wi-Fi 6 AX3000 High-Power Ceiling AP",
+            imageResId = R.drawable.img_ruijie_rap2266,
+            defaultPrefix = "C0:A4:76:"
+        ),
+        HardwarePreset(
             id = "rap2260h",
+
             brand = "Ruijie / Reyee",
             modelName = "Reyee RG-RAP2260(H)",
             shortName = "RAP2260(H)",
@@ -602,6 +618,62 @@ object DeviceModelDetector {
             deviceType = "AX3600 Wi-Fi 6 Ceiling AP",
             imageResId = R.drawable.img_tplink_eap,
             defaultPrefix = "E8:48:B8:"
+        ),
+
+        // --- 4. MikroTik Routers & APs ---
+        HardwarePreset(
+            id = "l009uigs",
+            brand = "MikroTik",
+            modelName = "MikroTik L009UiGS-2HaxD",
+            shortName = "L009UiGS",
+            deviceType = "Dual-Core Gigabit Router AP",
+            imageResId = R.drawable.img_mikrotik_l009,
+            defaultPrefix = "48:A9:8A:"
+        ),
+        HardwarePreset(
+            id = "rb5009",
+            brand = "MikroTik",
+            modelName = "MikroTik RB5009UG+S+IN",
+            shortName = "RB5009",
+            deviceType = "Heavy-Duty Quad-Core Gigabit Router",
+            imageResId = R.drawable.img_mikrotik_rb4011,
+            defaultPrefix = "D4:01:C3:"
+        ),
+        HardwarePreset(
+            id = "hap_ax2",
+            brand = "MikroTik",
+            modelName = "MikroTik hAP ax2",
+            shortName = "hAP ax2",
+            deviceType = "Dual-Band Wi-Fi 6 Router AP",
+            imageResId = R.drawable.img_mikrotik_l009,
+            defaultPrefix = "48:A9:8A:"
+        ),
+        HardwarePreset(
+            id = "hap_ax3",
+            brand = "MikroTik",
+            modelName = "MikroTik hAP ax3",
+            shortName = "hAP ax3",
+            deviceType = "High-Gain Wi-Fi 6 Router AP",
+            imageResId = R.drawable.img_mikrotik_l009,
+            defaultPrefix = "48:A9:8A:"
+        ),
+        HardwarePreset(
+            id = "cap_ax",
+            brand = "MikroTik",
+            modelName = "MikroTik cAP ax",
+            shortName = "cAP ax",
+            deviceType = "Wi-Fi 6 Ceiling-Mount AP",
+            imageResId = R.drawable.img_ruijie_rap,
+            defaultPrefix = "48:A9:8A:"
+        ),
+        HardwarePreset(
+            id = "cap_ac",
+            brand = "MikroTik",
+            modelName = "MikroTik cAP ac",
+            shortName = "cAP ac",
+            deviceType = "Dual-Band AC Ceiling-Mount AP",
+            imageResId = R.drawable.img_ruijie_rap,
+            defaultPrefix = "CC:2D:E0:"
         )
     )
 
@@ -614,6 +686,12 @@ object DeviceModelDetector {
         val clean = mac.trim().uppercase()
         return TPLINK_OUIS.any { clean.startsWith(it) }
     }
+
+    fun isMikrotikMac(mac: String): Boolean {
+        val clean = mac.trim().uppercase()
+        return MIKROTIK_OUIS.any { clean.startsWith(it) }
+    }
+
 
     fun detectRouterGateway(boardName: String): DeviceModelInfo {
         val upper = boardName.uppercase()
@@ -848,11 +926,13 @@ object DeviceModelDetector {
             )
         }
 
-        // 9. Ruijie / Reyee Ceiling-Mount APs (RAP73HD, RAP72, RAP2260, RAP2200, RAP62)
+        // 9. Ruijie / Reyee Ceiling-Mount APs (RAP73HD, RAP72, RAP2266, RAP2260, RAP2200, RAP62)
         if (!isTpLink && (norm.contains("RAP") || (isRuijie && (norm.contains("AP") || norm.contains("CEILING"))))) {
+            val is2266 = norm.contains("2266")
             val model = when {
                 norm.contains("73HD") || norm.contains("73") -> "Reyee RG-RAP73HD"
                 norm.contains("72") -> "Reyee RG-RAP72"
+                is2266 -> "Reyee RG-RAP2266"
                 norm.contains("2260H") -> "Reyee RG-RAP2260(H)"
                 norm.contains("2260") -> "Reyee RG-RAP2260(E)"
                 norm.contains("62") -> "Reyee RG-RAP62"
@@ -862,8 +942,8 @@ object DeviceModelDetector {
             return DeviceModelInfo(
                 brand = "Ruijie / Reyee",
                 modelName = model,
-                deviceType = "Ceiling Access Point",
-                imageResId = R.drawable.img_ruijie_rap,
+                deviceType = if (is2266) "Wi-Fi 6 AX3000 High-Power Ceiling AP" else "Ceiling Access Point",
+                imageResId = if (is2266) R.drawable.img_ruijie_rap2266 else R.drawable.img_ruijie_rap,
                 isApOrBridge = true
             )
         }
@@ -955,6 +1035,38 @@ object DeviceModelDetector {
                 modelName = "Reyee RG-EW1200",
                 deviceType = "Access Point",
                 imageResId = R.drawable.img_ruijie_ew1200,
+                isApOrBridge = true
+            )
+        }
+
+        // 11. MikroTik Routers & APs (L009UiGS, RB5009, hAP ax2/ax3, cAP ax/ac)
+        val isMikrotik = isMikrotikMac(mac) || norm.contains("MIKROTIK") || norm.contains("ROUTEROS") || norm.contains("L009") || norm.contains("5009") || norm.contains("HAPAX")
+        if (isMikrotik) {
+            val isCap = norm.contains("CAP")
+            val isHapAx3 = norm.contains("AX3") || norm.contains("HAPAX3")
+            val isRb5009 = norm.contains("5009")
+            val isL009 = norm.contains("L009")
+            val model = when {
+                isL009 -> "MikroTik L009UiGS-2HaxD"
+                isRb5009 -> "MikroTik RB5009UG+S+IN"
+                isHapAx3 -> "MikroTik hAP ax3"
+                norm.contains("AX2") || norm.contains("HAPAX2") -> "MikroTik hAP ax2"
+                norm.contains("CAPAX") -> "MikroTik cAP ax"
+                isCap -> "MikroTik cAP ac"
+                norm.contains("4011") -> "MikroTik RB4011iGS+"
+                else -> if (name.isNotBlank() && !name.equals("default", ignoreCase = true)) "MikroTik $name" else "MikroTik Router AP"
+            }
+            val img = when {
+                isCap -> R.drawable.img_mikrotik_cap_ax
+                isHapAx3 -> R.drawable.img_mikrotik_hap_ax3
+                isRb5009 -> R.drawable.img_mikrotik_rb5009
+                else -> R.drawable.img_mikrotik_l009
+            }
+            return DeviceModelInfo(
+                brand = "MikroTik",
+                modelName = model,
+                deviceType = if (isCap) "Ceiling Access Point" else "Router / Gateway AP",
+                imageResId = img,
                 isApOrBridge = true
             )
         }

@@ -130,7 +130,7 @@
     if (!vInput) return;
 
     function formatVoucherValue() {
-      var val = vInput.value.replace(/[\s]/g, '').toUpperCase();
+      var val = vInput.value.replace(/[\s]/g, '');
       vInput.value = val;
       if (clearBtn) clearBtn.style.display = val.length > 0 ? 'flex' : 'none';
       if (pasteBtn) pasteBtn.style.display = val.length === 0 ? 'flex' : 'none';
@@ -151,7 +151,7 @@
       pasteBtn.addEventListener('click', function () {
         navigator.clipboard.readText().then(function (text) {
           if (text) {
-            vInput.value = text.trim().toUpperCase();
+            vInput.value = text.trim();
             formatVoucherValue();
             vInput.focus();
           }
@@ -166,7 +166,7 @@
     var q = parseQueryParams();
     var prefill = q.voucher || q.code || q.username || getStoredVoucher();
     if (prefill) {
-      vInput.value = prefill.toUpperCase();
+      vInput.value = prefill;
       formatVoucherValue();
     }
   }
@@ -292,7 +292,7 @@
       // Priority B: Saved Voucher
       var autoVoucher = q.voucher || q.code || storedVoucher;
       if (autoVoucher) {
-        var cleanCode = autoVoucher.trim().replace(/[\s]/g, '').toUpperCase();
+        var cleanCode = autoVoucher.trim().replace(/[\s]/g, '');
         if (cleanCode.length >= 3) {
           uField.value = cleanCode;
           pField.value = cleanCode;
@@ -319,7 +319,7 @@
     // 3. Normal Manual Submission
     form.addEventListener('submit', function (e) {
       if (currentTab === 'voucher') {
-        var code = (vInput ? vInput.value : '').replace(/[\s]/g, '').toUpperCase();
+        var code = (vInput ? vInput.value : '').replace(/[\s]/g, '');
         if (!code || code.length < 3) {
           e.preventDefault();
           if (vInput) {

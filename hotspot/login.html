@@ -2,18 +2,543 @@
 <html lang="my">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <title>Kyaw Gyi WiFi – အင်တာနက် အသုံးပြုရန်</title>
+  <title>Kyaw Gyi WiFi – အင်တာနက် ချိတ်ဆက်ရန်</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23060913'/%3E%3Cpath d='M14 24 Q32 10 50 24' stroke='%2300F2FE' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M20 32 Q32 20 44 32' stroke='%2338BDF8' stroke-width='3.5' fill='none' stroke-linecap='round'/%3E%3Cpolygon points='27,43 37,43 41,47 32,56 23,47' fill='%23F59E0B'/%3E%3C/svg%3E" />
+  <style>
+/* ─────────────────────────────────────────────────────────────
+   Kyaw Gyi WiFi – Ultra-Modern Obsidian & Electric Cyan Theme
+   Clean, Responsive, Zero-Lag, 100% Reliable 1-Click Login
+   ─────────────────────────────────────────────────────────── */
+
+:root {
+  --bg-primary: #070B14;
+  --bg-card: rgba(13, 22, 41, 0.78);
+  --border-glass: rgba(56, 189, 248, 0.22);
+  --border-glow: rgba(0, 242, 254, 0.55);
+  --accent-cyan: #00F2FE;
+  --accent-blue: #38BDF8;
+  --accent-emerald: #10B981;
+  --text-main: #F8FAFC;
+  --text-muted: #94A3B8;
+  --text-dim: #64748B;
+  --input-bg: rgba(7, 14, 28, 0.85);
+  --input-border: rgba(56, 189, 248, 0.25);
+  --input-focus: #00F2FE;
+  --btn-gradient: linear-gradient(135deg, #00F2FE 0%, #0284C7 60%, #1E40AF 100%);
+  --font-stack: -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Segoe UI", Roboto, "Noto Sans Myanmar", sans-serif;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  min-height: 100vh;
+  width: 100%;
+  font-family: var(--font-stack);
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  overflow-x: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Ambient Moving Aurora Orbs */
+.bg-ambient {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(85px);
+  opacity: 0.45;
+  will-change: transform;
+}
+
+.orb-1 {
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, #00F2FE, #0284C7);
+  top: -60px;
+  left: -80px;
+  animation: floatOrb 12s ease-in-out infinite alternate;
+}
+
+.orb-2 {
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, #6366F1, #3B82F6);
+  bottom: -90px;
+  right: -90px;
+  animation: floatOrb 15s ease-in-out infinite alternate-reverse;
+}
+
+.orb-3 {
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, #10B981, #059669);
+  top: 45%;
+  left: 60%;
+  opacity: 0.25;
+  animation: floatOrb 18s ease-in-out infinite alternate;
+}
+
+@keyframes floatOrb {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(40px, 30px) scale(1.12); }
+  100% { transform: translate(-30px, 50px) scale(0.95); }
+}
+
+/* Container & Glass Card */
+.portal-container {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 420px;
+  padding: 18px 16px;
+  margin: auto;
+}
+
+.glass-card {
+  position: relative;
+  background: var(--bg-card);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: 28px;
+  border: 1px solid var(--border-glass);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.65),
+    0 0 45px rgba(0, 242, 254, 0.12),
+    inset 0 1px 1px rgba(255, 255, 255, 0.2);
+  padding: 32px 24px 26px;
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Header & Brand Emblem */
+.brand-header {
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.brand-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.18), rgba(99, 102, 241, 0.18));
+  border: 1.5px solid rgba(56, 189, 248, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 242, 254, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+  margin-bottom: 14px;
+  position: relative;
+}
+
+.brand-badge::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 26px;
+  background: linear-gradient(135deg, #00F2FE, transparent, #6366F1);
+  opacity: 0.4;
+  z-index: -1;
+}
+
+.wifi-wave-icon {
+  width: 42px;
+  height: 42px;
+  display: block;
+}
+
+.brand-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  background: linear-gradient(135deg, #FFFFFF 30%, #38BDF8 75%, #00F2FE 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 4px;
+}
+
+.brand-subtitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.live-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-emerald);
+  box-shadow: 0 0 12px var(--accent-emerald);
+  animation: pulseDot 2s infinite;
+}
+
+@keyframes pulseDot {
+  0% { transform: scale(0.95); opacity: 0.7; }
+  50% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.7; }
+}
+
+/* Tabs */
+.tab-pills {
+  display: flex;
+  background: rgba(4, 9, 20, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 4px;
+  margin-bottom: 20px;
+  gap: 4px;
+}
+
+.pill-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pill-btn.active {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(0, 242, 254, 0.12));
+  color: #FFFFFF;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  box-shadow: 0 4px 16px rgba(0, 242, 254, 0.18);
+}
+
+/* Input Fields */
+.input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--input-bg);
+  border: 1.5px solid var(--input-border);
+  border-radius: 18px;
+  padding: 2px 10px 2px 16px;
+  transition: all 0.25s ease;
+}
+
+.input-group:focus-within {
+  border-color: var(--input-focus);
+  background: rgba(10, 20, 40, 0.95);
+  box-shadow: 0 0 24px rgba(0, 242, 254, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+}
+
+.input-control {
+  flex: 1;
+  width: 100%;
+  padding: 15px 4px;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 16.5px;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: 0.5px;
+}
+
+.input-control::placeholder {
+  color: var(--text-dim);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.action-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94A3B8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: 6px;
+}
+
+.action-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #FFFFFF;
+}
+
+/* Connect Submit Button */
+.btn-submit {
+  position: relative;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 20px;
+  margin-top: 20px;
+  border: none;
+  border-radius: 18px;
+  background: var(--btn-gradient);
+  color: #FFFFFF;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow:
+    0 10px 28px rgba(2, 132, 199, 0.45),
+    0 0 25px rgba(0, 242, 254, 0.35),
+    inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-submit:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 14px 34px rgba(2, 132, 199, 0.55),
+    0 0 35px rgba(0, 242, 254, 0.5),
+    inset 0 1px 1px rgba(255, 255, 255, 0.5);
+}
+
+.btn-submit:active {
+  transform: translateY(1px);
+}
+
+.btn-shimmer-sweep {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-25deg);
+  animation: sweepAnim 3.2s infinite;
+}
+
+@keyframes sweepAnim {
+  0%   { left: -100%; }
+  35%  { left: 140%; }
+  100% { left: 140%; }
+}
+
+/* Alerts and Messages (Strict Zero-Ghosting) */
+.alert-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin-top: 14px;
+  font-size: 13.5px;
+  color: #FCA5A5;
+  line-height: 1.45;
+  animation: alertShake 0.35s ease;
+}
+
+@keyframes alertShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+/* Strict Hide Utilities */
+.hide, [hidden] {
+  display: none !important;
+}
+
+/* Router Address Badge */
+.info-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 14px;
+  padding: 11px 16px;
+  margin-top: 18px;
+  font-size: 12px;
+  color: #CBD5E1;
+}
+
+.info-badge strong {
+  color: #38BDF8;
+}
+
+.info-link {
+  color: #38BDF8;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.footer-note {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 12px;
+  color: var(--text-dim);
+  letter-spacing: 0.2px;
+}
+
+/* Status Dashboard Specific Styles */
+.status-badge-card {
+  background: rgba(4, 9, 20, 0.75);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.user-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stats-2x2-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 340px) {
+  .stats-2x2-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stat-tile {
+  background: rgba(10, 20, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 14px 12px;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.stat-tile.featured-emerald {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: linear-gradient(145deg, rgba(16, 185, 129, 0.08) 0%, rgba(10, 20, 38, 0.9) 100%);
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.12);
+}
+
+.stat-tile.featured-cyan {
+  border-color: rgba(0, 242, 254, 0.35);
+  background: linear-gradient(145deg, rgba(0, 242, 254, 0.08) 0%, rgba(10, 20, 38, 0.9) 100%);
+  box-shadow: 0 4px 20px rgba(0, 242, 254, 0.12);
+}
+
+.stat-tile-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #94A3B8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.stat-tile-val {
+  font-size: 16.5px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  line-height: 1.25;
+  margin-bottom: 4px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+  word-break: break-word;
+}
+
+.stat-tile-sub {
+  font-size: 11px;
+  color: #64748B;
+  line-height: 1.35;
+  font-weight: 500;
+}
+
+.color-emerald { color: #10B981; }
+.color-cyan { color: #00F2FE; }
+.color-amber { color: #F59E0B; }
+.color-slate { color: #CBD5E1; }
+
+.plan-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(0, 242, 254, 0.12);
+  border: 1px solid rgba(0, 242, 254, 0.3);
+  color: #00F2FE;
+}
+
+.refresh-btn {
+  width: 100%;
+  padding: 11px 16px;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 14px;
+  background: rgba(56, 189, 248, 0.08);
+  color: #38BDF8;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  transition: all 0.2s ease;
+}
+
+.refresh-btn:hover {
+  background: rgba(56, 189, 248, 0.18);
+  color: #FFFFFF;
+}
+
+</style>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-  <!-- Dynamic Ambient Animated Glow Orbs -->
+  <!-- Ambient Animated Glowing Aurora -->
   <div class="bg-ambient">
     <div class="orb orb-1"></div>
     <div class="orb orb-2"></div>
@@ -22,157 +547,320 @@
 
   <div class="portal-container">
     <div class="glass-card">
-      <div class="card-glow-border"></div>
 
-      <!-- Animated Brand Logo -->
+      <!-- Brand Header -->
       <div class="brand-header">
-        <div class="brand-logo-wrap">
-          <svg class="wifi-svg" width="46" height="46" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="wifiGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#00F2FE"/>
-                <stop offset="60%" stop-color="#38BDF8"/>
-                <stop offset="100%" stop-color="#818CF8"/>
-              </linearGradient>
-              <linearGradient id="gemGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#FDE68A"/>
-                <stop offset="50%" stop-color="#F59E0B"/>
-                <stop offset="100%" stop-color="#D97706"/>
-              </linearGradient>
-            </defs>
-            <path class="arc arc-3" d="M12 23 Q32 7 52 23" stroke="url(#wifiGrad)" stroke-width="3.6" stroke-linecap="round" fill="none"/>
-            <path class="arc arc-2" d="M19 30 Q32 18 45 30" stroke="url(#wifiGrad)" stroke-width="3.2" stroke-linecap="round" fill="none"/>
-            <path class="arc arc-1" d="M26 37 Q32 30 38 37" stroke="url(#wifiGrad)" stroke-width="2.8" stroke-linecap="round" fill="none"/>
-            <polygon class="gem-pulse" points="27,45 37,45 42,50 32,60 22,50" fill="url(#gemGrad)" stroke="#FEF3C7" stroke-width="1.2" stroke-linejoin="round"/>
+        <div class="brand-badge">
+          <svg class="wifi-wave-icon" width="42" height="42" style="width:42px;height:42px;max-width:42px;max-height:42px;" viewBox="0 0 24 24" fill="none" stroke="#00F2FE" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+            <path d="M1.42 9a16 16 0 0 1 21.16 0" />
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+            <circle cx="12" cy="20" r="1.5" fill="#00F2FE" />
           </svg>
         </div>
         <h1 class="brand-title">ကျော်ကြီး WiFi</h1>
-        <p class="brand-sub">
-          <span class="live-dot"></span>
-          အင်တာနက် ချိတ်ဆက်ရန်
-        </p>
+        <div class="brand-subtitle">
+          <span class="live-indicator"></span>
+          <span>မြန်နှုန်းမြင့် အင်တာနက် ကွန်ရက်</span>
+        </div>
       </div>
 
-      <!-- Real RouterOS Form (Submits to link-login-only) -->
+      <!-- Auth Switcher Tabs (Voucher / Account) -->
+      <div class="tab-pills">
+        <button type="button" class="pill-btn active" id="tab_voucher" onclick="switchMode('voucher')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <rect x="2" y="4" width="20" height="16" rx="2"/>
+            <line x1="2" y1="10" x2="22" y2="10"/>
+            <line x1="7" y1="15" x2="7.01" y2="15"/>
+            <line x1="12" y1="15" x2="12.01" y2="15"/>
+          </svg>
+          ဘောင်ချာ
+        </button>
+        <button type="button" class="pill-btn" id="tab_member" onclick="switchMode('member')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          အကောင့်
+        </button>
+      </div>
+
+      <!-- Native Direct-Action RouterOS Form (No Mock Interception, 1-Click Instant Login) -->
       <form id="login_form" name="sendin" method="post" action="$(link-login-only)">
         <input type="hidden" name="dst" value="$(link-orig)" />
         <input type="hidden" name="popup" value="false" />
-        <input type="hidden" name="username" id="username_field" />
-        <input type="hidden" name="password" id="password_field" value="" />
+        <!-- Hidden password mirrored for voucher mode -->
+        <input type="hidden" name="password" id="password_hidden" value="" />
 
-        <!-- Minimalist Pill Tabs -->
-        <div class="tab-switcher" id="login_tabs">
-          <button type="button" class="tab-btn active" id="tab_voucher">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <rect x="2" y="6" width="20" height="12" rx="3"/>
-              <path d="M12 6v12M2 12h2M20 12h2"/>
-            </svg>
-            ဘောင်ချာ
-          </button>
-          <button type="button" class="tab-btn" id="tab_account">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
-            </svg>
-            အကောင့်
-          </button>
+        <!-- Voucher Mode Form Field -->
+        <div id="section_voucher">
+          <div class="input-group">
+            <input
+              type="text"
+              name="username"
+              id="voucher_input"
+              class="input-control"
+              placeholder="ဘောင်ချာကုဒ် ရိုက်ထည့်ပါ..."
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="none"
+              spellcheck="false"
+              maxlength="32"
+              required
+            />
+            <button type="button" class="action-icon-btn" id="btn_paste" title="ကူးယူထားသည်ကို ထည့်မည်" onclick="pasteVoucher()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
-        <!-- Voucher Tab Panel -->
-        <div class="tab-panel" id="panel_voucher">
-          <div class="input-box-wrapper">
+        <!-- Account / Member Mode Form Fields -->
+        <div id="section_member" class="hide">
+          <div class="input-group" style="margin-bottom: 12px;">
             <input
-              class="code-input-main"
-              id="voucher_input"
               type="text"
-              maxlength="32"
-              placeholder="ဘောင်ချာကုဒ် ရိုက်ထည့်ပါ"
+              id="member_user"
+              class="input-control"
+              placeholder="အသုံးပြုသူ အမည် (Username)"
               autocomplete="off"
               autocorrect="off"
               autocapitalize="none"
               spellcheck="false"
             />
-            <button type="button" class="btn-icon-action" id="clear_voucher_btn" title="ဖျက်မည်" style="display:none;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="18" y1="6" x2="6" y2="18"/>
-                <line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </button>
-            <button type="button" class="btn-icon-action" id="paste_voucher_btn" title="Paste">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-              </svg>
-            </button>
           </div>
-        </div>
-
-        <!-- Account Tab Panel -->
-        <div class="tab-panel hide" id="panel_account">
-          <div class="input-box-wrapper" style="margin-bottom: 12px;">
+          <div class="input-group">
             <input
-              class="code-input-main account-field"
-              type="text"
-              id="account_input"
-              autocomplete="username"
-              placeholder="အသုံးပြုသူအမည် (Username)"
-              autocorrect="off"
-              autocapitalize="none"
-              spellcheck="false"
-            />
-          </div>
-          <div class="input-box-wrapper">
-            <input
-              class="code-input-main account-field"
               type="password"
-              id="account_password"
-              autocomplete="current-password"
-              placeholder="လျှို့ဝှက်နံပါတ် (Password)"
+              id="member_pass"
+              class="input-control"
+              placeholder="စကားဝှက် (Password)"
+              autocomplete="off"
             />
-            <button type="button" class="btn-icon-action" id="toggle_password_btn" title="View Password">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-            </button>
           </div>
         </div>
 
-        <!-- Error Message Alert -->
-        <div class="msg-alert $(if !error)hide$(endif)" id="login_msg">$(if error)<span>&#9888;</span> <span>$(error)</span>$(endif)</div>
-
-        <!-- Connect Action Button -->
-        <button class="btn-connect" type="submit" id="login_btn">
-          <span class="btn-shimmer"></span>
-          <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
-            <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
-            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
-            <circle cx="12" cy="20" r="1"/>
+        <!-- Dynamic Error Alert (Strictly Hidden by Default to Prevent Empty Boxes) -->
+        <div class="alert-box hide" id="login_msg">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
-          <span class="btn-text">ချိတ်ဆက်မည်</span>
+          <span id="login_msg_text">$(if error)$(error)$(endif)</span>
+        </div>
+
+        <!-- 1-Click Instant Connect Button -->
+        <button type="submit" class="btn-submit" id="btn_connect">
+          <div class="btn-shimmer-sweep"></div>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+            <circle cx="12" cy="20" r="1.5" fill="currentColor" />
+          </svg>
+          <span id="btn_text">ချိတ်ဆက်မည် (Connect)</span>
         </button>
+
       </form>
 
-      <!-- Auto-Login Cancel / New Voucher Banner (Shows only if auto-reconnecting) -->
-      <div id="cancel_auto_bar" style="display:none; margin-top: 10px; text-align: center;">
-        <button type="button" id="cancel_auto_btn" style="background: none; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #38BDF8; font-size: 12px; padding: 6px 14px; cursor: pointer; font-family: inherit;">
-          ✕ ဘောင်ချာအသစ် ရိုက်ထည့်မည်
-        </button>
+      <!-- Router Gateway Address Card -->
+      <div class="info-badge">
+        <span>လော့ဂ်အင်လိပ်စာ (Gateway)</span>
+        <strong>http://10.10.10.1</strong>
       </div>
 
-      <!-- Login Address Info -->
-      <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 10px 14px; margin-top: 16px; text-align: left; font-size: 11.5px; color: #CBD5E1; line-height: 1.5;">
-        <span style="color: #38BDF8; font-weight: 700;">🌐 လော့ဂ်အင်လိပ်စာ:</span> <a href="http://10.10.10.1" style="color: #38BDF8; font-weight: 700; text-decoration: none;">http://10.10.10.1</a>
-      </div>
-
-      <p class="footer-copy">
-        Kyaw Gyi WiFi &bull; မြန်နှုန်းမြင့် ကွန်ရက် ဝန်ဆောင်မှု
+      <!-- Footer Copy -->
+      <p class="footer-note">
+        Kyaw Gyi WiFi &bull; အချိန်မရွေး မြန်ဆန်သော အင်တာနက် ဝန်ဆောင်မှု
       </p>
 
     </div>
   </div>
 
-  <script src="js/main.js"></script>
+  <script>
+/* ─────────────────────────────────────────────────────────────
+   Kyaw Gyi WiFi – High-Performance Portal Automation
+   1-Click Direct Login • Zero Delay • Burmese Error Handling
+   ─────────────────────────────────────────────────────────── */
+
+(function () {
+  'use strict';
+
+  var form = document.getElementById('login_form');
+  var vInput = document.getElementById('voucher_input');
+  var passHidden = document.getElementById('password_hidden');
+  var memberUser = document.getElementById('member_user');
+  var memberPass = document.getElementById('member_pass');
+  var msgBox = document.getElementById('login_msg');
+  var msgText = document.getElementById('login_msg_text');
+  var btnConnect = document.getElementById('btn_connect');
+  var btnText = document.getElementById('btn_text');
+
+  var currentMode = 'voucher';
+
+  // 1. Password synchronization for voucher mode
+  function syncPassword() {
+    if (currentMode === 'voucher' && vInput && passHidden) {
+      passHidden.value = vInput.value.trim();
+    }
+  }
+
+  if (vInput) {
+    vInput.addEventListener('input', syncPassword);
+    vInput.addEventListener('change', syncPassword);
+  }
+
+  // 2. Mode Switching (Voucher vs Member Account)
+  window.switchMode = function (mode) {
+    currentMode = mode;
+    var tabV = document.getElementById('tab_voucher');
+    var tabM = document.getElementById('tab_member');
+    var secV = document.getElementById('section_voucher');
+    var secM = document.getElementById('section_member');
+
+    if (mode === 'voucher') {
+      tabV.classList.add('active');
+      tabM.classList.remove('active');
+      secV.classList.remove('hide');
+      secM.classList.add('hide');
+
+      vInput.name = 'username';
+      vInput.required = true;
+      passHidden.name = 'password';
+
+      if (memberUser) { memberUser.name = ''; memberUser.required = false; }
+      if (memberPass) { memberPass.name = ''; memberPass.required = false; }
+
+      syncPassword();
+      setTimeout(function () { vInput.focus(); }, 50);
+    } else {
+      tabM.classList.add('active');
+      tabV.classList.remove('active');
+      secM.classList.remove('hide');
+      secV.classList.add('hide');
+
+      vInput.name = '';
+      vInput.required = false;
+      passHidden.name = '';
+
+      if (memberUser) { memberUser.name = 'username'; memberUser.required = true; }
+      if (memberPass) { memberPass.name = 'password'; memberPass.required = true; }
+
+      if (memberUser) {
+        setTimeout(function () { memberUser.focus(); }, 50);
+      }
+    }
+  };
+
+  // 3. Paste Clipboard Handler
+  window.pasteVoucher = function () {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      navigator.clipboard.readText().then(function (text) {
+        if (text) {
+          vInput.value = text.trim();
+          syncPassword();
+          vInput.focus();
+        }
+      }).catch(function () {
+        vInput.focus();
+      });
+    } else {
+      vInput.focus();
+    }
+  };
+
+  // 4. Show Friendly Error (Strictly removes .hide, only shows when content exists)
+  function showError(msg) {
+    if (!msgBox || !msgText) return;
+    var trimmed = (msg || '').trim();
+    if (!trimmed) {
+      msgBox.classList.add('hide');
+      return;
+    }
+    msgText.innerText = trimmed;
+    msgBox.classList.remove('hide');
+  }
+
+  // 5. Inspect Server-Side Error from RouterOS
+  var rawError = '';
+  if (msgText && msgText.innerText) {
+    rawError = msgText.innerText.trim();
+  }
+
+  if (rawError && rawError.indexOf('$(') === -1 && rawError.length > 0) {
+    var errLower = rawError.toLowerCase();
+    var friendly = rawError;
+
+    if (errLower.indexOf('traffic limit') !== -1 || errLower.indexOf('transfer limit') !== -1) {
+      friendly = 'ဒေတာ ကုန်သွားပါပြီ (Data Quota Finished) – ကျေးဇူးပြု၍ ဘောင်ချာအသစ် ဝယ်ယူသုံးစွဲပါ';
+      try { localStorage.clear(); } catch(e) {}
+    } else if (errLower.indexOf('uptime limit') !== -1 || errLower.indexOf('session limit') !== -1) {
+      friendly = 'ဘောင်ချာ သက်တမ်းကုန်သွားပါပြီ (Validity Expired) – ကျေးဇူးပြု၍ ဘောင်ချာအသစ် ဝယ်ယူသုံးစွဲပါ';
+      try { localStorage.clear(); } catch(e) {}
+    } else if (errLower.indexOf('invalid username') !== -1 || errLower.indexOf('invalid password') !== -1) {
+      friendly = 'ဘောင်ချာကုဒ် မှားယွင်းနေပါသည် (Invalid Code) – သေချာစစ်ဆေးပြီး ပြန်လည်ရိုက်ထည့်ပါ';
+    } else if (errLower.indexOf('user') !== -1 && errLower.indexOf('not found') !== -1) {
+      friendly = 'ဘောင်ချာကုဒ် မရှိပါ သို့မဟုတ် သက်တမ်းကုန်သွားပါပြီ';
+      try { localStorage.clear(); } catch(e) {}
+    } else if (errLower.indexOf('already logged in') !== -1) {
+      friendly = 'ဤဘောင်ချာကို အခြားစက်တစ်ခုတွင် အသုံးပြုနေပါသည်';
+    }
+
+    showError(friendly);
+    sessionStorage.setItem('kyawgyi_error_occurred', '1');
+  } else {
+    // If no error, ensure message box is strictly hidden
+    if (msgBox) msgBox.classList.add('hide');
+  }
+
+  // 6. Native Form Submit
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      if (currentMode === 'voucher') {
+        var code = (vInput ? vInput.value : '').trim();
+        if (!code) {
+          e.preventDefault();
+          showError('ကျေးဇူးပြု၍ ဘောင်ချာကုဒ် အရင်ရိုက်ထည့်ပါ');
+          if (vInput) vInput.focus();
+          return false;
+        }
+        syncPassword();
+        try {
+          localStorage.setItem('kyawgyi_wifi_voucher', code);
+          localStorage.setItem('kyawgyi_wifi_auth_type', 'voucher');
+          localStorage.setItem('kyawgyi_wifi_time', Date.now().toString());
+        } catch (ex) {}
+      } else {
+        var u = (memberUser ? memberUser.value : '').trim();
+        var p = (memberPass ? memberPass.value : '').trim();
+        if (!u || !p) {
+          e.preventDefault();
+          showError('Username နှင့် Password နှစ်ခုစလုံး ဖြည့်သွင်းပါ');
+          return false;
+        }
+      }
+
+      if (btnText) btnText.innerText = 'ချိတ်ဆက်နေပါသည်...';
+      if (btnConnect) btnConnect.style.opacity = '0.85';
+      return true;
+    });
+  }
+
+  // 7. Auto-fill Last Used Voucher (without auto-submitting dead codes)
+  try {
+    var savedVoucher = localStorage.getItem('kyawgyi_wifi_voucher');
+    var hadError = sessionStorage.getItem('kyawgyi_error_occurred');
+    if (savedVoucher && !hadError && vInput && !vInput.value) {
+      vInput.value = savedVoucher.trim();
+      syncPassword();
+    }
+    sessionStorage.removeItem('kyawgyi_error_occurred');
+  } catch(e) {}
+
+})();
+
+</script>
 </body>
 </html>

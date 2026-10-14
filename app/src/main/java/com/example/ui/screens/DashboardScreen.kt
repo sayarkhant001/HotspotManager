@@ -63,7 +63,12 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     val cloudUser by viewModel.cloudUser.collectAsStateWithLifecycle()
     val connMode by viewModel.connectionMode.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
     var showSettingsDialog by remember { mutableStateOf(false) }
+    val lowStockProfiles by viewModel.lowStockProfiles.collectAsStateWithLifecycle()
+    var selectedProfileForModal by remember { mutableStateOf<String?>(null) }
+    var showCustomerLookupDialog by remember { mutableStateOf(false) }
+    var dispensedVoucher by remember { mutableStateOf<com.example.domain.models.Voucher?>(null) }
 
     LaunchedEffect(userMsg) {
         userMsg?.let { msg ->
@@ -419,9 +424,9 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             val sessionDataRawMb = filteredSessions.sumOf { it.dataUsedMb }
             val totalDataRawMb = if (voucherDataRawMb > 0.0) voucherDataRawMb else sessionDataRawMb
             val formattedDataUsage = if (totalDataRawMb >= 1024.0) {
-                "${Math.round((totalDataRawMb / 1024.0) * 100.0) / 100.0} GB"
+                String.format(java.util.Locale.US, "%.2f GB", totalDataRawMb / 1024.0)
             } else {
-                "${Math.round(totalDataRawMb * 10.0) / 10.0} MB"
+                String.format(java.util.Locale.US, "%.1f MB", totalDataRawMb)
             }
 
             GlassCard(
@@ -467,7 +472,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                         }
                         Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                             Text(
-                                text = strings.trackedClients,
+                                text = strings.vouchersSoldLabel,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -546,9 +551,15 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                             ) {
                                 profileUsageBreakdown.forEach { stat ->
                                     Surface(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { selectedProfileForModal = stat.profileName },
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                                        )
                                     ) {
                                         Column(modifier = Modifier.padding(10.dp)) {
                                             Row(
@@ -556,17 +567,44 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Surface(
-                                                    shape = RoundedCornerShape(4.dp),
-                                                    color = MaterialTheme.colorScheme.primaryContainer
-                                                ) {
-                                                    Text(
-                                                        text = stat.profileName,
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                    )
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        color = MaterialTheme.colorScheme.primaryContainer
+                                                    ) {
+                                                        Text(
+                                                            text = stat.profileName,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                    if (stat.activeNow > 0) {
+                                                        Spacer(Modifier.width(6.dp))
+                                                        Surface(
+                                                            shape = RoundedCornerShape(10.dp),
+                                                            color = Color(0xFF10B981).copy(alpha = 0.15f)
+                                                        ) {
+                                                            Row(
+                                                                verticalAlignment = Alignment.CenterVertically,
+                                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                                            ) {
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .size(6.dp)
+                                                                        .background(Color(0xFF10B981), CircleShape)
+                                                                )
+                                                                Spacer(Modifier.width(4.dp))
+                                                                Text(
+                                                                    text = "${stat.activeNow} ${strings.activeNowLabel}",
+                                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = Color(0xFF047857)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                                 Text(
                                                     text = "${"%,d".format(java.util.Locale.US, stat.totalRevenue.toLong())} Ks",
@@ -582,15 +620,27 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Text(
-                                                    text = "${strings.vouchersSoldLabel}: ${stat.vouchersSold}",
+                                                    text = "${strings.vouchersSoldLabel}: ${stat.vouchersSold} / ${stat.totalVouchers}",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                                 Text(
-                                                    text = "${strings.exactDataConsumedLabel}: ${stat.dataUsedFormatted}",
+                                                    text = "Starlink: ${stat.exactGbFormatted.ifBlank { stat.dataUsedFormatted }}",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     fontWeight = FontWeight.SemiBold,
                                                     color = MaterialTheme.colorScheme.tertiary
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.End,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "Tap to view ${stat.vouchersSold} activated vouchers →",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
                                                 )
                                             }
                                         }
@@ -616,7 +666,144 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            // Low Stock Inventory Alert Banner
+            if (lowStockProfiles.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFFFEF3C7),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = Color(0xFFD97706),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = strings.lowStockWarning,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF92400E)
+                            )
+                            val lowStockSummary = lowStockProfiles.joinToString(", ") { "${it.first} (${it.second} left)" }
+                            Text(
+                                text = lowStockSummary,
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                color = Color(0xFFB45309)
+                            )
+                        }
+                        TextButton(onClick = { navController.navigate("vouchers") }) {
+                            Text("Generate", fontWeight = FontWeight.Bold, color = Color(0xFFB45309))
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Quick Voucher Seller & Customer Lookup Bar
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.FlashOn,
+                                contentDescription = null,
+                                tint = Color(0xFFF59E0B),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = strings.quickSellVoucher,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        IconButton(
+                            onClick = { showCustomerLookupDialog = true },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = strings.customerLookup,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(6.dp))
+
+                    val topProfiles = remember(vouchers) {
+                        vouchers.groupBy { it.profileName.ifBlank { "1000Ks" } }
+                            .map { (pName, vList) ->
+                                val available = vList.count { !it.isUsed && !it.isPrinted && (it.bytesIn + it.bytesOut == 0L) }
+                                pName to available
+                            }
+                            .sortedByDescending { it.second }
+                            .take(4)
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        topProfiles.forEach { (pName, stockCount) ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (stockCount > 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable(enabled = stockCount > 0) {
+                                        viewModel.quickDispenseVoucher(pName) { v, msg ->
+                                            if (v != null) {
+                                                dispensedVoucher = v
+                                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(v.code))
+                                            }
+                                        }
+                                    }
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = pName,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "$stockCount left",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                        color = if (stockCount > 0) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Management Navigation
             Text(
@@ -868,7 +1055,398 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 }
             )
         }
+
+        selectedProfileForModal?.let { profName ->
+            ProfileActivatedVouchersDialog(
+                profileName = profName,
+                viewModel = viewModel,
+                strings = strings,
+                onDismiss = { selectedProfileForModal = null }
+            )
+        }
+
+        if (showCustomerLookupDialog) {
+            CustomerQuotaLookupDialog(
+                viewModel = viewModel,
+                strings = strings,
+                onDismiss = { showCustomerLookupDialog = false }
+            )
+        }
+
+        dispensedVoucher?.let { v ->
+            VoucherDispensedDialog(
+                voucher = v,
+                strings = strings,
+                onDismiss = { dispensedVoucher = null }
+            )
+        }
     }
+}
+
+@Composable
+fun ProfileActivatedVouchersDialog(
+    profileName: String,
+    viewModel: MainViewModel,
+    strings: com.example.utils.AppStrings,
+    onDismiss: () -> Unit
+) {
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val activeUsers by viewModel.activeUsers.collectAsStateWithLifecycle()
+    val activeCodes = remember(activeUsers) { activeUsers.map { it.user }.toSet() }
+    val activatedVouchers = remember(profileName, viewModel.vouchers) {
+        viewModel.getActivatedVouchersForProfile(profileName)
+    }
+    var searchQuery by remember { mutableStateOf("") }
+    val filteredList = remember(activatedVouchers, searchQuery) {
+        if (searchQuery.isBlank()) activatedVouchers
+        else activatedVouchers.filter {
+            it.code.contains(searchQuery.trim(), ignoreCase = true) ||
+            it.comment.contains(searchQuery.trim(), ignoreCase = true)
+        }
+    }
+
+    val totalBytes = remember(activatedVouchers) {
+        activatedVouchers.sumOf { it.bytesIn + it.bytesOut }
+    }
+    val totalGbFormatted = String.format(java.util.Locale.US, "%.2f GB", totalBytes / (1024.0 * 1024.0 * 1024.0))
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Text(
+                            text = profileName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = strings.profileActivatedVouchersTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "${activatedVouchers.size} Activated • Total Starlink: $totalGbFormatted",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text(strings.enterVoucherCode) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    trailingIcon = {
+                        if (searchQuery.isNotBlank()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                if (filteredList.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No activated vouchers found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(filteredList.size) { index ->
+                            val v = filteredList[index]
+                            val isOnline = activeCodes.contains(v.code) || activeCodes.contains(v.username)
+                            val consumedBytes = v.bytesIn + v.bytesOut
+                            val consumedStr = if (consumedBytes >= 1024L * 1024L * 1024L) {
+                                String.format(java.util.Locale.US, "%.2f GB", consumedBytes / (1024.0 * 1024.0 * 1024.0))
+                            } else {
+                                String.format(java.util.Locale.US, "%.1f MB", consumedBytes / (1024.0 * 1024.0))
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                border = androidx.compose.foundation.BorderStroke(0.8.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(7.dp)
+                                                    .background(if (isOnline) Color(0xFF10B981) else MaterialTheme.colorScheme.outline, CircleShape)
+                                            )
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(
+                                                text = v.code,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            if (isOnline) {
+                                                Spacer(Modifier.width(4.dp))
+                                                Text(
+                                                    text = "Online",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFF047857)
+                                                )
+                                            }
+                                        }
+                                        Spacer(Modifier.height(2.dp))
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text(
+                                                text = "Used: $consumedStr",
+                                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            if (v.uptime.isNotBlank() && v.uptime != "0s") {
+                                                Text(
+                                                    text = "Uptime: ${v.uptime}",
+                                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(v.code))
+                                        },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ContentCopy,
+                                            contentDescription = "Copy",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text(strings.close)
+            }
+        }
+    )
+}
+
+@Composable
+fun CustomerQuotaLookupDialog(
+    viewModel: MainViewModel,
+    strings: com.example.utils.AppStrings,
+    onDismiss: () -> Unit
+) {
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    var query by remember { mutableStateOf("") }
+    var resultVoucher by remember { mutableStateOf<com.example.domain.models.Voucher?>(null) }
+    val activeUsers by viewModel.activeUsers.collectAsStateWithLifecycle()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.SupportAgent, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(8.dp))
+                Text(strings.customerLookup, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            }
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = {
+                            query = it
+                            resultVoucher = viewModel.searchVoucherDetails(it)
+                        },
+                        placeholder = { Text(strings.enterVoucherCode) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Button(onClick = {
+                        resultVoucher = viewModel.searchVoucherDetails(query)
+                    }) {
+                        Text(strings.checkQuota)
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                resultVoucher?.let { v ->
+                    val isOnline = activeUsers.any { it.user.equals(v.code, ignoreCase = true) || it.user.equals(v.username, ignoreCase = true) }
+                    val activeSession = activeUsers.firstOrNull { it.user.equals(v.code, ignoreCase = true) || it.user.equals(v.username, ignoreCase = true) }
+                    val totalConsumedBytes = v.bytesIn + v.bytesOut
+                    val consumedMb = totalConsumedBytes / (1024.0 * 1024.0)
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(v.code, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (isOnline) Color(0xFF10B981).copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+                                ) {
+                                    Text(
+                                        text = if (isOnline) "🟢 Active Online" else "⚪ Offline",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isOnline) Color(0xFF047857) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(6.dp))
+                            Text("Profile: ${v.profileName.ifBlank { "1000Ks" }}", style = MaterialTheme.typography.bodySmall)
+
+                            if (v.dataLimitMb > 0) {
+                                val remainingMb = (v.dataLimitMb - consumedMb).coerceAtLeast(0.0)
+                                Text("Remaining Quota: ${String.format(java.util.Locale.US, "%.1f MB / %d MB", remainingMb, v.dataLimitMb)}", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                            } else {
+                                Text("Data Consumed: ${String.format(java.util.Locale.US, "%.1f MB (Unlimited)", consumedMb)}", style = MaterialTheme.typography.bodySmall)
+                            }
+
+                            if (v.uptime.isNotBlank()) {
+                                Text("Uptime: ${v.uptime}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+
+                            activeSession?.let { s ->
+                                Spacer(Modifier.height(4.dp))
+                                Text("Connected IP: ${s.address}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp))
+                                Text("Client MAC: ${s.macAddress}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp))
+                            }
+                        }
+                    }
+                } ?: run {
+                    if (query.isNotBlank()) {
+                        Text("No matching voucher found in system.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text(strings.close)
+            }
+        }
+    )
+}
+
+@Composable
+fun VoucherDispensedDialog(
+    voucher: com.example.domain.models.Voucher,
+    strings: com.example.utils.AppStrings,
+    onDismiss: () -> Unit
+) {
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF10B981))
+                Spacer(Modifier.width(8.dp))
+                Text(strings.voucherSoldSuccess, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                    border = androidx.compose.foundation.BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = voucher.profileName.ifBlank { "1000Ks" },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = voucher.code,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Copied to Clipboard ✓",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF10B981)
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text(strings.close)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = {
+                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(voucher.code))
+            }) {
+                Text(strings.sellAndCopy)
+            }
+        }
+    )
 }
 
 private fun formatBytes(bytes: Long): String {

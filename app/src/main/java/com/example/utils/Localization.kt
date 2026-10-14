@@ -229,7 +229,26 @@ data class AppStrings(
     val routerScriptSuccess: String,
     val routerScriptFailed: String,
     val routerUpdateAvailable: String,
-    val runUpdateScriptBtn: String
+    val runUpdateScriptBtn: String,
+
+    // Mobile Data Seller & AirMetro Enhanced Strings
+    val quickSellVoucher: String,
+    val sellAndCopy: String,
+    val sellAndPrint: String,
+    val voucherSoldSuccess: String,
+    val inStockLabel: String,
+    val lowStockWarning: String,
+    val customerLookup: String,
+    val enterVoucherCode: String,
+    val checkQuota: String,
+    val profileActivatedVouchersTitle: String,
+    val activeNowLabel: String,
+    val exactGbUsage: String,
+    val airMetroAutoPairSuccess: String,
+    val autoDetectPairs: String,
+    val linkHealthLabel: String,
+    val confidenceLabel: String,
+    val swapBaseCpe: String
 )
 
 val MyanmarStrings = AppStrings(
@@ -450,7 +469,26 @@ val MyanmarStrings = AppStrings(
     routerScriptSuccess = "Router တွင် အောင်မြင်စွာ Run ပြီးပါပြီ!",
     routerScriptFailed = "Router တွင် Run ရာတွင် အမှားဖြစ်ပေါ်ပါသည်",
     routerUpdateAvailable = "Update တွင် Router ညွှန်ကြားချက်များ ပါဝင်ပါသည်",
-    runUpdateScriptBtn = "Router Script ကို Run မည်"
+    runUpdateScriptBtn = "Router Script ကို Run မည်",
+
+    // Mobile Data Seller & AirMetro Enhanced Strings
+    quickSellVoucher = "ဘောင်ချာ အမြန်ရောင်းမည်",
+    sellAndCopy = "ကုဒ် ကူးယူမည်",
+    sellAndPrint = "ပရင့်ထုတ်မည်",
+    voucherSoldSuccess = "ဘောင်ချာ ကုဒ် ရယူပြီးပါပြီ",
+    inStockLabel = "လက်ကျန်",
+    lowStockWarning = "သတိပေးချက် - ဘောင်ချာ လက်ကျန် နည်းနေပါသည်!",
+    customerLookup = "ဝယ်သူ ဘောင်ချာ လက်ကျန်/အခြေအနေ စစ်ဆေးရန်",
+    enterVoucherCode = "ဘောင်ချာ ကုဒ် ရိုက်ထည့်ပါ...",
+    checkQuota = "လက်ကျန် စစ်မည်",
+    profileActivatedVouchersTitle = "သုံးစွဲထားသော ဘောင်ချာများ စာရင်း",
+    activeNowLabel = "လက်ရှိ သုံးနေဆဲ",
+    exactGbUsage = "တိကျသော GB ပမာဏ",
+    airMetroAutoPairSuccess = "AirMetro Bridge များကို အောင်မြင်စွာ ချိတ်ဆက်ပြီးပါပြီ",
+    autoDetectPairs = "AirMetro Pair အလိုအလျောက် ရှာမည်",
+    linkHealthLabel = "လိုင်းအရည်အသွေး",
+    confidenceLabel = "ကိုက်ညီမှု",
+    swapBaseCpe = "Base နှင့် CPE အခန်းကဏ္ဍ ပြောင်းမည်"
 )
 
 val EnglishStrings = AppStrings(
@@ -671,7 +709,26 @@ val EnglishStrings = AppStrings(
     routerScriptSuccess = "Script executed successfully on router!",
     routerScriptFailed = "Failed to execute script on router",
     routerUpdateAvailable = "Router Script Available in Update",
-    runUpdateScriptBtn = "Run Router Script Now"
+    runUpdateScriptBtn = "Run Router Script Now",
+
+    // Mobile Data Seller & AirMetro Enhanced Strings
+    quickSellVoucher = "Quick Voucher Dispenser",
+    sellAndCopy = "Copy Code",
+    sellAndPrint = "Print",
+    voucherSoldSuccess = "Voucher Dispensed Successfully!",
+    inStockLabel = "in stock",
+    lowStockWarning = "Low Voucher Inventory Alert!",
+    customerLookup = "Customer Voucher & Quota Lookup",
+    enterVoucherCode = "Enter voucher code...",
+    checkQuota = "Check Quota",
+    profileActivatedVouchersTitle = "Activated Vouchers Under Profile",
+    activeNowLabel = "Active Now",
+    exactGbUsage = "Exact GB Usage",
+    airMetroAutoPairSuccess = "AirMetro bridge pairs automatically linked!",
+    autoDetectPairs = "Auto-Detect Pairs",
+    linkHealthLabel = "Link Health",
+    confidenceLabel = "Match",
+    swapBaseCpe = "Swap Base ↔ CPE Roles"
 )
 
 object LanguageManager {

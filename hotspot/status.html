@@ -1,47 +1,140 @@
-$(if logged-in == 'no')
 <!DOCTYPE html>
 <html lang="my">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <meta http-equiv="refresh" content="0; url=$(link-login)" />
-  <title>Kyaw Gyi WiFi – လော့ဂ်အင်</title>
-  <script>
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } catch(e) {}
-    window.location.replace("$(link-login)");
-  </script>
-</head>
-<body style="background:#060913; color:#94A3B8; font-family:sans-serif; text-align:center; padding-top:40px;">
-  <p>လော့ဂ်အင် စာမျက်နှာသို့ ကူးပြောင်းနေပါသည်...</p>
-  <p><a href="$(link-login)" style="color:#38BDF8;">ဒီနေရာကို နှိပ်ပါ (Login)</a></p>
-</body>
-</html>
-$(else)
-<!DOCTYPE html>
-<html lang="my">
-
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <title>Kyaw Gyi WiFi – အခြေအနေ</title>
+  <title>Kyaw Gyi WiFi – အင်တာနက် အခြေအနေ (Status)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
+  $(if logged-in == 'yes')
   <meta http-equiv="refresh" content="60; url=$(link-status)" />
-  <link rel="icon" type="image/svg+xml"
-    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23060913'/%3E%3Cpath d='M14 24 Q32 10 50 24' stroke='%2300F2FE' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M20 32 Q32 20 44 32' stroke='%2338BDF8' stroke-width='3.5' fill='none' stroke-linecap='round'/%3E%3Cpolygon points='27,43 37,43 41,47 32,56 23,47' fill='%23F59E0B'/%3E%3C/svg%3E" />
+  $(endif)
   <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* Status Dashboard Specific Styles */
+    .status-badge-card {
+      background: rgba(4, 9, 20, 0.75);
+      border: 1px solid rgba(56, 189, 248, 0.22);
+      border-radius: 20px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .user-info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .stats-2x2-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 340px) {
+      .stats-2x2-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .stat-tile {
+      background: rgba(10, 20, 38, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 14px 12px;
+      text-align: left;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .stat-tile.featured-emerald {
+      border-color: rgba(16, 185, 129, 0.35);
+      background: linear-gradient(145deg, rgba(16, 185, 129, 0.08) 0%, rgba(10, 20, 38, 0.9) 100%);
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.12);
+    }
+    .stat-tile.featured-cyan {
+      border-color: rgba(0, 242, 254, 0.35);
+      background: linear-gradient(145deg, rgba(0, 242, 254, 0.08) 0%, rgba(10, 20, 38, 0.9) 100%);
+      box-shadow: 0 4px 20px rgba(0, 242, 254, 0.12);
+    }
+    .stat-tile-title {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #94A3B8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .stat-tile-val {
+      font-size: 16.5px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      line-height: 1.25;
+      margin-bottom: 4px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      word-break: break-word;
+    }
+    .stat-tile-sub {
+      font-size: 11px;
+      color: #64748B;
+      line-height: 1.35;
+      font-weight: 500;
+    }
+    .color-emerald { color: #10B981; }
+    .color-cyan { color: #00F2FE; }
+    .color-amber { color: #F59E0B; }
+    .color-slate { color: #CBD5E1; }
+    .plan-tag {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 8px;
+      background: rgba(0, 242, 254, 0.12);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      color: #00F2FE;
+    }
+    .refresh-btn {
+      width: 100%;
+      padding: 11px 16px;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 14px;
+      background: rgba(56, 189, 248, 0.08);
+      color: #38BDF8;
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      transition: all 0.2s ease;
+    }
+    .refresh-btn:hover {
+      background: rgba(56, 189, 248, 0.18);
+      color: #FFFFFF;
+    }
+  </style>
 </head>
-
 <body>
 
-  <!-- Dynamic Ambient Animated Glow Orbs -->
+  <!-- Server-Side Gate: If not logged in, immediately redirect to login.html -->
+  $(if logged-in == 'no')
+  <meta http-equiv="refresh" content="0; url=$(link-login)" />
+  <script>
+    try { localStorage.clear(); sessionStorage.clear(); } catch(e){}
+    window.location.replace("$(link-login)");
+  </script>
+  $(else)
+
+  <!-- Ambient Animated Aurora -->
   <div class="bg-ambient">
     <div class="orb orb-1"></div>
     <div class="orb orb-2"></div>
@@ -49,325 +142,500 @@ $(else)
   </div>
 
   <div class="portal-container">
-    <div class="glass-card" style="text-align: center;">
+    <div class="glass-card">
 
-      <!-- Brand Header: Kyaw Gyi WiFi -->
-      <div class="brand-header" style="margin-bottom: 18px;">
-        <h1 class="brand-title">ကျော်ကြီး WiFi</h1>
-        <p class="brand-sub">
-          <span class="live-dot"></span>
-          အင်တာနက် ချိတ်ဆက်ထားသည်
-        </p>
-      </div>
-
-      <!-- Active User Card with Dynamic Profile Badge -->
-      <div
-        style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 12px 16px; margin-bottom: 16px; text-align: left; display: flex; align-items: center; justify-content: space-between;">
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <div
-            style="width: 38px; height: 38px; border-radius: 12px; background: rgba(56, 189, 248, 0.15); display: flex; align-items: center; justify-content: center; color: #38BDF8;">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
-            </svg>
-          </div>
-          <div>
-            <div style="font-size: 11px; color: var(--text-dim); font-weight: 500;">အသုံးပြုသူ (Voucher)</div>
-            <div style="font-size: 15px; font-weight: 700; color: #FFFFFF;" id="display_username">$(username)</div>
-          </div>
-        </div>
-        <div id="badge_profile_plan"
-          style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 10px; padding: 5px 11px; text-align: right;">
-          <div style="font-size: 9.5px; color: #6EE7B7; font-weight: 600; text-transform: uppercase;">ပက်ကေ့ဂျ်</div>
-          <div style="font-size: 12.5px; font-weight: 700; color: #A7F3D0;" id="profile_plan_name">1,000 Ks (1.7 GB)</div>
-        </div>
-      </div>
-
-      <!-- Live Session Stats 2x2 Grid -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;">
-        <div
-          style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; text-align: left;">
-          <div style="font-size: 11px; color: var(--text-dim);">အသုံးပြုချိန်</div>
-          <div style="font-size: 14px; font-weight: 700; color: #10B981; margin-top: 2px;" id="stat_uptime">$(uptime)</div>
-        </div>
-
-        <div
-          style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; text-align: left;">
-          <div style="font-size: 11px; color: var(--text-dim);">ကျန်ရှိချိန်</div>
-          <div style="font-size: 14px; font-weight: 700; color: #F59E0B; margin-top: 2px;" id="stat_timeleft">$(session-time-left)</div>
-        </div>
-
-        <div
-          style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; text-align: left;">
-          <div style="font-size: 11px; color: var(--text-dim);">အသုံးပြုပြီး</div>
-          <div style="font-size: 14px; font-weight: 700; color: #38BDF8; margin-top: 2px;" id="stat_data_used">$(bytes-in-nice) / $(bytes-out-nice)</div>
-        </div>
-
-        <div
-          style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; text-align: left;">
-          <div style="font-size: 11px; color: var(--text-dim);">ကျန်ရှိဒေတာ</div>
-          <div style="font-size: 14px; font-weight: 700; color: #A7F3D0; margin-top: 2px;" id="stat_data_remaining">$(remain-bytes-total)</div>
-        </div>
-      </div>
-
-      <!-- Raw Hidden Fields for JavaScript Formatters -->
-      <span id="raw_bytes_in" style="display:none;">$(bytes-in)</span>
-      <span id="raw_bytes_out" style="display:none;">$(bytes-out)</span>
-      <span id="raw_remain_bytes" style="display:none;">$(remain-bytes-total)</span>
-      <span id="raw_timeleft" style="display:none;">$(session-time-left)</span>
-      <span id="raw_uptime" style="display:none;">$(uptime)</span>
-
-      <!-- IP & MAC -->
-      <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 16px;">
-        IP: <span style="color:#E2E8F0;">$(ip)</span> &bull; MAC: <span style="color:#E2E8F0;">$(mac)</span>
-      </div>
-
-      <!-- Logout Form -->
-      <form action="$(link-logout)" name="logout" method="post" onsubmit="try { localStorage.clear(); sessionStorage.clear(); } catch(e){}">
-        <input type="hidden" name="erase-cookie" value="on" />
-        <button type="submit"
-          style="width: 100%; padding: 13px; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 14px; background: rgba(239, 68, 68, 0.12); color: #FCA5A5; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
+      <!-- Connected Brand Header -->
+      <div class="brand-header">
+        <div class="brand-badge" style="border-color: rgba(16, 185, 129, 0.45); box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25);">
+          <svg class="wifi-wave-icon" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+            <path d="M1.42 9a16 16 0 0 1 21.16 0" />
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+            <circle cx="12" cy="20" r="1.5" fill="#10B981" />
           </svg>
-          ထွက်မည် (Logout)
+        </div>
+        <h1 class="brand-title">ကျော်ကြီး WiFi</h1>
+        <div class="brand-subtitle">
+          <span class="live-indicator" style="background: #10B981; box-shadow: 0 0 12px #10B981;"></span>
+          <span style="color: #10B981; font-weight: 700;">အင်တာနက် ချိတ်ဆက်ထားသည်</span>
+        </div>
+      </div>
+
+      <!-- User & Plan Card -->
+      <div class="status-badge-card">
+        <div class="user-info-row">
+          <span style="font-size: 13px; color: #94A3B8;">ဘောင်ချာကုဒ် (User)</span>
+          <strong style="font-size: 15px; color: #00F2FE; font-family: monospace;">$(username)</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 13px; color: #94A3B8;">အစီအစဉ် (Plan)</span>
+          <span class="plan-tag" id="plan_badge">စစ်ဆေးနေပါသည်...</span>
+        </div>
+      </div>
+
+      <!-- 2x2 Stats Dashboard Grid: Exact MBs & Exact Time -->
+      <div class="stats-2x2-grid">
+
+        <!-- 1. Exact Remaining Data in MB -->
+        <div class="stat-tile featured-emerald">
+          <div class="stat-tile-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+            <span>လက်ကျန်ဒေတာ</span>
+          </div>
+          <div class="stat-tile-val color-emerald" id="stat_data_remaining">
+            တွက်ချက်နေပါသည်...
+          </div>
+          <div class="stat-tile-sub" id="stat_data_remaining_sub">
+            စစ်ဆေးနေပါသည်...
+          </div>
+        </div>
+
+        <!-- 2. Exact Used Data in MB -->
+        <div class="stat-tile featured-cyan">
+          <div class="stat-tile-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00F2FE" stroke-width="2.2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+            <span>အသုံးပြုပြီးဒေတာ</span>
+          </div>
+          <div class="stat-tile-val color-cyan" id="stat_data_used">
+            တွက်ချက်နေပါသည်...
+          </div>
+          <div class="stat-tile-sub" id="stat_data_used_sub">
+            ↑ တင်ပို့ | ↓ ရယူ
+          </div>
+        </div>
+
+        <!-- 3. Remaining Time -->
+        <div class="stat-tile">
+          <div class="stat-tile-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span>လက်ကျန်အချိန်</span>
+          </div>
+          <div class="stat-tile-val color-amber" id="stat_timeleft">
+            $(session-time-left)
+          </div>
+          <div class="stat-tile-sub" id="stat_timeleft_sub">
+            သက်တမ်း
+          </div>
+        </div>
+
+        <!-- 4. Uptime -->
+        <div class="stat-tile">
+          <div class="stat-tile-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="2.2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 14 10"></polyline>
+            </svg>
+            <span>အသုံးပြုပြီးချိန်</span>
+          </div>
+          <div class="stat-tile-val color-slate" id="stat_uptime">
+            $(uptime)
+          </div>
+          <div class="stat-tile-sub" id="stat_uptime_sub">
+            ချိတ်ဆက်ထားချိန်
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Quick Live Refresh Button -->
+      <button type="button" class="refresh-btn" onclick="window.location.reload();">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <polyline points="1 20 1 14 7 14"></polyline>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+        <span>လက်ကျန်ဒေတာ ပြန်လည်စစ်ဆေးရန် (Refresh)</span>
+      </button>
+
+      <!-- Native Logoff Form -->
+      <form action="$(link-logout)" name="logout" method="post" onsubmit="try { localStorage.clear(); } catch(e){}">
+        <input type="hidden" name="erase-cookie" value="on" />
+        <button type="submit" class="btn-submit" style="background: linear-gradient(135deg, #EF4444 0%, #B91C1C 100%); box-shadow: 0 10px 25px rgba(239, 68, 68, 0.4); margin-top: 4px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+          ထွက်မည် (Disconnect)
         </button>
       </form>
 
-      <!-- Status Check Info Link -->
-      <div
-        style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 10px 14px; margin-top: 14px; text-align: left; font-size: 11.5px; color: #CBD5E1; line-height: 1.5;">
-        လက်ကျန်အချိန်နှင့် ဒေတာကို <strong style="color: #FBBF24;">http://10.10.10.1</strong> တွင် အချိန်မရွေး စစ်ဆေးနိုင်ပါသည်။
+      <!-- Network Info Pill -->
+      <div style="font-size: 11px; color: var(--text-dim); margin-top: 16px; text-align: center; background: rgba(255,255,255,0.03); border-radius: 10px; padding: 6px 10px;">
+        IP: <span style="color:#CBD5E1;">$(ip)</span> &bull; MAC: <span style="color:#CBD5E1;">$(mac)</span>
       </div>
 
-      <p class="footer-copy">
-        Kyaw Gyi WiFi &bull; High Speed Internet
+      <!-- Footer Copy -->
+      <p class="footer-note">
+        Kyaw Gyi WiFi &bull; အင်တာနက် အသုံးပြုခြင်းအတွက် ကျေးဇူးတင်ပါသည်
       </p>
 
     </div>
   </div>
 
+  <!-- Raw Hidden Fields for JavaScript Formatters -->
+  <span id="raw_bytes_in" style="display:none;">$(bytes-in)</span>
+  <span id="raw_bytes_out" style="display:none;">$(bytes-out)</span>
+  <span id="raw_bytes_in_nice" style="display:none;">$(bytes-in-nice)</span>
+  <span id="raw_bytes_out_nice" style="display:none;">$(bytes-out-nice)</span>
+  <span id="raw_remain_bytes" style="display:none;">$(remain-bytes-total)</span>
+  <span id="raw_limit_bytes" style="display:none;">$(limit-bytes-total)</span>
+  <span id="raw_timeleft" style="display:none;">$(session-time-left)</span>
+  <span id="raw_uptime" style="display:none;">$(uptime)</span>
+  <span id="raw_username" style="display:none;">$(username)</span>
+
   <script>
     (function () {
-      // 0. Rigorous Login Validation
-      var u = "$(username)";
-      var loggedIn = "$(logged-in)";
-      if (!u || u === '' || u.indexOf('$(') !== -1 || loggedIn === 'no') {
-        try {
-          localStorage.clear();
-          sessionStorage.clear();
-        } catch(e) {}
-        window.location.replace("$(link-login)");
-        return;
-      }
-
-      // 1. Session Persistence
-      try {
-        localStorage.setItem('kyawgyi_wifi_voucher', u.trim());
-        localStorage.setItem('kyawgyi_wifi_voucher_time', Date.now().toString());
-        localStorage.setItem('kyawgyi_wifi_auth_type', 'voucher');
-      } catch (e) { }
-
-      // 2. Parse Byte Values cleanly
+      // 1. Robust Bytes Parser
       function parseBytes(val) {
-        if (!val || val.indexOf('$(') !== -1) return 0;
-        var s = String(val).trim().replace(/,/g, '');
-        if (/^[0-9]+(?:\.[0-9]+)?\s*b$/i.test(s)) {
-          var n = parseFloat(s);
-          return isNaN(n) ? 0 : n * 1073741824;
+        if (!val) return null;
+        var s = String(val).trim();
+        if (s.indexOf('$(') !== -1 || s.toLowerCase() === 'none' || s.toLowerCase() === 'unlimited' || s === '') {
+          return null;
         }
-        if (/\b(?:gb|gib)\b/i.test(s)) {
-          var n = parseFloat(s);
-          return isNaN(n) ? 0 : n * 1073741824;
+
+        s = s.replace(/,/g, '').replace(/[\u00a0\s]+/g, ' ').trim();
+
+        var m = s.match(/^([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)?$/);
+        if (!m) {
+          var noSpaces = s.replace(/\s+/g, '');
+          m = noSpaces.match(/^([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)?$/);
         }
-        if (/\b(?:mb|mib)\b/i.test(s)) {
-          var n = parseFloat(s);
-          return isNaN(n) ? 0 : n * 1048576;
-        }
-        if (/\b(?:kb|kib)\b/i.test(s)) {
-          var n = parseFloat(s);
-          return isNaN(n) ? 0 : n * 1024;
-        }
-        var n = parseFloat(s);
-        return isNaN(n) ? 0 : n;
+        if (!m) return null;
+
+        var num = parseFloat(m[1]);
+        if (isNaN(num)) return null;
+        var unit = (m[2] || '').toLowerCase();
+
+        if (unit.indexOf('g') !== -1) return num * 1024 * 1024 * 1024;
+        if (unit.indexOf('m') !== -1) return num * 1024 * 1024;
+        if (unit.indexOf('k') !== -1) return num * 1024;
+        if (unit === 'b' || unit === 'byte' || unit === 'bytes') return num;
+
+        // Raw bytes from RouterOS
+        return num;
       }
 
-      // 3. Robust Data Formatter
-      function formatDataBytes(val) {
-        if (!val || val.indexOf('$(') !== -1 || val.toLowerCase() === 'none' || val.toLowerCase() === 'unlimited') {
-          return 'ကန့်သတ်မထားပါ (Unlimited)';
+      // 2. Format Exact Remaining MB
+      function formatRemainingMB(bytes) {
+        if (bytes === null || bytes === undefined) {
+          return {
+            main: 'ကန့်သတ်မထားပါ',
+            sub: 'အကန့်အသတ်မရှိ (Unlimited)'
+          };
         }
-        var s = String(val).trim().replace(/,/g, '');
-
-        if (/^[0-9]+(?:\.[0-9]+)?\s*b$/i.test(s)) {
-          var n = parseFloat(s);
-          if (!isNaN(n)) return (n < 10 ? n.toFixed(2) : n.toFixed(1)) + ' GB';
-        }
-
-        if (/\b(?:gb|gib)\b/i.test(s)) {
-          var n = parseFloat(s);
-          if (!isNaN(n)) return (n < 10 ? n.toFixed(2) : n.toFixed(1)) + ' GB';
-          return s;
+        if (bytes <= 0) {
+          return {
+            main: '0 MB',
+            sub: 'ဒေတာကုန်ပါပြီ'
+          };
         }
 
-        if (/\b(?:mb|mib)\b/i.test(s)) {
-          var n = parseFloat(s);
-          if (!isNaN(n)) {
-            if (n >= 1024) return (n / 1024).toFixed(2) + ' GB';
-            return Math.round(n) + ' MB';
-          }
-          return s;
+        var mb = bytes / (1024 * 1024);
+
+        if (mb >= 1024) {
+          var gb = mb / 1024;
+          var mbStr = (Math.round(mb * 10) / 10).toLocaleString(undefined, {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1
+          }) + ' MB';
+          var gbStr = gb.toFixed(2) + ' GB';
+          return {
+            main: mbStr,
+            sub: '≈ ' + gbStr + ' ကျန်ရှိပါသည်'
+          };
         }
 
-        if (/\b(?:kb|kib)\b/i.test(s)) {
-          var n = parseFloat(s);
-          if (!isNaN(n)) {
-            var mb = n / 1024;
-            return mb >= 1 ? mb.toFixed(1) + ' MB' : '< 1 MB';
-          }
-          return s;
+        if (mb >= 10) {
+          var mbStr = (Math.round(mb * 10) / 10).toFixed(1) + ' MB';
+          return {
+            main: mbStr,
+            sub: 'လက်ကျန်ဒေတာ'
+          };
         }
 
-        var num = parseFloat(s);
-        if (!isNaN(num)) {
-          if (num >= 1073741824) {
-            return (num / 1073741824).toFixed(2) + ' GB';
-          } else if (num >= 1048576) {
-            var mb = num / 1048576;
-            return (mb >= 10 ? Math.round(mb) : mb.toFixed(1)) + ' MB';
-          } else if (num >= 1024) {
-            return Math.round(num / 1024) + ' KB';
-          } else if (num > 0) {
-            return '< 1 MB';
-          } else {
-            return '0 MB';
-          }
+        if (mb >= 1) {
+          return {
+            main: mb.toFixed(1) + ' MB',
+            sub: 'လက်ကျန်ဒေတာ'
+          };
         }
-        return s;
+
+        if (mb >= 0.05) {
+          return {
+            main: mb.toFixed(2) + ' MB',
+            sub: 'လက်ကျန် နည်းပါးနေပါသည်'
+          };
+        }
+
+        return {
+          main: '< 0.05 MB',
+          sub: 'လက်ကျန် နည်းပါးနေပါသည်'
+        };
       }
 
-      // 4. Format Used Bytes Cleanly
-      function formatUsedBytes(rawIn, rawOut, niceFallback) {
-        var inB = parseBytes(rawIn);
-        var outB = parseBytes(rawOut);
-        var total = inB + outB;
-        if (total > 0) return formatDataBytes(total.toString());
-        if (niceFallback && niceFallback.indexOf('$(') === -1) {
-          var parts = niceFallback.split('/');
-          if (parts.length === 2) {
-            var p1 = parseBytes(parts[0]);
-            var p2 = parseBytes(parts[1]);
-            var sum = p1 + p2;
-            if (sum > 0) return formatDataBytes(sum.toString());
-            return formatDataBytes(parts[1].trim()) || formatDataBytes(parts[0].trim());
-          }
-          return formatDataBytes(niceFallback);
+      // 3. Format Exact Used MB
+      function formatUsedMB(bytes, inBytes, outBytes) {
+        if (!bytes || bytes <= 0) {
+          return {
+            main: '0.0 MB',
+            sub: 'အသုံးမပြုရသေးပါ'
+          };
         }
-        return '0 MB';
+
+        var mb = bytes / (1024 * 1024);
+        var inMb = (inBytes / (1024 * 1024));
+        var outMb = (outBytes / (1024 * 1024));
+
+        var subStr = '↑ ' + inMb.toFixed(1) + ' MB | ↓ ' + outMb.toFixed(1) + ' MB';
+        if (inMb < 0.1 && outMb < 0.1) {
+          subStr = '↑ ' + inMb.toFixed(2) + ' MB | ↓ ' + outMb.toFixed(2) + ' MB';
+        }
+
+        if (mb >= 1024) {
+          var gb = mb / 1024;
+          var mbStr = (Math.round(mb * 10) / 10).toLocaleString(undefined, {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1
+          }) + ' MB';
+          var gbStr = gb.toFixed(2) + ' GB';
+          return {
+            main: mbStr,
+            sub: '≈ ' + gbStr + ' (' + subStr + ')'
+          };
+        }
+
+        if (mb >= 10) {
+          return {
+            main: (Math.round(mb * 10) / 10).toFixed(1) + ' MB',
+            sub: subStr
+          };
+        }
+
+        if (mb >= 0.1) {
+          return {
+            main: mb.toFixed(2) + ' MB',
+            sub: subStr
+          };
+        }
+
+        if (mb >= 0.01) {
+          return {
+            main: mb.toFixed(2) + ' MB',
+            sub: subStr
+          };
+        }
+
+        return {
+          main: '< 0.01 MB',
+          sub: subStr
+        };
       }
 
-      // 5. Format Remaining Time
+      // 4. Format Time Left
       function formatTimeLeft(val) {
-        if (!val || val.indexOf('$(') !== -1 || val.toLowerCase() === 'none' || val === '0s' || val === '0') {
-          return '24h (၁ ရက်)';
+        if (!val || val.indexOf('$(') !== -1 || val.toLowerCase() === 'none' || val === '0s' || val === '0' || val === '') {
+          return { main: 'ကန့်သတ်မထားပါ', sub: 'အချိန် အကန့်အသတ်မရှိ' };
         }
         var s = String(val).trim();
-        var m = s.match(/(?:(\d+)\s*w)?\s*(?:(\d+)\s*d)?\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?/i);
+        var m = s.match(/(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/);
         if (m) {
-          var w = m[1] ? m[1] + 'w ' : '';
-          var d = m[2] ? m[2] + 'd ' : '';
-          var h = m[3] ? m[3] + 'h ' : '';
-          var min = m[4] ? m[4] + 'm' : '';
-          var res = (w + d + h + min).trim();
-          if (res) return res;
+          var w = m[1] ? parseInt(m[1], 10) : 0;
+          var d = m[2] ? parseInt(m[2], 10) : 0;
+          var h = m[3] ? parseInt(m[3], 10) : 0;
+          var min = m[4] ? parseInt(m[4], 10) : 0;
+
+          var parts = [];
+          var mmParts = [];
+          if (w > 0) { parts.push(w + 'w'); mmParts.push(w + ' ပတ်'); }
+          if (d > 0) { parts.push(d + 'd'); mmParts.push(d + ' ရက်'); }
+          if (h > 0) { parts.push(h + 'h'); mmParts.push(h + ' နာရီ'); }
+          if (min > 0) { parts.push(min + 'm'); mmParts.push(min + ' မိနစ်'); }
+
+          if (parts.length > 0) {
+            return {
+              main: parts.slice(0, 2).join(' '),
+              sub: mmParts.slice(0, 2).join(' ') + ' ကျန်ရှိပါသည်'
+            };
+          }
         }
-        return s;
+        return { main: s, sub: 'ကျန်ရှိချိန်' };
       }
 
-      // 6. Dynamic Package Badge Resolver
-      function updatePlanBadge(uName, usedBytes, remBytes) {
-        var el = document.getElementById('profile_plan_name');
-        if (!el) return;
+      // 5. Format Uptime
+      function formatUptime(val) {
+        if (!val || val.indexOf('$(') !== -1 || val === '') return { main: '0m', sub: 'ချိတ်ဆက်ထားချိန်' };
+        var s = String(val).trim();
+        var m = s.match(/(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/);
+        if (m) {
+          var d = m[2] ? parseInt(m[2], 10) : 0;
+          var h = m[3] ? parseInt(m[3], 10) : 0;
+          var min = m[4] ? parseInt(m[4], 10) : 0;
+          var sec = m[5] ? parseInt(m[5], 10) : 0;
 
-        var totalBytes = usedBytes + remBytes;
-        var totalMb = totalBytes / 1048576;
+          var parts = [];
+          var mmParts = [];
+          if (d > 0) { parts.push(d + 'd'); mmParts.push(d + ' ရက်'); }
+          if (h > 0) { parts.push(h + 'h'); mmParts.push(h + ' နာရီ'); }
+          if (min > 0) { parts.push(min + 'm'); mmParts.push(min + ' မိနစ်'); }
+          if (parts.length === 0 && sec > 0) { parts.push(sec + 's'); mmParts.push(sec + ' စက္ကန့်'); }
+
+          if (parts.length > 0) {
+            return {
+              main: parts.slice(0, 2).join(' '),
+              sub: mmParts.slice(0, 2).join(' ') + ' အသုံးပြုပြီး'
+            };
+          }
+        }
+        return { main: s, sub: 'ချိတ်ဆက်ထားချိန်' };
+      }
+
+      // 6. Detect Plan Quota Bytes (fallback)
+      function detectPlanQuotaBytes(uName, rawTimeLeft) {
         var u = String(uName || '').toUpperCase();
+        var tLeft = String(rawTimeLeft || '').toLowerCase();
 
-        if (u.indexOf('40G') !== -1) { el.textContent = '40G (30 Day)'; return; }
-        if (u.indexOf('30D') !== -1 || u.indexOf('MONTH') !== -1) { el.textContent = '30Day (30 GB)'; return; }
-        if (u.indexOf('750') !== -1) { el.textContent = '500 Ks (750 MB)'; return; }
-        if (u.indexOf('1.7G') !== -1) { el.textContent = '1,000 Ks (1.7 GB)'; return; }
+        if (u.indexOf('40G') !== -1) return 40 * 1024 * 1024 * 1024;
+        if (u.indexOf('50G') !== -1) return 50 * 1024 * 1024 * 1024;
+        if (u.indexOf('30D') !== -1 || u.indexOf('MONTH') !== -1) return 30 * 1024 * 1024 * 1024;
+        if (u.indexOf('4GB') !== -1 || u.indexOf('4G') !== -1) return 4 * 1024 * 1024 * 1024;
+        if (u.indexOf('3GB') !== -1 || u.indexOf('3G') !== -1) return 3 * 1024 * 1024 * 1024;
+        if (u.indexOf('2GB') !== -1 || u.indexOf('2G') !== -1) return 2 * 1024 * 1024 * 1024;
+        if (u.indexOf('1.7G') !== -1 || u.indexOf('1000') !== -1) return Math.round(1.7 * 1024 * 1024 * 1024);
+        if (u.indexOf('750') !== -1 || u.indexOf('500') !== -1) return 750 * 1024 * 1024;
+        if (u.indexOf('TEST') !== -1) return 50 * 1024 * 1024;
 
-        if (totalMb >= 35000) {
-          el.textContent = '40G (30 Day)';
-        } else if (totalMb >= 25000) {
-          el.textContent = '30Day (30 GB)';
-        } else if (totalMb >= 18000) {
-          el.textContent = '20 GB Plan';
-        } else if (totalMb >= 12000) {
-          el.textContent = '15 GB Plan';
-        } else if (totalMb >= 8500) {
-          el.textContent = '10 GB Plan';
-        } else if (totalMb >= 6000) {
-          el.textContent = '7 GB Plan';
-        } else if (totalMb >= 4500) {
-          el.textContent = '5 GB Plan';
-        } else if (totalMb >= 3500) {
-          el.textContent = '4 GB Plan';
-        } else if (totalMb >= 2400) {
-          el.textContent = '3 GB (1 Day)';
-        } else if (totalMb >= 1800) {
-          el.textContent = '1,000 Ks (2 GB)';
-        } else if (totalMb >= 1300) {
-          el.textContent = '1,000 Ks (1.7 GB)';
-        } else if (totalMb >= 850) {
-          el.textContent = '500 Ks (1 GB)';
-        } else if (totalMb >= 400) {
-          el.textContent = '500 Ks (750 MB)';
-        } else if (totalMb >= 30) {
-          el.textContent = 'Test Plan (50 MB)';
-        } else {
-          el.textContent = '1,000 Ks (1.7 GB)';
+        if (tLeft.indexOf('w') !== -1 || tLeft.indexOf('4w') !== -1) {
+          return 30 * 1024 * 1024 * 1024;
         }
+
+        return Math.round(1.7 * 1024 * 1024 * 1024);
       }
 
-      // 7. Apply All Formatters
-      function applyFormatters() {
-        var rawIn = document.getElementById('raw_bytes_in') ? document.getElementById('raw_bytes_in').textContent : '0';
-        var rawOut = document.getElementById('raw_bytes_out') ? document.getElementById('raw_bytes_out').textContent : '0';
-        var uNameEl = document.getElementById('display_username');
-        var uName = uNameEl ? uNameEl.textContent.trim() : '';
+      // 7. Detect Plan Name
+      function detectPlan(uName, totalMb, rawTimeLeft) {
+        var u = String(uName || '').toUpperCase();
+        var tLeft = String(rawTimeLeft || '').toLowerCase();
 
-        var usedEl = document.getElementById('stat_data_used');
-        if (usedEl) {
-          usedEl.textContent = formatUsedBytes(rawIn, rawOut, usedEl.textContent);
+        if (u.indexOf('40G') !== -1) return '40 GB (30 ရက်)';
+        if (u.indexOf('50G') !== -1) return '50 GB (30 ရက်)';
+        if (u.indexOf('30D') !== -1 || u.indexOf('MONTH') !== -1) return '30Day (30 GB)';
+        if (u.indexOf('TEST') !== -1) return 'စမ်းသပ် (Test Plan)';
+
+        if (tLeft.indexOf('w') !== -1 || tLeft.indexOf('4w') !== -1) {
+          if (totalMb >= 35000) return '40 GB (30 ရက်)';
+          return '30Day (30 GB)';
         }
 
+        if (totalMb >= 35000) return '40 GB (30 ရက်)';
+        if (totalMb >= 25000) return '30Day (30 GB)';
+        if (totalMb >= 3800) return '4 GB (1 ရက်)';
+        if (totalMb >= 1900) return '2 GB (1 ရက်)';
+        if (totalMb >= 1200) return '1,000 Ks (1.7 GB)';
+        if (totalMb >= 500) return '500 Ks (750 MB)';
+
+        return '1,000 Ks (1.7 GB)';
+      }
+
+      function updateDashboard() {
+        var rawIn = document.getElementById('raw_bytes_in') ? document.getElementById('raw_bytes_in').textContent : '';
+        var rawOut = document.getElementById('raw_bytes_out') ? document.getElementById('raw_bytes_out').textContent : '';
+        var rawInNice = document.getElementById('raw_bytes_in_nice') ? document.getElementById('raw_bytes_in_nice').textContent : '';
+        var rawOutNice = document.getElementById('raw_bytes_out_nice') ? document.getElementById('raw_bytes_out_nice').textContent : '';
+        var rawRemain = document.getElementById('raw_remain_bytes') ? document.getElementById('raw_remain_bytes').textContent : '';
+        var rawLimit = document.getElementById('raw_limit_bytes') ? document.getElementById('raw_limit_bytes').textContent : '';
+        var rawTime = document.getElementById('raw_timeleft') ? document.getElementById('raw_timeleft').textContent : '';
+        var rawUptime = document.getElementById('raw_uptime') ? document.getElementById('raw_uptime').textContent : '';
+        var rawUser = document.getElementById('raw_username') ? document.getElementById('raw_username').textContent : '';
+
+        // Used Bytes
+        var inBytes = parseBytes(rawIn);
+        var outBytes = parseBytes(rawOut);
+        if (inBytes === null) inBytes = parseBytes(rawInNice) || 0;
+        if (outBytes === null) outBytes = parseBytes(rawOutNice) || 0;
+        var totalUsedBytes = inBytes + outBytes;
+
+        // Remaining Bytes
+        var remainBytes = parseBytes(rawRemain);
+        var limitBytes = parseBytes(rawLimit);
+
+        if (remainBytes === null) {
+          if (limitBytes !== null && limitBytes > 0) {
+            remainBytes = Math.max(0, limitBytes - totalUsedBytes);
+          } else {
+            var planEst = detectPlanQuotaBytes(rawUser, rawTime);
+            if (planEst !== null && planEst > 0) {
+              remainBytes = Math.max(0, planEst - totalUsedBytes);
+            }
+          }
+        }
+
+        // Render Remaining Data (Always in Exact MB)
         var remEl = document.getElementById('stat_data_remaining');
+        var remSubEl = document.getElementById('stat_data_remaining_sub');
         if (remEl) {
-          remEl.textContent = formatDataBytes(remEl.textContent);
+          var formattedRem = formatRemainingMB(remainBytes);
+          remEl.textContent = formattedRem.main;
+          if (remSubEl) remSubEl.textContent = formattedRem.sub;
         }
 
+        // Render Used Data (Always in Exact MB)
+        var usedEl = document.getElementById('stat_data_used');
+        var usedSubEl = document.getElementById('stat_data_used_sub');
+        if (usedEl) {
+          var formattedUsed = formatUsedMB(totalUsedBytes, inBytes, outBytes);
+          usedEl.textContent = formattedUsed.main;
+          if (usedSubEl) usedSubEl.textContent = formattedUsed.sub;
+        }
+
+        // Render Time Left
         var timeEl = document.getElementById('stat_timeleft');
+        var timeSubEl = document.getElementById('stat_timeleft_sub');
         if (timeEl) {
-          timeEl.textContent = formatTimeLeft(timeEl.textContent);
+          var formattedTime = formatTimeLeft(rawTime);
+          timeEl.textContent = formattedTime.main;
+          if (timeSubEl) timeSubEl.textContent = formattedTime.sub;
         }
 
-        var usedBytes = (parseBytes(rawIn) + parseBytes(rawOut)) || (usedEl ? parseBytes(usedEl.textContent) : 0);
-        var remBytes = remEl ? parseBytes(remEl.textContent) : 0;
-        updatePlanBadge(uName, usedBytes, remBytes);
+        // Render Uptime
+        var uptimeEl = document.getElementById('stat_uptime');
+        var uptimeSubEl = document.getElementById('stat_uptime_sub');
+        if (uptimeEl) {
+          var formattedUptime = formatUptime(rawUptime);
+          uptimeEl.textContent = formattedUptime.main;
+          if (uptimeSubEl) uptimeSubEl.textContent = formattedUptime.sub;
+        }
+
+        // Render Plan Badge
+        var planBadge = document.getElementById('plan_badge');
+        if (planBadge) {
+          var totalMb = 0;
+          if (remainBytes !== null) {
+            totalMb = (totalUsedBytes + remainBytes) / (1024 * 1024);
+          } else if (limitBytes !== null) {
+            totalMb = limitBytes / (1024 * 1024);
+          }
+          var planName = detectPlan(rawUser, totalMb, rawTime);
+          planBadge.textContent = planName;
+        }
       }
 
-      applyFormatters();
+      // Execute immediately and on load events
+      updateDashboard();
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', applyFormatters);
+        document.addEventListener('DOMContentLoaded', updateDashboard);
       }
-      window.addEventListener('load', applyFormatters);
+      window.addEventListener('load', updateDashboard);
     })();
   </script>
-</body>
+  $(endif)
 
+</body>
 </html>
-$(endif)

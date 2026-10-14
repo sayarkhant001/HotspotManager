@@ -276,7 +276,8 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         val distinctVouchers = list.distinctBy { it.code }
         val activated = distinctVouchers.filter { v ->
             activeCodes.contains(v.code) || activeCodes.contains(v.username) ||
-            v.activatedAt != null || (v.isUsed && v.generatedAt > 0L) || (v.bytesIn + v.bytesOut) > 0L
+            v.activatedAt != null || v.isUsed || (v.bytesIn + v.bytesOut) > 0L ||
+            (v.uptime.isNotBlank() && v.uptime != "0s")
         }
 
         val filtered = when (filter) {
@@ -307,8 +308,13 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
             voucherCodes.add(v.code)
             voucherCodes.add(v.username)
             val liveBytes = activeBytesMap[v.code] ?: activeBytesMap[v.username] ?: 0L
+            val commentUsedBytes = Regex("\\[USED:(\\d+)\\]").find(v.comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
             val dbBytes = v.bytesIn + v.bytesOut
-            maxOf(dbBytes, liveBytes) / (1024.0 * 1024.0)
+            val quotaBytes = if (v.isUsed && v.dataLimitMb > 0) v.dataLimitMb.toLong() * 1024L * 1024L else 0L
+            val isCutoff = v.comment.contains("EXHAUSTED", ignoreCase = true) || v.comment.contains("[CUTOFF]", ignoreCase = true)
+            val maxRecorded = maxOf(dbBytes, liveBytes, commentUsedBytes)
+            val effectiveBytes = if ((maxRecorded == 0L || isCutoff) && v.isUsed && quotaBytes > 0L) quotaBytes else maxRecorded
+            effectiveBytes / (1024.0 * 1024.0)
         }
 
         val remainingActiveMb = if (filter == "Today" || filter == "All" || filter == "Last 7 Days" || filter == "Last 30 Days") {
@@ -375,7 +381,8 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         val distinctVouchers = list.distinctBy { it.code }
         val activated = distinctVouchers.filter { v ->
             activeCodes.contains(v.code) || activeCodes.contains(v.username) ||
-            v.activatedAt != null || (v.isUsed && v.generatedAt > 0L) || (v.bytesIn + v.bytesOut) > 0L
+            v.activatedAt != null || v.isUsed || (v.bytesIn + v.bytesOut) > 0L ||
+            (v.uptime.isNotBlank() && v.uptime != "0s")
         }
 
         val filtered = when (filter) {
@@ -420,31 +427,117 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
             }
             val totalBytes = vList.sumOf { v ->
                 val liveBytes = activeBytesMap[v.code] ?: activeBytesMap[v.username] ?: 0L
+                val commentUsedBytes = Regex("\\[USED:(\\d+)\\]").find(v.comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
                 val dbBytes = v.bytesIn + v.bytesOut
-                maxOf(dbBytes, liveBytes)
+                val quotaBytes = if (v.isUsed && v.dataLimitMb > 0) v.dataLimitMb.toLong() * 1024L * 1024L else 0L
+                val isCutoff = v.comment.contains("EXHAUSTED", ignoreCase = true) || v.comment.contains("[CUTOFF]", ignoreCase = true)
+                val maxRecorded = maxOf(dbBytes, liveBytes, commentUsedBytes)
+                if ((maxRecorded == 0L || isCutoff) && v.isUsed && quotaBytes > 0L) quotaBytes else maxRecorded
             }
             val mb = totalBytes / (1024.0 * 1024.0)
-            val formatted = if (mb >= 1024.0) {
-                "${Math.round((mb / 1024.0) * 100.0) / 100.0} GB"
-            } else {
-                "${Math.round(mb * 10.0) / 10.0} MB"
+            val gb = mb / 1024.0
+            val exactGbStr = String.format(Locale.US, "%.2f GB", gb)
+            val formatted = if (mb >= 1024.0) exactGbStr else String.format(Locale.US, "%.1f MB", mb)
+
+            val totalInProfile = list.count { v ->
+                val p = v.profileName.trim()
+                val mapped = if (p.isBlank() || p.equals("default", ignoreCase = true)) {
+                    when {
+                        v.comment.contains("1000Ks") || v.price == 1000.0 -> "1000Ks"
+                        v.comment.contains("500Ks") || v.price == 500.0 -> "500Ks"
+                        v.comment.contains("30Day") || v.price >= 20000.0 -> "30Day"
+                        else -> "1000Ks"
+                    }
+                } else p
+                mapped.equals(profName, ignoreCase = true)
             }
+
+            val liveActiveCount = vList.count { activeCodes.contains(it.code) || activeCodes.contains(it.username) }
+
             ProfileUsageStat(
                 profileName = profName,
                 vouchersSold = count,
                 totalRevenue = rev,
                 dataUsedMb = mb,
-                dataUsedFormatted = formatted
+                dataUsedFormatted = formatted,
+                totalVouchers = maxOf(totalInProfile, count),
+                activeNow = liveActiveCount,
+                dataUsedGb = gb,
+                exactGbFormatted = exactGbStr
             )
         }.sortedByDescending { it.totalRevenue }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val isSyncingVouchers = MutableStateFlow(false)
 
-
     val profileVoucherCounts: StateFlow<Map<String, Int>> = vouchers.map { list ->
         list.groupingBy { it.profileName }.eachCount()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    // Profiles with low voucher stock (< 15 available un-activated and un-printed vouchers)
+    val lowStockProfiles: StateFlow<List<Pair<String, Int>>> = vouchers.map { list ->
+        val activeCodes = activeUsers.value.map { it.user }.toSet()
+        val available = list.filter { v ->
+            !v.isUsed && !v.isPrinted && (v.bytesIn + v.bytesOut == 0L) &&
+            !activeCodes.contains(v.code) && !activeCodes.contains(v.username)
+        }
+        val counts = available.groupBy { it.profileName.ifBlank { "1000Ks" } }
+            .mapValues { it.value.size }
+        counts.filter { it.value < 15 }.map { it.key to it.value }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun quickDispenseVoucher(
+        profileName: String,
+        onResult: (Voucher?, String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val activeCodes = activeUsers.value.map { it.user }.toSet()
+            val candidate = vouchers.value.firstOrNull { v ->
+                val p = v.profileName.ifBlank { "1000Ks" }
+                p.equals(profileName, ignoreCase = true) &&
+                !v.isUsed && !v.isPrinted &&
+                (v.bytesIn + v.bytesOut == 0L) &&
+                v.uptime.isBlank() &&
+                !activeCodes.contains(v.code)
+            } ?: vouchers.value.firstOrNull { v ->
+                val p = v.profileName.ifBlank { "1000Ks" }
+                p.equals(profileName, ignoreCase = true) && !v.isUsed && !activeCodes.contains(v.code)
+            }
+
+            if (candidate != null) {
+                val updated = candidate.copy(isPrinted = true)
+                repository.markVouchersAsPrinted(listOf(candidate.code))
+                onResult(updated, "Success")
+            } else {
+                onResult(null, "No stock available for $profileName")
+            }
+        }
+    }
+
+    fun searchVoucherDetails(query: String): Voucher? {
+        val q = query.trim()
+        if (q.isBlank()) return null
+        return vouchers.value.firstOrNull {
+            it.code.equals(q, ignoreCase = true) || it.username.equals(q, ignoreCase = true)
+        } ?: vouchers.value.firstOrNull {
+            it.code.endsWith(q, ignoreCase = true) || it.code.contains(q, ignoreCase = true)
+        }
+    }
+
+    fun getActivatedVouchersForProfile(profileName: String): List<Voucher> {
+        val activeCodes = activeUsers.value.map { it.user }.toSet()
+        return vouchers.value.filter { v ->
+            val p = v.profileName.ifBlank { "1000Ks" }
+            val isProfile = p.equals(profileName, ignoreCase = true)
+            val isActivated = activeCodes.contains(v.code) || activeCodes.contains(v.username) ||
+                              v.activatedAt != null || v.isUsed || (v.bytesIn + v.bytesOut > 0L) ||
+                              (v.uptime.isNotBlank() && v.uptime != "0s")
+            isProfile && isActivated
+        }.sortedWith(
+            compareByDescending<Voucher> { activeCodes.contains(it.code) || activeCodes.contains(it.username) }
+                .thenByDescending { it.activatedAt ?: it.generatedAt }
+        )
+    }
 
     private var pollingJob: Job? = null
 

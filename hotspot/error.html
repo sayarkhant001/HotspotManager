@@ -2,58 +2,62 @@
 <html lang="my">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <title>Kyaw Gyi WiFi – ချိတ်ဆက်မှု မအောင်မြင်ပါ</title>
+  <title>Kyaw Gyi WiFi – အမှားအယွင်း (Error)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <link rel="stylesheet" href="css/style.css" />
-  <script>
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } catch(e) {}
-  </script>
 </head>
 <body>
 
+  <!-- Ambient Animated Aurora -->
   <div class="bg-ambient">
-    <div class="orb orb-1" style="background: radial-gradient(circle, #EF4444, #F97316);"></div>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
   </div>
 
   <div class="portal-container">
-    <div class="glass-card" style="text-align: center;">
+    <div class="glass-card">
 
-      <div style="width: 72px; height: 72px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); border: 1.5px solid rgba(239, 68, 68, 0.40); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px; color: #F87171;">
-        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <div class="brand-header">
+        <div class="brand-badge" style="border-color: rgba(239, 68, 68, 0.45); box-shadow: 0 8px 24px rgba(239, 68, 68, 0.25);">
+          <svg class="wifi-wave-icon" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+        </div>
+        <h1 class="brand-title">ချိတ်ဆက်မှု မအောင်မြင်ပါ</h1>
+        <div class="brand-subtitle">
+          <span style="color: #F87171;">အမှားအယွင်း ဖြစ်ပေါ်ခဲ့သည်</span>
+        </div>
+      </div>
+
+      <!-- Error Message Box -->
+      <div class="alert-box" style="margin-bottom: 20px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;">
           <circle cx="12" cy="12" r="10"/>
           <line x1="12" y1="8" x2="12" y2="12"/>
           <line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
+        <span>$(error)</span>
       </div>
 
-      <h1 class="brand-title" style="font-size: 22px;">ချိတ်ဆက်မှု မအောင်မြင်ပါ</h1>
-      <p class="brand-sub" style="margin-bottom: 20px; color: #FCA5A5;">
-        $(if error)$(error)$(else)အချက်အလက် မှားယွင်းနေပါသည် သို့မဟုတ် ဒေတာ/သက်တမ်း ကုန်ဆုံးပါပြီ$(endif)
-      </p>
-
-      <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.30); border-radius: 14px; padding: 14px 16px; margin-bottom: 22px; color: #FECACA; font-size: 13.5px; line-height: 1.6;">
-        ဘောင်ချာကုဒ် သက်တမ်း သို့မဟုတ် ဒေတာကုန်သွားပါက ဘောင်ချာအသစ် ဝယ်ယူထည့်သွင်းပေးပါရန်
-      </div>
-
-      <form action="$(link-login)" method="get">
-        <button class="btn-connect" type="submit">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <!-- Retry Back Button -->
+      <a href="$(link-login)" style="text-decoration:none;">
+        <button type="button" class="btn-submit">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <polyline points="1 4 1 10 7 10"/>
             <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
           </svg>
-          ဘောင်ချာအသစ် ထည့်မည် (Login Again)
+          ပြန်လည် ကြိုးစားမည် (Try Again)
         </button>
-      </form>
+      </a>
 
-      <p class="footer-copy">
-        Kyaw Gyi WiFi &bull; စိတ်ချယုံကြည်ရသော ဝန်ဆောင်မှု
+      <p class="footer-note">
+        Kyaw Gyi WiFi &bull; ပြဿနာရှိပါက ဆိုင်ရှင်ထံ ဆက်သွယ်ပါ
       </p>
 
     </div>

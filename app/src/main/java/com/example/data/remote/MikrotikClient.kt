@@ -1584,7 +1584,7 @@ class MikrotikClient {
                     val bMacUpper = b.macAddress.trim().uppercase()
                     val c = b.comment.lowercase()
                     val isClient = com.example.utils.DeviceModelDetector.isClientDevice("", "", b.comment, bMacUpper)
-                    val isApComment = !isClient && (c.startsWith("ruijie ap:") || c.startsWith("ap:") || c.contains("reyee") || c.contains("est") || c.contains("tp-link") || c.contains("tplink") || c.contains("cpe"))
+                    val isApComment = !isClient && (c.startsWith("ruijie ap:") || c.startsWith("ap:") || c.contains("reyee") || c.contains("ruijie") || c.contains("rap") || c.contains("est") || c.contains("tp-link") || c.contains("tplink") || c.contains("cpe") || c.contains("mikrotik") || c.contains("router") || c.contains("management"))
                     val cleanCommentName = b.comment.replace(Regex("(?i)^(ruijie\\s+)?ap:\\s*"), "").trim()
 
                     val existingAp = (if (bMacUpper.isNotBlank()) apMap[bMacUpper] else null)

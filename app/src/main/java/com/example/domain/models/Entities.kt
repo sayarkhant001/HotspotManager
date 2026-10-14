@@ -135,6 +135,11 @@ data class ProfileUsageStat(
     val vouchersSold: Int,
     val totalRevenue: Double,
     val dataUsedMb: Double,
-    val dataUsedFormatted: String
+    val dataUsedFormatted: String,
+    val totalVouchers: Int = 0,
+    val activeNow: Int = 0,
+    val dataUsedGb: Double = 0.0,
+    val exactGbFormatted: String = ""
 )
+
 

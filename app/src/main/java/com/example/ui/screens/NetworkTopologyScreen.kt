@@ -135,6 +135,45 @@ fun NetworkTopologyScreen(
         AirMetroPairManager.buildPairs(context, topology.accessPoints)
     }
 
+    val apClientCountsMap = remember(activeUsers, topology.accessPoints) {
+        val onlineAps = topology.accessPoints.filter { it.isOnline }
+        if (onlineAps.isEmpty()) {
+            emptyMap<String, Int>()
+        } else if (onlineAps.size == 1) {
+            mapOf(onlineAps.first().macAddress.uppercase() to activeUsers.size)
+        } else {
+            val counts = mutableMapOf<String, Int>()
+            val unassigned = mutableListOf<ActiveUser>()
+
+            for (u in activeUsers) {
+                val uNorm = u.user.lowercase()
+                val cNorm = u.comment.lowercase()
+                val uMacUpper = u.macAddress.uppercase()
+
+                val matchedAp = onlineAps.firstOrNull { ap ->
+                    val apNorm = ap.name.replace(" ", "").lowercase()
+                    (apNorm.length >= 3 && (uNorm.contains(apNorm) || cNorm.contains(apNorm))) ||
+                    (ap.connectedClientMacs.isNotEmpty() && uMacUpper in ap.connectedClientMacs.map { it.uppercase() })
+                }
+
+                if (matchedAp != null) {
+                    val mac = matchedAp.macAddress.uppercase()
+                    counts[mac] = (counts[mac] ?: 0) + 1
+                } else {
+                    unassigned.add(u)
+                }
+            }
+
+            for (u in unassigned) {
+                val h = Math.abs(u.macAddress.ifBlank { u.user }.hashCode())
+                val targetAp = onlineAps[h % onlineAps.size]
+                val mac = targetAp.macAddress.uppercase()
+                counts[mac] = (counts[mac] ?: 0) + 1
+            }
+            counts
+        }
+    }
+
     val filteredAps = remember(topology.accessPoints, selectedFilterCategory) {
         when (selectedFilterCategory) {
             "AirMetro" -> topology.accessPoints.filter {
@@ -539,36 +578,75 @@ fun NetworkTopologyScreen(
 
                     // VIEW 1: AIRMETRO PAIR MODE
                     if (viewMode == 2) {
+                        val totalBackhaulRx = remember(airMetroPairs) { airMetroPairs.sumOf { it.totalRxBps } }
+                        val totalBackhaulTx = remember(airMetroPairs) { airMetroPairs.sumOf { it.totalTxBps } }
+
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = Color(0xFF6366F1).copy(alpha = 0.08f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6366F1).copy(alpha = 0.25f)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6366F1).copy(alpha = 0.3f)),
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Sensors,
-                                    contentDescription = null,
-                                    tint = Color(0xFF4F46E5),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
-                                        text = "📡 AirMetro Wireless Bridge PtP / PtMP Pairs",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF4F46E5)
-                                    )
-                                    Text(
-                                        text = "Data transfer between AirMetros is wireless backhaul — excluded from hotspot voucher data usage.",
-                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                        Icon(
+                                            imageVector = Icons.Default.Sensors,
+                                            contentDescription = null,
+                                            tint = Color(0xFF4F46E5),
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(
+                                                text = "📡 AirMetro Wireless Bridge PtP / PtMP Backbone",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF4F46E5)
+                                            )
+                                            Text(
+                                                text = "Backhaul Throughput: ${formatSpeed(totalBackhaulRx + totalBackhaulTx)} • ${airMetroPairs.size} Pairs Active",
+                                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            val created = AirMetroPairManager.autoPairAll(context, topology.accessPoints)
+                                            viewModel.fetchNetworkTopology()
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.AutoFixHigh,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp),
+                                            tint = Color.White
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            text = strings.autoDetectPairs,
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
                                 }
+
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "Data transfer between AirMetros is wireless backhaul transit — automatically excluded from voucher quota accounting.",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                )
                             }
                         }
 
@@ -584,7 +662,18 @@ fun NetworkTopologyScreen(
                                         pair = pair,
                                         onOpenBaseDetails = { selectedApForDetails = pair.baseDevice },
                                         onOpenCpeDetails = { pair.cpeDevice?.let { selectedApForDetails = it } },
-                                        onEditPair = { pairToEdit = pair }
+                                        onEditPair = { pairToEdit = pair },
+                                        onSwapRoles = {
+                                            if (pair.cpeDevice != null) {
+                                                AirMetroPairManager.swapBaseAndCpe(
+                                                    context,
+                                                    pair.baseDevice.macAddress,
+                                                    pair.cpeDevice.macAddress,
+                                                    pair.pairTitle
+                                                )
+                                                viewModel.fetchNetworkTopology()
+                                            }
+                                        }
                                     )
                                 }
                             }
@@ -632,35 +721,7 @@ fun NetworkTopologyScreen(
                                     verticalAlignment = Alignment.Top
                                 ) {
                                     rowAps.forEach { ap ->
-                                        val clientCount = remember(activeUsers, ap, topology) {
-                                            if (!ap.isOnline) 0 else {
-                                                val onlineAps = topology.accessPoints.filter { it.isOnline }
-                                                if (onlineAps.size <= 1) {
-                                                    activeUsers.size
-                                                } else {
-                                                    val apNameNorm = ap.name.replace(" ", "").lowercase()
-                                                    val directMatches = activeUsers.filter { u ->
-                                                        val uNorm = u.user.lowercase()
-                                                        val cNorm = u.comment.lowercase()
-                                                        (apNameNorm.length >= 3 && (uNorm.contains(apNameNorm) || cNorm.contains(apNameNorm))) ||
-                                                        (ap.connectedClientMacs.isNotEmpty() && u.macAddress.uppercase() in ap.connectedClientMacs.map { it.uppercase() })
-                                                    }
-                                                    val unassigned = activeUsers.filter { u ->
-                                                        onlineAps.none { other ->
-                                                            val oNorm = other.name.replace(" ", "").lowercase()
-                                                            (oNorm.length >= 3 && (u.user.lowercase().contains(oNorm) || u.comment.lowercase().contains(oNorm))) ||
-                                                            (other.connectedClientMacs.isNotEmpty() && u.macAddress.uppercase() in other.connectedClientMacs.map { it.uppercase() })
-                                                        }
-                                                    }
-                                                    val apIdx = onlineAps.indexOfFirst { it.macAddress == ap.macAddress }
-                                                    val partitioned = unassigned.filter { u ->
-                                                        val h = Math.abs(u.macAddress.ifBlank { u.user }.hashCode())
-                                                        (h % onlineAps.size) == apIdx
-                                                    }
-                                                    directMatches.size + partitioned.size
-                                                }
-                                            }
-                                        }
+                                        val clientCount = if (!ap.isOnline) 0 else (apClientCountsMap[ap.macAddress.uppercase()] ?: 0)
                                         val isExpanded = expandedApMacs.contains(ap.macAddress.uppercase())
                                         val todayBytes = ap.dailyBytesIn + ap.dailyBytesOut
 
@@ -710,35 +771,7 @@ fun NetworkTopologyScreen(
                                     verticalAlignment = Alignment.Top
                                 ) {
                                     rowAps.forEach { ap ->
-                                        val clientCount = remember(activeUsers, ap, topology) {
-                                            if (!ap.isOnline) 0 else {
-                                                val onlineAps = topology.accessPoints.filter { it.isOnline }
-                                                if (onlineAps.size <= 1) {
-                                                    activeUsers.size
-                                                } else {
-                                                    val apNameNorm = ap.name.replace(" ", "").lowercase()
-                                                    val directMatches = activeUsers.filter { u ->
-                                                        val uNorm = u.user.lowercase()
-                                                        val cNorm = u.comment.lowercase()
-                                                        (apNameNorm.length >= 3 && (uNorm.contains(apNameNorm) || cNorm.contains(apNameNorm))) ||
-                                                        (ap.connectedClientMacs.isNotEmpty() && u.macAddress.uppercase() in ap.connectedClientMacs.map { it.uppercase() })
-                                                    }
-                                                    val unassigned = activeUsers.filter { u ->
-                                                        onlineAps.none { other ->
-                                                            val oNorm = other.name.replace(" ", "").lowercase()
-                                                            (oNorm.length >= 3 && (u.user.lowercase().contains(oNorm) || u.comment.lowercase().contains(oNorm))) ||
-                                                            (other.connectedClientMacs.isNotEmpty() && u.macAddress.uppercase() in other.connectedClientMacs.map { it.uppercase() })
-                                                        }
-                                                    }
-                                                    val apIdx = onlineAps.indexOfFirst { it.macAddress == ap.macAddress }
-                                                    val partitioned = unassigned.filter { u ->
-                                                        val h = Math.abs(u.macAddress.ifBlank { u.user }.hashCode())
-                                                        (h % onlineAps.size) == apIdx
-                                                    }
-                                                    directMatches.size + partitioned.size
-                                                }
-                                            }
-                                        }
+                                        val clientCount = if (!ap.isOnline) 0 else (apClientCountsMap[ap.macAddress.uppercase()] ?: 0)
                                         val isExpanded = expandedApMacs.contains(ap.macAddress.uppercase())
                                         val todayBytes = ap.dailyBytesIn + ap.dailyBytesOut
 
@@ -2719,7 +2752,8 @@ fun AirMetroPairCard(
     pair: AirMetroBridgePair,
     onOpenBaseDetails: () -> Unit,
     onOpenCpeDetails: () -> Unit,
-    onEditPair: () -> Unit
+    onEditPair: () -> Unit,
+    onSwapRoles: () -> Unit
 ) {
     val baseModel = remember(pair.baseDevice) {
         DeviceModelDetector.detectApOrClient(
@@ -2749,7 +2783,7 @@ fun AirMetroPairCard(
                 .fillMaxWidth()
                 .padding(12.dp)
         ) {
-            // Header: Pair title, link badge, and edit button
+            // Header: Pair title, link badge, auto-detect badge, and action buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -2762,29 +2796,46 @@ fun AirMetroPairCard(
                     Surface(
                         shape = CircleShape,
                         color = Color(0xFF6366F1).copy(alpha = 0.15f),
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(30.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Sensors,
                                 contentDescription = null,
                                 tint = Color(0xFF4F46E5),
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
                     Spacer(Modifier.width(8.dp))
                     Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = pair.pairTitle,
+                                style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.sp),
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (pair.isAutoDetected) {
+                                Spacer(Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFF6366F1).copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = "⚡ ${pair.matchConfidence}% Match",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF4F46E5),
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                        }
                         Text(
-                            text = pair.pairTitle,
-                            style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.sp),
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = if (pair.cpeDevice != null) "PtP / PtMP Wireless Bridge Link" else "Standalone AirMetro Bridge",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+                            text = if (pair.cpeDevice != null) "PtP / PtMP Wireless Backbone Link" else "Standalone AirMetro Bridge",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -2816,7 +2867,22 @@ fun AirMetroPairCard(
                         )
                     }
 
-                    Spacer(Modifier.width(4.dp))
+                    if (pair.cpeDevice != null) {
+                        Spacer(Modifier.width(2.dp))
+                        IconButton(
+                            onClick = onSwapRoles,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SwapHoriz,
+                                contentDescription = "Swap Base / CPE Roles",
+                                tint = Color(0xFF6366F1),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.width(2.dp))
 
                     IconButton(
                         onClick = onEditPair,
@@ -2862,7 +2928,7 @@ fun AirMetroPairCard(
                                 shape = CircleShape,
                                 color = Color.White,
                                 shadowElevation = 1.dp,
-                                modifier = Modifier.size(42.dp)
+                                modifier = Modifier.size(44.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(3.dp)) {
                                     if (baseModel.imageResId != 0) {
@@ -2897,7 +2963,7 @@ fun AirMetroPairCard(
                             textAlign = TextAlign.Center
                         )
                         Text(
-                            text = "Base / Master",
+                            text = "📡 Base Station (Master)",
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF4F46E5)
@@ -2934,29 +3000,34 @@ fun AirMetroPairCard(
                         imageVector = Icons.Default.SwapHoriz,
                         contentDescription = null,
                         tint = if (pair.isLinked) Color(0xFF4F46E5) else MaterialTheme.colorScheme.outlineVariant,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                     Text(
-                        text = "Bridge Link",
+                        text = "5 GHz Link",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                         color = Color(0xFF6366F1)
                     )
-                    if (pair.totalRxBps > 0L || pair.totalTxBps > 0L) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFF6366F1).copy(alpha = 0.12f),
-                            modifier = Modifier.padding(top = 2.dp)
-                        ) {
-                            Text(
-                                text = "${formatSpeed(pair.totalRxBps + pair.totalTxBps)}",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF4F46E5),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                            )
-                        }
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFF6366F1).copy(alpha = 0.12f),
+                        modifier = Modifier.padding(top = 2.dp)
+                    ) {
+                        Text(
+                            text = "${formatSpeed(pair.totalRxBps + pair.totalTxBps)}",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF4F46E5),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
                     }
+                    Text(
+                        text = "${pair.linkHealthPercent}% Health • <2ms",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.5.sp),
+                        color = Color(0xFF059669),
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 1.dp)
+                    )
                 }
 
                 // 3. CPE Node
@@ -2984,7 +3055,7 @@ fun AirMetroPairCard(
                                     shape = CircleShape,
                                     color = Color.White,
                                     shadowElevation = 1.dp,
-                                    modifier = Modifier.size(42.dp)
+                                    modifier = Modifier.size(44.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(3.dp)) {
                                         if (cModel.imageResId != 0) {
@@ -3019,7 +3090,7 @@ fun AirMetroPairCard(
                                 textAlign = TextAlign.Center
                             )
                             Text(
-                                text = "CPE / Station",
+                                text = "🎯 CPE Station (Slave)",
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF059669)
@@ -3084,7 +3155,35 @@ fun AirMetroPairCard(
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            if (pair.detectionReason.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFF6366F1).copy(alpha = 0.08f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = Color(0xFF4F46E5),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "Auto-Detection: ${pair.detectionReason}",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+                            color = Color(0xFF4F46E5),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(6.dp))
 
             // Footer transit traffic notice
             Row(
@@ -3150,6 +3249,23 @@ fun EditAirMetroPairDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                // Swap Roles Quick Action
+                if (selectedCpeMac.isNotBlank()) {
+                    OutlinedButton(
+                        onClick = {
+                            val temp = selectedBaseMac
+                            selectedBaseMac = selectedCpeMac
+                            selectedCpeMac = temp
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.SwapVert, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Swap Base ↔ CPE Roles", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
 
                 // Base Station Selection
                 Column {

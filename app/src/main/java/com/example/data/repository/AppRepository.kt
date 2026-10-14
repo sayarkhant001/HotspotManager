@@ -526,7 +526,10 @@ class AppRepository(
                          (liveUpSec > 0L) ||
                          (u.bytesOut > 0L) ||
                          (u.bytesIn > 0L) ||
-                         (liveTotal > 0L)
+                         (liveTotal > 0L) ||
+                         (u.limitBytesTotal == 1L) ||
+                         u.comment.contains("EXHAUSTED", ignoreCase = true) ||
+                         u.comment.contains("USED", ignoreCase = true)
 
             val isPrinted = u.comment.contains("PRINTED", ignoreCase = true) || (existing?.isPrinted == true)
 
@@ -539,10 +542,23 @@ class AppRepository(
             val existingOut = existing?.bytesOut ?: 0L
             val existingTotal = existingIn + existingOut
 
+            val originalLimitBytes = when {
+                parsedOrigBytes != null && parsedOrigBytes > 0L -> parsedOrigBytes
+                mb > 0 -> mb.toLong() * 1024L * 1024L
+                else -> 0L
+            }
+
             // Total bytes reported by router (hardware balance, or base + current boot traffic or live session)
-            val hardwareUsed = if (parsedOrigBytes != null && parsedOrigBytes > 0L && u.limitBytesTotal > 0L && u.limitBytesTotal <= parsedOrigBytes) {
-                parsedOrigBytes - u.limitBytesTotal
-            } else 0L
+            val hardwareUsed = when {
+                // If limitBytesTotal == 1L, this is RouterOS's universal cutoff indicator that quota was 100% EXHAUSTED!
+                u.limitBytesTotal == 1L -> {
+                    if (originalLimitBytes > 0L) originalLimitBytes else 0L
+                }
+                parsedOrigBytes != null && parsedOrigBytes > 0L && u.limitBytesTotal > 0L && u.limitBytesTotal <= parsedOrigBytes -> {
+                    parsedOrigBytes - u.limitBytesTotal
+                }
+                else -> 0L
+            }
 
             // Router recorded used bytes:
             // When liveTotal > 0 (active session): active bytes are not yet flushed to user sessionTotal,
@@ -555,10 +571,18 @@ class AppRepository(
                 maxOf(sessionTotal, parsedUsedBytes, parsedBaseBytes)
             }
 
+            val isExhaustedOrCutoff = u.comment.contains("EXHAUSTED", ignoreCase = true) ||
+                u.comment.contains("[CUTOFF]", ignoreCase = true) ||
+                u.comment.contains("[EXPIRED:", ignoreCase = true) ||
+                (u.disabled && u.limitBytesTotal == 1L)
+
             val totalCumulative = when {
+                isExhaustedOrCutoff && originalLimitBytes > 0L -> maxOf(originalLimitBytes, hardwareUsed, routerRecordedUsed)
                 hardwareUsed > 0L -> maxOf(hardwareUsed, routerRecordedUsed)
                 routerRecordedUsed > 0L -> routerRecordedUsed
                 existingTotal > 0L -> existingTotal
+                // Fallback for used vouchers with quota that completed session
+                isUsed && originalLimitBytes > 0L && (isExhaustedOrCutoff || u.uptime.isNotBlank()) -> originalLimitBytes
                 else -> 0L
             }
 

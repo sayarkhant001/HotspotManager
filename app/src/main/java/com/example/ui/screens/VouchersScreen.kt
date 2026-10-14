@@ -822,22 +822,37 @@ fun VoucherItemCard(
                 val commentUptime = Regex("\\[USED-UP:([^\\]]+)\\]").find(voucher.comment)?.groupValues?.get(1)?.trim() ?: ""
                 val commentOrigLimit = Regex("\\[ORIG-LIMIT:(\\d+)\\]").find(voucher.comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
 
-                val totalConsumedBytes = maxOf(
+                val limitMb: Int = when {
+                    activeUser != null && activeUser.quotaTotalMb > 0 -> activeUser.quotaTotalMb
+                    voucher.dataLimitMb > 0 -> voucher.dataLimitMb
+                    commentOrigLimit > 0L -> (commentOrigLimit / (1024L * 1024L)).toInt()
+                    else -> 0
+                }
+
+                val limitBytes = if (limitMb > 0) limitMb.toLong() * 1024L * 1024L else 0L
+
+                val isExhaustedOrCutoff = voucher.comment.contains("EXHAUSTED", ignoreCase = true) ||
+                    voucher.comment.contains("[CUTOFF]", ignoreCase = true) ||
+                    voucher.comment.contains("[EXPIRED:", ignoreCase = true)
+
+                val rawConsumedBytes = maxOf(
                     liveBytes,
                     voucher.bytesIn + voucher.bytesOut,
                     commentUsedBytes
                 )
 
-                val usedMb: Int = if (activeUser != null && activeUser.quotaUsedMb > 0) {
-                    activeUser.quotaUsedMb.toInt()
-                } else {
-                    (totalConsumedBytes / (1024L * 1024L)).toInt()
-                }
+                val totalConsumedBytes = if (isExhaustedOrCutoff && limitBytes > 0L) {
+                    maxOf(rawConsumedBytes, limitBytes)
+                } else rawConsumedBytes
 
-                val limitMb: Int = when {
-                    activeUser != null && activeUser.quotaTotalMb > 0 -> activeUser.quotaTotalMb
-                    voucher.dataLimitMb > 0 -> voucher.dataLimitMb
-                    commentOrigLimit > 0L -> (commentOrigLimit / (1024L * 1024L)).toInt()
+                val usedMb: Int = when {
+                    activeUser != null && activeUser.quotaUsedMb > 0 -> activeUser.quotaUsedMb.toInt()
+                    // If voucher is used, has quota limit, and was exhausted or reached >=95%: show full quota (e.g. 50 / 50 MB)
+                    limitMb > 0 && (isExhaustedOrCutoff || (limitBytes > 0L && totalConsumedBytes >= (limitBytes * 95L / 100L))) -> limitMb
+                    // If voucher is marked used and session ended, but raw bytes were 0: show full quota
+                    limitMb > 0 && voucher.isUsed && !isOnline && (totalConsumedBytes == 0L || voucher.uptime.isNotBlank()) -> limitMb
+                    totalConsumedBytes > 0L -> (totalConsumedBytes / (1024L * 1024L)).toInt()
+                    voucher.isUsed && limitMb > 0 && !isOnline -> limitMb
                     else -> 0
                 }
 
