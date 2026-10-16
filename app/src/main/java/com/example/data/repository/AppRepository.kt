@@ -517,22 +517,6 @@ class AppRepository(
             val liveTotal = liveIn + liveOut
             val liveUpSec = parseUptimeSeconds(activeUser?.uptime ?: "")
 
-            // Once used or activated, isUsed NEVER resets to false on reboot
-            val isUsed = (existing?.isUsed == true) ||
-                         (activeUser != null) ||
-                         (parsedActTime != null) ||
-                         (parsedUsedBytes > 0L) ||
-                         (u.uptime != "0s" && u.uptime.isNotBlank()) ||
-                         (liveUpSec > 0L) ||
-                         (u.bytesOut > 0L) ||
-                         (u.bytesIn > 0L) ||
-                         (liveTotal > 0L) ||
-                         (u.limitBytesTotal == 1L) ||
-                         u.comment.contains("EXHAUSTED", ignoreCase = true) ||
-                         u.comment.contains("USED", ignoreCase = true)
-
-            val isPrinted = u.comment.contains("PRINTED", ignoreCase = true) || (existing?.isPrinted == true)
-
             // Calculate continuous cumulative data bytes (resilient to router reboot / counter reset)
             val sessionIn = u.bytesIn
             val sessionOut = u.bytesOut
@@ -541,6 +525,25 @@ class AppRepository(
             val existingIn = existing?.bytesIn ?: 0L
             val existingOut = existing?.bytesOut ?: 0L
             val existingTotal = existingIn + existingOut
+
+            // A voucher is used only if it has actual network traffic, active session, activation timestamp, or exhaustion marker
+            val hasActiveSession = activeUser != null || liveTotal > 0L || liveUpSec > 0L
+            val hasRecordedTraffic = u.bytesIn > 0L || u.bytesOut > 0L || liveTotal > 0L || existingTotal > 0L || parsedUsedBytes > 0L
+            val hasUptime = (u.uptime != "0s" && u.uptime.isNotBlank()) || (existing?.uptime?.isNotBlank() == true && existing.uptime != "0s")
+            val hasExhaustionMarker = u.limitBytesTotal == 1L ||
+                u.comment.contains("EXHAUSTED", ignoreCase = true) ||
+                u.comment.contains("[CUTOFF]", ignoreCase = true) ||
+                u.comment.contains("[USED:", ignoreCase = true) ||
+                u.comment.contains("[ACT:", ignoreCase = true)
+
+            val isUsed = hasActiveSession ||
+                         (parsedActTime != null) ||
+                         hasRecordedTraffic ||
+                         hasUptime ||
+                         hasExhaustionMarker ||
+                         (existing?.isUsed == true && (existing.activatedAt != null || existingTotal > 0L || existing.uptime.isNotBlank()))
+
+            val isPrinted = u.comment.contains("PRINTED", ignoreCase = true) || (existing?.isPrinted == true)
 
             val originalLimitBytes = when {
                 parsedOrigBytes != null && parsedOrigBytes > 0L -> parsedOrigBytes
@@ -605,16 +608,16 @@ class AppRepository(
 
             val activatedAt = when {
                 parsedActTime != null -> parsedActTime
-                existing?.activatedAt != null -> existing.activatedAt
+                existing?.activatedAt != null && isUsed -> existing.activatedAt
+                activeUser != null && liveUpSec > 0 -> System.currentTimeMillis() - (liveUpSec * 1000L)
+                activeUser != null -> System.currentTimeMillis()
                 isUsed && uptimeSec > 0 -> System.currentTimeMillis() - (uptimeSec * 1000L)
-                isUsed -> System.currentTimeMillis()
-                existing?.isUsed == true && existing.generatedAt > 0L -> existing.generatedAt
+                isUsed && (sessionTotal > 0L || existingTotal > 0L) -> existing?.activatedAt ?: System.currentTimeMillis()
                 else -> null
             }
 
             val generatedAt = when {
                 existing != null && existing.generatedAt > 0L -> existing.generatedAt
-                activatedAt != null -> activatedAt
                 else -> System.currentTimeMillis()
             }
 

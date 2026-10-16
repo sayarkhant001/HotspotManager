@@ -221,150 +221,8 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Activated voucher sales amount strictly for used vouchers on first activation
-    val activatedVoucherSales: StateFlow<Double> = combine(
-        vouchers,
-        selectedDateFilter,
-        routerClockOffsetMillis
-    ) { list, filter, _ ->
-        val bounds = getMmtDateBoundaries(getEffectiveMmtTimeMillis())
-        val distinctVouchers = list.distinctBy { it.code }
-
-        // A voucher represents an actual sale strictly when it has been activated.
-        // Unused vouchers in inventory are not sales.
-        val activated = distinctVouchers.filter { v ->
-            v.activatedAt != null || (v.isUsed && (v.bytesIn + v.bytesOut > 0L || v.generatedAt > 0L))
-        }
-
-        val filtered = when (filter) {
-            "Today" -> activated.filter { v ->
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                act in bounds.todayStart..bounds.todayEnd
-            }
-            "Yesterday" -> activated.filter { v ->
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                act in bounds.yesterdayStart..bounds.yesterdayEnd
-            }
-            "Last 7 Days" -> activated.filter { v ->
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                act in bounds.sevenDaysAgo..bounds.todayEnd
-            }
-            "Last 30 Days" -> activated.filter { v ->
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                act in bounds.thirtyDaysAgo..bounds.todayEnd
-            }
-            else -> activated
-        }
-        filtered.sumOf { it.price }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
-
-    // Data usage (in MB) strictly consumed by vouchers within selected date range
-    val dateFilteredVoucherDataMb: StateFlow<Double> = combine(
-        vouchers,
-        selectedDateFilter,
-        activeUsers,
-        routerClockOffsetMillis
-    ) { list, filter, actives, _ ->
-        val bounds = getMmtDateBoundaries(getEffectiveMmtTimeMillis())
-        val activeCodes = actives.map { it.user }.toSet()
-        val activeBytesMap = actives.associate { a ->
-            val bin = a.bytesIn.toLongOrNull() ?: 0L
-            val bout = a.bytesOut.toLongOrNull() ?: 0L
-            a.user to (bin + bout)
-        }
-
-        val distinctVouchers = list.distinctBy { it.code }
-        val activated = distinctVouchers.filter { v ->
-            activeCodes.contains(v.code) || activeCodes.contains(v.username) ||
-            v.activatedAt != null || v.isUsed || (v.bytesIn + v.bytesOut) > 0L ||
-            (v.uptime.isNotBlank() && v.uptime != "0s")
-        }
-
-        val filtered = when (filter) {
-            "Today" -> activated.filter { v ->
-                val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                isActiveNow || (act in bounds.todayStart..bounds.todayEnd)
-            }
-            "Yesterday" -> activated.filter { v ->
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                act in bounds.yesterdayStart..bounds.yesterdayEnd
-            }
-            "Last 7 Days" -> activated.filter { v ->
-                val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                isActiveNow || (act in bounds.sevenDaysAgo..bounds.todayEnd)
-            }
-            "Last 30 Days" -> activated.filter { v ->
-                val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                isActiveNow || (act in bounds.thirtyDaysAgo..bounds.todayEnd)
-            }
-            else -> activated
-        }
-
-        val voucherCodes = mutableSetOf<String>()
-        val voucherMb = filtered.sumOf { v ->
-            voucherCodes.add(v.code)
-            voucherCodes.add(v.username)
-            val liveBytes = activeBytesMap[v.code] ?: activeBytesMap[v.username] ?: 0L
-            val commentUsedBytes = Regex("\\[USED:(\\d+)\\]").find(v.comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
-            val dbBytes = v.bytesIn + v.bytesOut
-            val quotaBytes = if (v.isUsed && v.dataLimitMb > 0) v.dataLimitMb.toLong() * 1024L * 1024L else 0L
-            val isCutoff = v.comment.contains("EXHAUSTED", ignoreCase = true) || v.comment.contains("[CUTOFF]", ignoreCase = true)
-            val maxRecorded = maxOf(dbBytes, liveBytes, commentUsedBytes)
-            val effectiveBytes = if ((maxRecorded == 0L || isCutoff) && v.isUsed && quotaBytes > 0L) quotaBytes else maxRecorded
-            effectiveBytes / (1024.0 * 1024.0)
-        }
-
-        val remainingActiveMb = if (filter == "Today" || filter == "All" || filter == "Last 7 Days" || filter == "Last 30 Days") {
-            actives.filter { a ->
-                !voucherCodes.contains(a.user) &&
-                !com.example.utils.DeviceModelDetector.isAirMetroOrBridge(a.user, a.hostName, a.comment, a.macAddress)
-            }.sumOf { a ->
-                val bin = a.bytesIn.toLongOrNull() ?: 0L
-                val bout = a.bytesOut.toLongOrNull() ?: 0L
-                (bin + bout) / (1024.0 * 1024.0)
-            }
-        } else 0.0
-
-        voucherMb + remainingActiveMb
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
-
-    val dateFilteredVoucherCount: StateFlow<Int> = combine(
-        vouchers,
-        selectedDateFilter,
-        routerClockOffsetMillis
-    ) { list, filter, _ ->
-        val bounds = getMmtDateBoundaries(getEffectiveMmtTimeMillis())
-        val distinctVouchers = list.distinctBy { it.code }
-        val activated = distinctVouchers.filter { v ->
-            v.activatedAt != null || (v.isUsed && (v.bytesIn + v.bytesOut > 0L || v.generatedAt > 0L))
-        }
-        val filtered = when (filter) {
-            "Today" -> activated.filter { v ->
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                act in bounds.todayStart..bounds.todayEnd
-            }
-            "Yesterday" -> activated.filter { v ->
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                act in bounds.yesterdayStart..bounds.yesterdayEnd
-            }
-            "Last 7 Days" -> activated.filter { v ->
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                act in bounds.sevenDaysAgo..bounds.todayEnd
-            }
-            "Last 30 Days" -> activated.filter { v ->
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                act in bounds.thirtyDaysAgo..bounds.todayEnd
-            }
-            else -> activated
-        }
-        filtered.size
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
+    // Profile-by-Profile Activated Voucher Breakdown and Exact Consumed Data
     val profileUsageBreakdown: StateFlow<List<ProfileUsageStat>> = combine(
-
         vouchers,
         selectedDateFilter,
         activeUsers,
@@ -379,31 +237,52 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         }
 
         val distinctVouchers = list.distinctBy { it.code }
+
+        // A voucher represents an actual activated voucher ONLY when it has been activated by a user.
+        // Stocked / unused inventory vouchers (0 bytes transferred, 0 uptime, null activatedAt) are STRICTLY excluded.
         val activated = distinctVouchers.filter { v ->
-            activeCodes.contains(v.code) || activeCodes.contains(v.username) ||
-            v.activatedAt != null || v.isUsed || (v.bytesIn + v.bytesOut) > 0L ||
-            (v.uptime.isNotBlank() && v.uptime != "0s")
+            val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
+            val hasTraffic = (v.bytesIn + v.bytesOut) > 0L
+            val hasUptime = v.uptime.isNotBlank() && v.uptime != "0s" && v.uptime != "00:00:00"
+            val hasActComment = v.comment.contains("[ACT:", ignoreCase = true) ||
+                                v.comment.contains("[USED:", ignoreCase = true) ||
+                                v.comment.contains("[CUTOFF]", ignoreCase = true) ||
+                                v.comment.contains("EXHAUSTED", ignoreCase = true)
+            isActiveNow || v.activatedAt != null || hasTraffic || hasUptime || hasActComment
+        }
+
+        fun getVoucherEffectiveActTime(v: Voucher): Long? {
+            if (v.activatedAt != null && v.activatedAt > 0L) return v.activatedAt
+            val actIdx = v.comment.indexOf("[ACT:")
+            if (actIdx >= 0) {
+                val parsed = repository.parseActivationTimestamp(v.comment)
+                if (parsed != null) return parsed
+            }
+            if (activeCodes.contains(v.code) || activeCodes.contains(v.username)) {
+                return System.currentTimeMillis()
+            }
+            return null
         }
 
         val filtered = when (filter) {
             "Today" -> activated.filter { v ->
                 val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                isActiveNow || (act in bounds.todayStart..bounds.todayEnd)
+                val act = getVoucherEffectiveActTime(v)
+                isActiveNow || (act != null && act in bounds.todayStart..bounds.todayEnd)
             }
             "Yesterday" -> activated.filter { v ->
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                act in bounds.yesterdayStart..bounds.yesterdayEnd
+                val act = getVoucherEffectiveActTime(v)
+                act != null && act in bounds.yesterdayStart..bounds.yesterdayEnd
             }
             "Last 7 Days" -> activated.filter { v ->
                 val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                isActiveNow || (act in bounds.sevenDaysAgo..bounds.todayEnd)
+                val act = getVoucherEffectiveActTime(v)
+                isActiveNow || (act != null && act in bounds.sevenDaysAgo..bounds.todayEnd)
             }
             "Last 30 Days" -> activated.filter { v ->
                 val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
-                val act = v.activatedAt ?: (if (v.isUsed) v.generatedAt else 0L)
-                isActiveNow || (act in bounds.thirtyDaysAgo..bounds.todayEnd)
+                val act = getVoucherEffectiveActTime(v)
+                isActiveNow || (act != null && act in bounds.thirtyDaysAgo..bounds.todayEnd)
             }
             else -> activated
         }
@@ -468,6 +347,21 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         }.sortedByDescending { it.totalRevenue }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Activated voucher sales strictly sum the revenue of activated vouchers across all profiles
+    val activatedVoucherSales: StateFlow<Double> = profileUsageBreakdown.map { breakdown ->
+        breakdown.sumOf { it.totalRevenue }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    // Daily activated voucher count strictly sum the activated vouchers across all profiles (excluding stocked vouchers)
+    val dateFilteredVoucherCount: StateFlow<Int> = profileUsageBreakdown.map { breakdown ->
+        breakdown.sumOf { it.vouchersSold }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    // Total data usage strictly sum all profile consumptions for perfect accounting
+    val dateFilteredVoucherDataMb: StateFlow<Double> = profileUsageBreakdown.map { breakdown ->
+        breakdown.sumOf { it.dataUsedMb }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
     val isSyncingVouchers = MutableStateFlow(false)
 
     val profileVoucherCounts: StateFlow<Map<String, Int>> = vouchers.map { list ->
@@ -524,15 +418,57 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         }
     }
 
-    fun getActivatedVouchersForProfile(profileName: String): List<Voucher> {
+    fun getActivatedVouchersForProfile(profileName: String, filter: String? = null): List<Voucher> {
+        val bounds = getMmtDateBoundaries(getEffectiveMmtTimeMillis())
+        val effectiveFilter = filter ?: selectedDateFilter.value
         val activeCodes = activeUsers.value.map { it.user }.toSet()
+
+        fun getVoucherEffectiveActTime(v: Voucher): Long? {
+            if (v.activatedAt != null && v.activatedAt > 0L) return v.activatedAt
+            val actIdx = v.comment.indexOf("[ACT:")
+            if (actIdx >= 0) {
+                val parsed = repository.parseActivationTimestamp(v.comment)
+                if (parsed != null) return parsed
+            }
+            if (activeCodes.contains(v.code) || activeCodes.contains(v.username)) {
+                return System.currentTimeMillis()
+            }
+            return null
+        }
+
         return vouchers.value.filter { v ->
-            val p = v.profileName.ifBlank { "1000Ks" }
-            val isProfile = p.equals(profileName, ignoreCase = true)
-            val isActivated = activeCodes.contains(v.code) || activeCodes.contains(v.username) ||
-                              v.activatedAt != null || v.isUsed || (v.bytesIn + v.bytesOut > 0L) ||
-                              (v.uptime.isNotBlank() && v.uptime != "0s")
-            isProfile && isActivated
+            val p = v.profileName.trim()
+            val mapped = if (p.isBlank() || p.equals("default", ignoreCase = true)) {
+                when {
+                    v.comment.contains("1000Ks") || v.price == 1000.0 -> "1000Ks"
+                    v.comment.contains("500Ks") || v.price == 500.0 -> "500Ks"
+                    v.comment.contains("30Day") || v.price >= 20000.0 -> "30Day"
+                    v.comment.contains("40G") -> "40G_30D"
+                    v.comment.contains("50GB") -> "50GB-30000"
+                    else -> "1000Ks"
+                }
+            } else p
+            val isProfile = mapped.equals(profileName, ignoreCase = true)
+            if (!isProfile) return@filter false
+
+            val isActiveNow = activeCodes.contains(v.code) || activeCodes.contains(v.username)
+            val hasTraffic = (v.bytesIn + v.bytesOut) > 0L
+            val hasUptime = v.uptime.isNotBlank() && v.uptime != "0s" && v.uptime != "00:00:00"
+            val hasActComment = v.comment.contains("[ACT:", ignoreCase = true) ||
+                                v.comment.contains("[USED:", ignoreCase = true) ||
+                                v.comment.contains("[CUTOFF]", ignoreCase = true) ||
+                                v.comment.contains("EXHAUSTED", ignoreCase = true)
+            val isActivated = isActiveNow || v.activatedAt != null || hasTraffic || hasUptime || hasActComment
+            if (!isActivated) return@filter false
+
+            val act = getVoucherEffectiveActTime(v)
+            when (effectiveFilter) {
+                "Today" -> isActiveNow || (act != null && act in bounds.todayStart..bounds.todayEnd)
+                "Yesterday" -> act != null && act in bounds.yesterdayStart..bounds.yesterdayEnd
+                "Last 7 Days" -> isActiveNow || (act != null && act in bounds.sevenDaysAgo..bounds.todayEnd)
+                "Last 30 Days" -> isActiveNow || (act != null && act in bounds.thirtyDaysAgo..bounds.todayEnd)
+                else -> true
+            }
         }.sortedWith(
             compareByDescending<Voucher> { activeCodes.contains(it.code) || activeCodes.contains(it.username) }
                 .thenByDescending { it.activatedAt ?: it.generatedAt }

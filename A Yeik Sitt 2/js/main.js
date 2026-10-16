@@ -257,6 +257,10 @@
         friendlyMsg = 'ဒေတာ ကုန်သွားပါပြီ (Data Quota Reached) – ကျေးဇူးပြု၍ ဘောင်ချာအသစ် ဝယ်ယူသုံးစွဲပါ';
       } else if (errLower.indexOf('uptime limit') !== -1 || errLower.indexOf('session limit') !== -1) {
         friendlyMsg = 'ဘောင်ချာ သက်တမ်းကုန်သွားပါပြီ (Validity Expired) – ကျေးဇူးပြု၍ ဘောင်ချာအသစ် ဝယ်ယူသုံးစွဲပါ';
+      } else if (errLower.indexOf('disabled') !== -1) {
+        friendlyMsg = 'ဘောင်ချာ သက်တမ်း (သို့) ဒေတာ ကုန်ဆုံးသွားပါပြီ (Expired or Quota Reached) – ကျေးဇူးပြု၍ ဘောင်ချာအသစ် ဝယ်ယူသုံးစွဲပါ';
+      } else if (errLower.indexOf('already logged in') !== -1 || errLower.indexOf('simultaneous') !== -1) {
+        friendlyMsg = 'ဤဘောင်ချာကုဒ်သည် အခြားဖုန်းတွင် အသုံးပြုနေပါသည် (Already In Use)';
       } else if (errLower.indexOf('not found') !== -1 || errLower.indexOf('invalid username') !== -1) {
         friendlyMsg = 'ဘောင်ချာကုဒ် မှားယွင်းနေပါသည် (Invalid Voucher Code) – ပြန်လည်စစ်ဆေးပေးပါ';
       }

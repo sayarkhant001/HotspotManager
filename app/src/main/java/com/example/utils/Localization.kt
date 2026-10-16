@@ -320,9 +320,9 @@ val MyanmarStrings = AppStrings(
     vouchersAccountsSubtitle = "Hotspot ဘောင်ချာ • ပရင့်ထုတ်ခြင်း",
     userProfilesTitle = "အသုံးပြုသူ ပရိုဖိုင်များ",
     userProfilesSubtitle = "အမြန်နှုန်း • သက်တမ်း • ဈေးနှုန်း",
-    profileSalesBreakdown = "ပရိုဖိုင်အလိုက် ရောင်းအားနှင့် ဒေတာသုံးစွဲမှု",
-    vouchersSoldLabel = "ရောင်းရဘောင်ချာ",
-    exactDataConsumedLabel = "Starlink တကယ့်ဒေတာ သုံးစွဲမှု",
+    profileSalesBreakdown = "ပရိုဖိုင်အလိုက် ဖွင့်သုံးမှုနှင့် ဒေတာသုံးစွဲမှု",
+    vouchersSoldLabel = "ဖွင့်သုံးပြီး ဘောင်ချာ",
+    exactDataConsumedLabel = "ဒေတာ သုံးစွဲမှု",
     noSalesInPeriod = "ရွေးချယ်ထားသော ကာလအတွင်း ရောင်းရငွေ မရှိသေးပါ",
 
     // Update Dialog
@@ -560,9 +560,9 @@ val EnglishStrings = AppStrings(
     vouchersAccountsSubtitle = "Generate Hotspot codes • 58/80mm & A4 Print",
     userProfilesTitle = "User Profiles",
     userProfilesSubtitle = "Bandwidth limits (Rate-limit) • Validity • Prices",
-    profileSalesBreakdown = "Profile Sales & Real Data Breakdown",
-    vouchersSoldLabel = "Vouchers Sold",
-    exactDataConsumedLabel = "Real Starlink Data Consumed",
+    profileSalesBreakdown = "Profile Activated & Data Breakdown",
+    vouchersSoldLabel = "Activated Vouchers",
+    exactDataConsumedLabel = "Data Used",
     noSalesInPeriod = "No voucher sales in selected period",
 
     // Update Dialog

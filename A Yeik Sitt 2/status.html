@@ -1,3 +1,13 @@
+$(if logged-in == 'no')
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="refresh" content="0; url=$(link-login)" />
+  <script>window.location.replace("$(link-login)");</script>
+</head>
+<body></body>
+</html>
+$(else)
 <!DOCTYPE html>
 <html lang="my">
 <head>
@@ -80,7 +90,8 @@
       </div>
 
       <!-- Logout Button Form -->
-      <form action="$(link-logout)" name="logout" method="post">
+      <form action="$(link-logout)" name="logout" method="post" onsubmit="try { localStorage.clear(); sessionStorage.clear(); } catch(e){}">
+        <input type="hidden" name="erase-cookie" value="on" />
         <button class="btn-connect" type="submit" style="background: linear-gradient(135deg, #EF4444 0%, #F97316 100%); box-shadow: 0 8px 20px -3px rgba(239, 68, 68, 0.35);">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -149,3 +160,4 @@
   </script>
 </body>
 </html>
+$(endif)

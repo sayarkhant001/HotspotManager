@@ -29,7 +29,8 @@ object AirMetroPairManager {
         accessPoints: List<AccessPointDevice>
     ): List<AirMetroBridgePair> {
         val bridgeDevices = accessPoints.filter {
-            DeviceModelDetector.isAirMetroOrBridge(it.name, it.name, it.model, it.macAddress)
+            DeviceModelDetector.isAirMetroOrBridge(it.name, it.name, it.model, it.macAddress) ||
+            !DeviceModelDetector.isClientDevice(it.name, it.name, it.model, it.macAddress)
         }
         if (bridgeDevices.isEmpty()) return emptyList()
 
@@ -44,7 +45,7 @@ object AirMetroPairManager {
 
             val partnerMac = prefs.getString("$KEY_PAIR_MAP$dMac", null)?.uppercase()
             if (!partnerMac.isNullOrBlank() && partnerMac != dMac) {
-                val partnerDevice = bridgeDevices.firstOrNull { it.macAddress.uppercase() == partnerMac }
+                val partnerDevice = accessPoints.firstOrNull { it.macAddress.uppercase() == partnerMac }
                 if (partnerDevice != null && partnerMac !in usedMacs) {
                     val pairId = "pair_${minOf(dMac, partnerMac)}"
                     val customTitle = prefs.getString("$KEY_PAIR_TITLE$pairId", null)
@@ -201,10 +202,21 @@ object AirMetroPairManager {
         val is460A = modelA.contains("460") || a.name.uppercase().contains("460")
         val is460B = modelB.contains("460") || b.name.uppercase().contains("460")
 
+        val isEw3000A = modelA.contains("3000") || modelA.contains("EW3000") || a.name.uppercase().contains("3000GX") || a.name.uppercase().contains("EW3000")
+        val isEw3000B = modelB.contains("3000") || modelB.contains("EW3000") || b.name.uppercase().contains("3000GX") || b.name.uppercase().contains("EW3000")
+
         if ((is550A && is460B) || (is550B && is460A)) {
             score += 45
             confidence = maxOf(confidence, 99)
             reasons.add("AirMetro 550G-B + 460G PtMP Pair")
+        } else if ((is460A && isEw3000B) || (is460B && isEw3000A)) {
+            score += 55
+            confidence = maxOf(confidence, 98)
+            reasons.add("AirMetro 460G ↔ EW 3000GX PtP AP Link")
+        } else if (is460A && is460B) {
+            score += 50
+            confidence = maxOf(confidence, 96)
+            reasons.add("AirMetro 460G ↔ 460G PtP Backbone Link")
         } else if (modelA.contains("AIRMETRO") && modelB.contains("AIRMETRO")) {
             score += 30
             reasons.add("AirMetro Family")
@@ -273,7 +285,7 @@ object AirMetroPairManager {
     fun isBaseStation(dev: AccessPointDevice): Boolean {
         val n = dev.name.lowercase()
         val m = dev.model.lowercase()
-        return m.contains("550g") || m.contains("550g-b") || m.contains("base") ||
+        return m.contains("550g") || m.contains("550g-b") || m.contains("460g") || m.contains("airmetro") || m.contains("base") ||
                n.contains("base") || n.contains("master") || n.contains("tower") || n.contains("main") ||
                n.contains("transmitter") || n.contains("tx") || n.endsWith("-b") || n.contains("point a") ||
                n.contains("ptp-a") || n.contains("ptmp-master") || n.contains("ap-mode")
@@ -282,7 +294,8 @@ object AirMetroPairManager {
     fun isCpeStation(dev: AccessPointDevice): Boolean {
         val n = dev.name.lowercase()
         val m = dev.model.lowercase()
-        return m.contains("460g") || m.contains("460f") || m.contains("cpe") || m.contains("slave") ||
+        return m.contains("3000gx") || m.contains("ew3000") || n.contains("3000gx") ||
+               m.contains("460f") || m.contains("cpe") || m.contains("slave") ||
                n.contains("cpe") || n.contains("slave") || n.contains("remote") || n.contains("client") ||
                n.contains("sub") || n.contains("station") || n.contains("receiver") || n.contains("rx") ||
                n.endsWith("-c") || n.contains("point b") || n.contains("ptp-b") || n.contains("station-mode")

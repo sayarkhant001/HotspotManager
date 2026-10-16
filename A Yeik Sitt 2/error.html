@@ -40,10 +40,10 @@
       <div class="alert-box" style="margin-bottom: 20px; justify-content: center; text-align: left;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0;">
           <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="8" x2="12"/>
           <line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
-        <span>$(error)</span>
+        <span id="err_text">$(error)</span>
       </div>
 
       <form action="$(link-login)" method="get">
@@ -64,5 +64,37 @@
     </div>
   </div>
 
+  <script>
+    (function () {
+      try {
+        localStorage.removeItem('ayeiksitt1_voucher');
+        localStorage.removeItem('ayeiksitt1_voucher_time');
+        localStorage.removeItem('ayeiksitt1_auth_type');
+        localStorage.removeItem('ayeiksitt2_voucher');
+        localStorage.removeItem('ayeiksitt2_voucher_time');
+        localStorage.removeItem('ayeiksitt2_auth_type');
+      } catch (e) {}
+
+      var el = document.getElementById('err_text');
+      if (!el) return;
+      var raw = (el.textContent || el.innerText || '').trim();
+      var lower = raw.toLowerCase();
+      if (!raw || raw.indexOf('$(') !== -1) {
+        el.textContent = 'ဘောင်ချာကုဒ် သို့မဟုတ် အကောင့် အဆင်မပြေပါ';
+        return;
+      }
+      if (lower.indexOf('traffic limit') !== -1 || lower.indexOf('transfer limit') !== -1) {
+        el.textContent = 'ဒေတာ ကုန်သွားပါပြီ (Data Quota Reached) – ကျေးဇူးပြု၍ ဘောင်ချာအသစ် ဝယ်ယူသုံးစွဲပါ';
+      } else if (lower.indexOf('uptime limit') !== -1 || lower.indexOf('session limit') !== -1) {
+        el.textContent = 'ဘောင်ချာ သက်တမ်းကုန်သွားပါပြီ (Validity Expired) – ကျေးဇူးပြု၍ ဘောင်ချာအသစ် ဝယ်ယူသုံးစွဲပါ';
+      } else if (lower.indexOf('disabled') !== -1) {
+        el.textContent = 'ဘောင်ချာ သက်တမ်း (သို့) ဒေတာ ကုန်ဆုံးသွားပါပြီ (Expired or Quota Reached) – ကျေးဇူးပြု၍ ဘောင်ချာအသစ် ဝယ်ယူသုံးစွဲပါ';
+      } else if (lower.indexOf('already logged in') !== -1 || lower.indexOf('simultaneous') !== -1) {
+        el.textContent = 'ဤဘောင်ချာကုဒ်သည် အခြားဖုန်းတွင် အသုံးပြုနေပါသည် (Already In Use)';
+      } else if (lower.indexOf('not found') !== -1 || lower.indexOf('invalid username') !== -1) {
+        el.textContent = 'ဘောင်ချာကုဒ် မှားယွင်းနေပါသည် (Invalid Voucher Code) – ပြန်လည်စစ်ဆေးပေးပါ';
+      }
+    })();
+  </script>
 </body>
 </html>

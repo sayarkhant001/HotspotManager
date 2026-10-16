@@ -420,14 +420,18 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             Spacer(modifier = Modifier.height(8.dp))
 
             // Usage Summary Cards for selected date range
-            // Calculate accurate router voucher data usage strictly synchronized with actual consumption
+            // Calculate accurate router voucher data usage strictly synchronized with actual consumption as sum of all profiles
             val sessionDataRawMb = filteredSessions.sumOf { it.dataUsedMb }
-            val totalDataRawMb = if (voucherDataRawMb > 0.0) voucherDataRawMb else sessionDataRawMb
+            val totalProfileDataMb = profileUsageBreakdown.sumOf { it.dataUsedMb }
+            val totalDataRawMb = if (profileUsageBreakdown.isNotEmpty()) totalProfileDataMb else (if (voucherDataRawMb > 0.0) voucherDataRawMb else sessionDataRawMb)
             val formattedDataUsage = if (totalDataRawMb >= 1024.0) {
                 String.format(java.util.Locale.US, "%.2f GB", totalDataRawMb / 1024.0)
             } else {
                 String.format(java.util.Locale.US, "%.1f MB", totalDataRawMb)
             }
+
+            val totalActivatedCount = if (profileUsageBreakdown.isNotEmpty()) profileUsageBreakdown.sumOf { it.vouchersSold } else (if (voucherCount > 0) voucherCount else filteredSessions.size)
+            val totalActivatedRevenue = if (profileUsageBreakdown.isNotEmpty()) profileUsageBreakdown.sumOf { it.totalRevenue } else activatedSales
 
             GlassCard(
                 modifier = Modifier
@@ -479,7 +483,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "${if (voucherCount > 0) voucherCount else filteredSessions.size}",
+                                text = "$totalActivatedCount",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1
@@ -504,14 +508,14 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "${"%,d".format(java.util.Locale.US, activatedSales.toLong())} Ks",
+                            text = "${"%,d".format(java.util.Locale.US, totalActivatedRevenue.toLong())} Ks",
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
                             maxLines = 1
                         )
                     }
 
-                    // Profile-by-Profile Sales and Exact Starlink Consumption
+                    // Profile-by-Profile Sales and Exact Data Consumed Breakdown
                     if (showProfileBreakdown) {
                         Spacer(modifier = Modifier.height(12.dp))
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -529,7 +533,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                 color = MaterialTheme.colorScheme.secondary
                             )
                             Text(
-                                text = "Starlink MMT Sync ✓",
+                                text = "${strings.totalDataUsage} Sync ✓",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color(0xFF4CAF50),
                                 fontSize = 10.sp
@@ -625,7 +629,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                                 Text(
-                                                    text = "Starlink: ${stat.exactGbFormatted.ifBlank { stat.dataUsedFormatted }}",
+                                                    text = "${strings.exactDataConsumedLabel}: ${stat.exactGbFormatted.ifBlank { stat.dataUsedFormatted }}",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     fontWeight = FontWeight.SemiBold,
                                                     color = MaterialTheme.colorScheme.tertiary
@@ -638,7 +642,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Text(
-                                                    text = "Tap to view ${stat.vouchersSold} activated vouchers →",
+                                                    text = "Tap to view ${stat.vouchersSold} ${strings.vouchersSoldLabel.lowercase()} →",
                                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
                                                 )
@@ -1093,8 +1097,9 @@ fun ProfileActivatedVouchersDialog(
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
     val activeUsers by viewModel.activeUsers.collectAsStateWithLifecycle()
     val activeCodes = remember(activeUsers) { activeUsers.map { it.user }.toSet() }
-    val activatedVouchers = remember(profileName, viewModel.vouchers) {
-        viewModel.getActivatedVouchersForProfile(profileName)
+    val selectedFilter by viewModel.selectedDateFilter.collectAsStateWithLifecycle()
+    val activatedVouchers = remember(profileName, viewModel.vouchers, selectedFilter) {
+        viewModel.getActivatedVouchersForProfile(profileName, selectedFilter)
     }
     var searchQuery by remember { mutableStateOf("") }
     val filteredList = remember(activatedVouchers, searchQuery) {
@@ -1136,7 +1141,7 @@ fun ProfileActivatedVouchersDialog(
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "${activatedVouchers.size} Activated • Total Starlink: $totalGbFormatted",
+                    text = "${activatedVouchers.size} ${strings.vouchersSoldLabel} • ${strings.exactDataConsumedLabel}: $totalGbFormatted",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

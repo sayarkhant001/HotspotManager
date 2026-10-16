@@ -1048,7 +1048,8 @@ fun NetworkTopologyScreen(
             EditAirMetroPairDialog(
                 pair = pairToEdit!!,
                 allBridgeDevices = topology.accessPoints.filter {
-                    DeviceModelDetector.isAirMetroOrBridge(it.name, it.name, it.model, it.macAddress)
+                    DeviceModelDetector.isAirMetroOrBridge(it.name, it.name, it.model, it.macAddress) ||
+                    !DeviceModelDetector.isClientDevice(it.name, it.name, it.model, it.macAddress)
                 },
                 onDismiss = { pairToEdit = null },
                 onSavePair = { baseMac, cpeMac, customTitle ->
