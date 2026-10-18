@@ -1033,8 +1033,8 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                     } catch (_: Exception) {}
                 }
 
-                // Periodic AP & Topology auto-sync (every 3 cycles ~36s or initial load)
-                if (pollCycleCount % 3 == 0 || networkTopology.value.accessPoints.isEmpty()) {
+                // Periodic AP & Topology auto-sync (every 15 cycles ~3m, or initial load)
+                if (pollCycleCount % 15 == 0 || networkTopology.value.accessPoints.isEmpty()) {
                     try {
                         val topo = repository.getNetworkTopology()
                         networkTopology.value = topo

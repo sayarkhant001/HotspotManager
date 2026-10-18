@@ -657,19 +657,30 @@ class MikrotikClient {
                     "=.proplist=.id,server,user,address,mac-address,uptime,session-time-left,limit-uptime,limit-bytes-total,bytes-in,bytes-out,comment,idle-time"
                 )
 
-                // Refresh router hotspot users periodically (every 60s) to obtain live cumulative comments ([USED:...], [BASE:...])
-                // Throttled to 60s to prevent router CPU spiking (running user print on every poll causes 90%+ CPU spikes on low-end routers)
-                if (cachedHotspotUsers.isEmpty() || now - lastHotspotUsersTime > 60_000L) {
-                    try {
-                        val userListRes = conn.execute(
-                            "/ip/hotspot/user/print",
-                            "=.proplist=.id,name,password,profile,limit-bytes-total,limit-uptime,uptime,bytes-in,bytes-out,comment,disabled"
-                        )
-                        if (userListRes.isNotEmpty()) {
-                            cachedHotspotUsers = userListRes.mapNotNull { uMap ->
-                                val uName = uMap["name"] ?: return@mapNotNull null
-                                if (uName.isBlank() || uName == "default-trial") return@mapNotNull null
-                                RouterHotspotUser(
+                // STABILITY & CPU OPTIMIZATION: Only inspect router user properties for ACTIVE vouchers!
+                // Eliminates dumping thousands of non-active vouchers across the API which causes 89%+ CPU spikes.
+                val activeUserNames = res.mapNotNull { it["user"]?.trim() }
+                    .filter { it.isNotBlank() && it != "admin" && it != "default-trial" }
+                    .toSet()
+
+                val currentCachedMap = cachedHotspotUsers.associateBy { it.name.lowercase() }.toMutableMap()
+                // Retain only currently active users to prevent memory bloat
+                currentCachedMap.keys.retainAll(activeUserNames.map { it.lowercase() })
+
+                // Identify newly connected active users that need router details (profile, initial comment, etc.)
+                val missingActiveUsers = activeUserNames.filter { !currentCachedMap.containsKey(it.lowercase()) }
+
+                if (missingActiveUsers.isNotEmpty()) {
+                    for (uName in missingActiveUsers.take(15)) {
+                        try {
+                            val singleRes = conn.execute(
+                                "/ip/hotspot/user/print",
+                                "=.proplist=.id,name,password,profile,limit-bytes-total,limit-uptime,uptime,bytes-in,bytes-out,comment,disabled",
+                                "?name=$uName"
+                            )
+                            if (singleRes.isNotEmpty()) {
+                                val uMap = singleRes[0]
+                                currentCachedMap[uName.lowercase()] = RouterHotspotUser(
                                     id = uMap[".id"] ?: "",
                                     name = uName,
                                     password = uMap["password"] ?: "",
@@ -683,12 +694,11 @@ class MikrotikClient {
                                     limitUptime = uMap["limit-uptime"] ?: ""
                                 )
                             }
-                            lastHotspotUsersTime = now
-                        }
-                    } catch (_: Exception) {}
+                        } catch (_: Exception) {}
+                    }
                 }
-
-                val userMap = cachedHotspotUsers.associateBy { it.name.lowercase() }
+                cachedHotspotUsers = currentCachedMap.values.toList()
+                val userMap = currentCachedMap
 
                 res.mapNotNull {
                     // Filter out disconnected/ghost sessions with idle-time > 180s (3m)

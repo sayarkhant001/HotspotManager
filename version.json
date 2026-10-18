@@ -1,7 +1,7 @@
 {
-  "versionName": "1.6.1",
-  "versionCode": 36,
-  "releaseTitle": "Hotspot Manager v1.6.1 - CPU Spike Fix & UI Polish",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.6.1.apk",
-  "releaseNotes": "• Router CPU Spike Fix (KyawGyi): Throttled heavy hotspot user database queries to 60s (previously dumping thousands of vouchers every poll cycle and driving CPU to 89%+). Throttled clock queries to 3m and active sessions loop to 8s.\n• Header Cleanup: Removed settings cog and update buttons from the top bar for a minimalist, uncluttered dashboard.\n• Printer in Settings: Thermal Bluetooth printer management relocated directly into the Settings tab.\n• Navigation Bar & Layout Fix: Eliminated double-insets causing blank white padding at the bottom of screens, restored space for content, and added a sleek rounded frosted glass bottom navigation bar.\n• PPPoE Smart Visibility: PPPoE tab is automatically hidden for routers without PPPoE configuration."
+  "versionName": "1.6.2",
+  "versionCode": 37,
+  "releaseTitle": "Hotspot Manager v1.6.2 - Active-Vouchers-Only Query Architecture",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.6.2.apk",
+  "releaseNotes": "• Targeted Active-Voucher-Only Architecture: The app now queries user properties ONLY for actively connected hotspot sessions (?name=...) instead of dumping all 5,000+ voucher records from the router. This completely resolves CPU spikes on low/mid-range routers like KyawGyi.\n• 100% Exact Quota & Time Enforcement: Real-time bytes-in/out and session-time-left counters from active sessions ensure byte-exact data quota cutting and second-exact session duration cutting.\n• Smart Active User Cache: Automatically caches active user profiles while online and clears them on disconnect, avoiding redundant API calls.\n• Reduced Network Payload: Polling payload reduced from ~2 MB to under 4 KB per cycle, dramatically improving responsiveness over remote relay/WireGuard tunnels.\n• Throttled Background Services: Network topology and IP binding sync throttled to prevent background burst load."
 }
