@@ -118,35 +118,19 @@ VOUCHER_ACTIVATE_SOURCE = """# Airtight Voucher Activation & Continuous Timer En
   :set curComm [$setTag comm=$curComm tag="[MAC:" val=$m];
 };
 
-# 5. CONTINUOUS COUNTDOWN TIMER
+# 5. RECORD ACTIVATION TIME (first login only)
+# Time expiry is handled by hs-continuous-expire-monitor (every 1m) + VPS sweep (every 5m)
+# Per-user schedulers are NOT created — they cause unnecessary CPU load on the router.
 :local isFirstLogin true;
 :if ([:find $curComm "[ACT:"] >= 0) do={ :set isFirstLogin false };
-:if ([:len [/system scheduler find name=$u]] > 0) do={ :set isFirstLogin false };
 
 :local cDate [/system clock get date];
 :local cTime [/system clock get time];
 
 :if ($isFirstLogin) do={
-  :local vDur "1d";
-  :if ($profName = "50GB-30000" or $profName = "30Day" or $profName = "40G_30D" or $curComm ~ "30D" or $curComm ~ "Month") do={ :set vDur "30d" };
-  :if ($profName = "1GB_1H" or $profName ~ "1H" or $curComm ~ "1Hour" or $curComm ~ "1H") do={ :set vDur "1h" };
-  :if ($profName ~ "2H" or $curComm ~ "2Hour" or $curComm ~ "2H") do={ :set vDur "2h" };
-  :if ($profName = "test" or $curComm ~ "3M") do={ :set vDur "3m" };
-  
   :set curComm [$setTag comm=$curComm tag="[ACT:" val=([:tostr $cDate] . " " . [:tostr $cTime])];
   /ip hotspot user set $uObj comment=$curComm;
-  :log info ("Hotspot: Voucher " . $u . " activated! Validity: " . [:tostr $vDur] . " started at " . [:tostr $cDate] . " " . [:tostr $cTime]);
-
-  :local schedEvt ("/ip hotspot active remove [find user=\\\"" . $u . "\\\"]; /ip hotspot cookie remove [find user=\\\"" . $u . "\\\"]; /ip hotspot user set [find name=\\\"" . $u . "\\\"] disabled=yes limit-uptime=1s limit-bytes-total=1 comment=([/ip hotspot user get [find name=\\\"" . $u . "\\\"] comment] . \\\" [EXPIRED:TIME_OVERDUE]\\\"); /system scheduler remove [find name=\\\"" . $u . "\\\"]");
-  :local schedComm ("Voucher continuous timer: " . [:tostr $vDur] . " from " . [:tostr $cDate] . " " . [:tostr $cTime]);
-
-  :do {
-    /system scheduler add name=$u start-date=$cDate start-time=$cTime interval=$vDur on-event=$schedEvt comment=$schedComm;
-  } on-error={
-    :do {
-      /system scheduler add name=$u start-time=startup interval=$vDur on-event=$schedEvt comment=($schedComm . " (fallback)");
-    } on-error={};
-  };
+  :log info ("Hotspot: Voucher " . $u . " first activated at " . [:tostr $cDate] . " " . [:tostr $cTime]);
 } else={
   /ip hotspot user set $uObj comment=$curComm;
 };
@@ -187,7 +171,7 @@ HS_QUOTA_SAVE_SOURCE = """# Airtight Realtime Quota Saver & Hardware Cutoff
         :if ($bIdx >= 0) do={
           :local pfx [:pick $comm 0 $bIdx];
           :local sfx "";
-          :if ($bEnd >= 0) do={ :set sfx [:pick $comm ($endIdx + 1) [:len $comm]] };
+          :if ($bEnd >= 0) do={ :set sfx [:pick $comm ($bEnd + 1) [:len $comm]] };
           :set comm ($pfx . "[BASE:" . [:tostr $baseBytes] . "]" . $sfx);
         } else={
           :set comm ($comm . " [BASE:" . [:tostr $baseBytes] . "]");
@@ -329,7 +313,6 @@ HS_ON_LOGOUT_SOURCE = """# Save quota and sync base state on user logout
     /ip hotspot user set $uObj comment=$comm;
   };
 };
-:do { /system script run hs-quota-save } on-error={};
 """
 
 class RouterAuditor:
@@ -394,7 +377,7 @@ class RouterAuditor:
                         else:
                             client.talk(['/system/scheduler/add', f'=name={name}', f'=interval={interval}', f'=on-event={on_event}', f'=comment={comment}', '=start-time=startup'])
 
-                    ensure_scheduler('hs-quota-saver', '3s', '/system script run hs-quota-save', "Realtime Quota Saver (every 3s)")
+                    ensure_scheduler('hs-quota-saver', '30s', '/system script run hs-quota-save', "Realtime Quota Saver (every 30s)")
                     ensure_scheduler('hs-continuous-expire-monitor', '1m', '/system script run voucher-expire-check', "Hotspot continuous expiration monitor (every 1m)")
 
                     # Clean up device-mode failing cloud-heartbeat scheduler if present
@@ -403,7 +386,21 @@ class RouterAuditor:
                         if r[0] == '!re':
                             for item in r[1:]:
                                 if item.startswith('=.id='):
-                                    client.talk(['/system/scheduler/remove', f'=numbers={item[5:]}'])
+                                    client.talk(['/system/scheduler/remove', f'=.id={item[5:]}'])
+
+                    # Clean up any leftover per-user schedulers (they cause heavy RouterOS CPU load)
+                    all_scheds = client.talk(['/system/scheduler/print', '=.proplist=.id,name'])
+                    sys_sched_names = {'hs-quota-saver', 'hs-continuous-expire-monitor', 'cloud-heartbeat', 'cloud_heartbeat'}
+                    for r in all_scheds:
+                        if r[0] == '!re':
+                            d = parse_re(r)
+                            sname = d.get('name', '')
+                            sid = d.get('.id')
+                            if sname and sname not in sys_sched_names and sid:
+                                try:
+                                    client.talk(['/system/scheduler/remove', f'=.id={sid}'])
+                                except Exception:
+                                    pass
 
                     # 3. Enforce User Profiles
                     profiles = client.talk(['/ip/hotspot/user/profile/print'])
@@ -413,31 +410,51 @@ class RouterAuditor:
                             pid = d.get('.id')
                             pname = d.get('name', '')
                             if pid and pname:
+                                # session-timeout MUST be empty string via API (not 'none').
+                                # MikroTik API rejects 'none' with !trap on many RouterOS versions.
+                                # Empty string '' = no session timeout so MikroTik does NOT
+                                # auto-disconnect users at a timer boundary. VPS enforcer +
+                                # per-user schedulers are the authoritative cutoff mechanism.
                                 cookie_time = "1d"
-                                sess_time = "1d"
                                 if any(k in pname for k in ["50GB", "30D", "30Day", "Month", "40G"]):
                                     cookie_time = "4w2d"
-                                    sess_time = "4w2d"
                                 elif any(k in pname for k in ["1H", "1Hour"]):
                                     cookie_time = "1h"
-                                    sess_time = "1h"
                                 elif any(k in pname for k in ["2H", "2Hour"]):
                                     cookie_time = "2h"
-                                    sess_time = "2h"
 
-                                client.talk([
-                                    '/ip/hotspot/user/profile/set',
-                                    f'=.id={pid}',
-                                    '=on-login=:global hsUser $user; :do { /system script run voucher-activate } on-error={}',
-                                    '=on-logout=/system script run hs-on-logout',
-                                    f'=session-timeout={sess_time}',
-                                    f'=mac-cookie-timeout={cookie_time}',
-                                    '=keepalive-timeout=2m',
-                                    '=idle-timeout=3m',
-                                    '=status-autorefresh=1m',
-                                    '=shared-users=1',
-                                    '=add-mac-cookie=yes'
-                                ])
+                                # Set session-timeout=0s = no timeout (disabled).
+                                # '0s' is the correct RouterOS API value - returns !done with no trap.
+                                # When set, the field is omitted from API responses (the "not set" state).
+                                # Empty string silently fails on some RouterOS versions.
+                                try:
+                                    client.talk([
+                                        '/ip/hotspot/user/profile/set',
+                                        f'=.id={pid}',
+                                        '=on-login=:global hsUser $user; :do { /system script run voucher-activate } on-error={}',
+                                        '=on-logout=/system script run hs-on-logout',
+                                        '=session-timeout=0s',
+                                        f'=mac-cookie-timeout={cookie_time}',
+                                        '=keepalive-timeout=2m',
+                                        '=idle-timeout=3m',
+                                        '=status-autorefresh=1m',
+                                        '=shared-users=1',
+                                        '=add-mac-cookie=yes'
+                                    ])
+                                except Exception:
+                                    # Fallback: set without session-timeout
+                                    client.talk([
+                                        '/ip/hotspot/user/profile/set',
+                                        f'=.id={pid}',
+                                        '=on-login=:global hsUser $user; :do { /system script run voucher-activate } on-error={}',
+                                        '=on-logout=/system script run hs-on-logout',
+                                        f'=mac-cookie-timeout={cookie_time}',
+                                        '=keepalive-timeout=2m',
+                                        '=idle-timeout=3m',
+                                        '=status-autorefresh=1m',
+                                        '=shared-users=1',
+                                        '=add-mac-cookie=yes'
+                                    ])
 
                     # 4. Enforce Reyee Hardware / APs / Bridges Bypassed
                     reyee_macs = [
@@ -455,9 +472,19 @@ class RouterAuditor:
                             client.talk(['/ip/hotspot/ip-binding/add', f'=mac-address={mac}', '=type=bypassed', f'=comment={desc}'])
 
                     # 5. Voucher Sweep / MAC Unbinding
-                    clock = [parse_re(r) for r in client.talk(['/system/clock/print']) if r[0] == '!re'][0]
-                    router_now_str = f"{clock.get('date')} {clock.get('time')}"
-                    router_now = datetime.strptime(router_now_str, "%Y-%m-%d %H:%M:%S")
+                    clk_res = client.talk(['/system/clock/print'])
+                    clk_entries = [parse_re(r) for r in clk_res if r[0] == '!re']
+                    if clk_entries:
+                        clk_date = clk_entries[0].get('date') or ''
+                        clk_time = clk_entries[0].get('time') or ''
+                    else:
+                        clk_date, clk_time = '', ''
+                    try:
+                        router_now = datetime.strptime(f"{clk_date} {clk_time}", "%Y-%m-%d %H:%M:%S")
+                        if router_now.year < 2025:
+                            raise ValueError("clock unsynchronized")
+                    except Exception:
+                        router_now = datetime.now()
 
                     users = [parse_re(r) for r in client.talk(['/ip/hotspot/user/print']) if r[0] == '!re']
                     disabled_count = 0

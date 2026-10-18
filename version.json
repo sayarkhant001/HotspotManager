@@ -1,7 +1,7 @@
 {
-  "versionName": "1.5.7",
-  "versionCode": 34,
-  "releaseTitle": "Hotspot Manager v1.5.7 - Exact Daily Activated Metrics & Profile Sync",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.5.7.apk",
-  "releaseNotes": "• Exact Daily Activated Voucher Accounting: Stocked inventory vouchers are strictly excluded; only genuine active/activated vouchers in the selected date window are counted\n• Harmonized Profile Sales & Revenue: Total revenue and per-profile sales strictly reflect activated voucher sales amounts\n• Clean Data Consumption Display: Profile and modal metrics clearly display Data Used (ဒေတာ သုံးစွဲမှု) with pure usage accounting\n• Profile Sum Synchronized Data Total: Overall dashboard data usage strictly equals the exact sum of all profile consumptions\n• Date-Filtered Profile Inspection Modal: Tap any profile to view only the vouchers activated within the selected date window\n• Multi-Device & Reboot Resilience: Persistent router metadata ensures identical metrics across all phones and after router reboots"
+  "versionName": "1.6.0",
+  "versionCode": 35,
+  "releaseTitle": "Hotspot Manager v1.6.0 - PPPoE Subscriber Management & Settings Redesign",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.6.0.apk",
+  "releaseNotes": "• PPPoE Subscriber Tab: Dynamically shown only when your router has a PPPoE server configured — hidden automatically for hotspot-only setups\n• PPPoE Management: Create, renew, disable/enable, and delete PPPoE subscribers directly from the app\n• Smart Expiry Tracking: Per-subscriber expiry countdown with color-coded warnings (red <3d, yellow <7d, green OK)\n• Speed Limits per User: Set download/upload Mbps and optional data cap per subscriber\n• Active Sessions View: Real-time PPPoE active session list with IP address and uptime\n• Enable PPPoE from Settings: New Settings tab option to configure PPPoE server on any router that doesn't have it yet\n• Settings Screen Redesign: Dedicated Settings tab replacing the old modal — Account, Connection, Routers list, PPPoE control, App preferences\n• Web App PPPoE Tab: hotspot-admin.pages.dev now includes a PPPoE subscriber management tab with search, filter, renew, disable, and delete\n• Stability Tab Removed from Web App: Router stability monitoring merged into Dashboard for cleaner navigation\n• Network-Aware Subnet Selection: IP pool automatically scales with max users (≤245→/24, ≤500→/23, ≤1000→/22)"
 }

@@ -100,6 +100,14 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     val connectionMode = MutableStateFlow<String>("local") // "local", "cloud_remote", "direct"
     val cloudLoginStatus = MutableStateFlow<String?>(null)
 
+    // ── PPPoE State ─────────────────────────────────────────────────────────
+    /** True when active router has a PPPoE server configured (or has any PPPoE users).
+     *  Drives the conditional PPPoE bottom nav tab visibility. */
+    val pppoeEnabled = MutableStateFlow(false)
+    val pppoeSubscribers = MutableStateFlow<List<PppoeSubscriber>>(emptyList())
+    val pppoeActiveSessions = MutableStateFlow<List<PppoeActiveSession>>(emptyList())
+    val isPppoeLoading = MutableStateFlow(false)
+
     // Network Topology & Whitelisting State
     val networkTopology = MutableStateFlow(NetworkTopologyData())
     val isTopologyLoading = MutableStateFlow(false)
@@ -1028,6 +1036,11 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                         networkTopology.value = topo
                     } catch (_: Exception) {}
                 }
+
+                // Check PPPoE enabled on this router (every 6th cycle ~72s, or on first load)
+                if (pollCycleCount % 6 == 0 || pollCycleCount == 1) {
+                    try { checkPppoeEnabled() } catch (_: Exception) {}
+                }
             } catch (t: Throwable) {
                 t.printStackTrace()
             } finally {
@@ -1461,9 +1474,143 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         }
     }
 
+    // ── PPPoE Functions ──────────────────────────────────────────────────────
+
+    /** Called whenever the active router changes. Checks if PPPoE server exists or
+     *  any PPP secrets exist → sets pppoeEnabled to show/hide the nav tab. */
+    fun checkPppoeEnabled() {
+        viewModelScope.launch(exceptionHandler) {
+            val result = repository.getPppoeSubscribers()
+            result.onSuccess { subs ->
+                pppoeEnabled.value = subs.isNotEmpty()
+                pppoeSubscribers.value = subs
+            }.onFailure {
+                // Also check if PPPoE server is configured even with 0 users
+                val serverResult = repository.checkPppoeServerExists()
+                pppoeEnabled.value = serverResult
+            }
+        }
+    }
+
+    fun fetchPppoeData() {
+        viewModelScope.launch(exceptionHandler) {
+            isPppoeLoading.value = true
+            try {
+                repository.getPppoeSubscribers().onSuccess { subs ->
+                    pppoeSubscribers.value = subs
+                    pppoeEnabled.value = subs.isNotEmpty()
+                }
+                repository.getPppoeActiveSessions().onSuccess { sessions ->
+                    pppoeActiveSessions.value = sessions
+                }
+            } finally {
+                isPppoeLoading.value = false
+            }
+        }
+    }
+
+    fun createPppoeUser(
+        username: String, password: String,
+        downloadMbps: Int, uploadMbps: Int,
+        dataLimitGb: Int = 0, validityDays: Int = 30,
+        profile: String = "pppoe-profile"
+    ) {
+        viewModelScope.launch(exceptionHandler) {
+            val res = repository.createPppoeUser(username, password, downloadMbps, uploadMbps, dataLimitGb, validityDays, profile)
+            if (res.isSuccess) {
+                userMessage.value = "✓ PPPoE user '$username' created!"
+                fetchPppoeData()
+                pppoeEnabled.value = true
+            } else {
+                userMessage.value = "✗ Failed: ${res.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
+    fun deletePppoeUser(username: String) {
+        viewModelScope.launch(exceptionHandler) {
+            val res = repository.deletePppoeUser(username)
+            if (res.isSuccess) {
+                userMessage.value = "✓ Removed PPPoE user '$username'"
+                fetchPppoeData()
+                if (pppoeSubscribers.value.isEmpty()) pppoeEnabled.value = false
+            } else {
+                userMessage.value = "✗ Failed to remove: ${res.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
+    fun renewPppoeUser(username: String, days: Int) {
+        viewModelScope.launch(exceptionHandler) {
+            val res = repository.renewPppoeUser(username, days)
+            if (res.isSuccess) {
+                userMessage.value = "✓ Renewed '$username' for $days days"
+                fetchPppoeData()
+            } else {
+                userMessage.value = "✗ Renewal failed: ${res.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
+    fun disablePppoeUser(username: String, disabled: Boolean) {
+        viewModelScope.launch(exceptionHandler) {
+            val res = repository.disablePppoeUser(username, disabled)
+            if (res.isSuccess) {
+                userMessage.value = if (disabled) "⏸ Disabled '$username'" else "▶ Enabled '$username'"
+                fetchPppoeData()
+            } else {
+                userMessage.value = "✗ Failed: ${res.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
+    fun enablePppoeServer(serviceName: String) {
+        viewModelScope.launch(exceptionHandler) {
+            isPppoeLoading.value = true
+            val res = repository.enablePppoeServer(serviceName)
+            isPppoeLoading.value = false
+            if (res.isSuccess) {
+                userMessage.value = "✓ PPPoE server '$serviceName' enabled!"
+                pppoeEnabled.value = true
+                fetchPppoeData()
+            } else {
+                userMessage.value = "✗ PPPoE setup failed: ${res.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         pollingJob?.cancel()
     }
 }
+
+// ── PPPoE Data Models ────────────────────────────────────────────────────────
+data class PppoeSubscriber(
+    val name: String,
+    val password: String = "",
+    val profile: String = "pppoe-profile",
+    val service: String = "pppoe-server",
+    val downloadMbps: Int = 0,
+    val uploadMbps: Int = 0,
+    val dataLimitGb: Int = 0,
+    val disabled: Boolean = false,
+    val comment: String = "",
+    val expiryDays: Int = 0,     // days remaining (parsed from comment)
+    val expiryDate: String = "", // formatted expiry date
+    val isOnline: Boolean = false,
+    val currentIp: String = "",
+    val uptimeStr: String = "",
+    val bytesInMb: Double = 0.0,
+    val bytesOutMb: Double = 0.0
+)
+
+data class PppoeActiveSession(
+    val name: String,
+    val address: String,
+    val uptime: String,
+    val service: String,
+    val callerId: String = ""
+)
+
 

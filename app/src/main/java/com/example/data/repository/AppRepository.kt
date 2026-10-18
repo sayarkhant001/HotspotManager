@@ -1404,5 +1404,202 @@ class AppRepository(
     suspend fun getNetworkTopology(): com.example.domain.models.NetworkTopologyData = mikrotikClient.getNetworkTopology()
     suspend fun renameAccessPoint(mac: String, newName: String): Boolean = mikrotikClient.renameAccessPoint(mac, newName)
     suspend fun setRouterAdvanceMode(): Boolean = mikrotikClient.setRouterAdvanceMode()
+
+    // ── PPPoE Methods ─────────────────────────────────────────────────────────
+
+
+    /** Returns list of PPP secrets (configured subscribers) from the router */
+    suspend fun getPppoeSubscribers(): Result<List<com.example.ui.screens.PppoeSubscriber>> = withContext(Dispatchers.IO) {
+        try {
+            val secrets = mikrotikClient.sendCommand("/ppp/secret/print")
+            val activeSessions = try { mikrotikClient.sendCommand("/ppp/active/print") } catch (_: Exception) { emptyList() }
+            val activeNames = activeSessions.associate { s ->
+                val name = s["name"] ?: ""
+                val addr = s["address"] ?: ""
+                val uptime = s["uptime"] ?: ""
+                name to Pair(addr, uptime)
+            }
+
+            val subs = secrets.map { r ->
+                val name = r["name"] ?: ""
+                val profile = r["profile"] ?: "pppoe-profile"
+                val comment = r["comment"] ?: ""
+                val disabled = r["disabled"] == "true"
+                val rateLimit = r["rates"] ?: ""
+                // Parse speed from rate-limit "10M/5M" → dl=10, ul=5
+                val dl = rateLimit.substringBefore("/").filter { it.isDigit() }.toIntOrNull() ?: 0
+                val ul = rateLimit.substringAfter("/", "").filter { it.isDigit() }.toIntOrNull() ?: 0
+                // Parse expiry from comment "[EXP:2025-01-15]"
+                val expMatch = Regex("\\[EXP:([^]]+)]").find(comment)
+                val expDate = expMatch?.groupValues?.get(1) ?: ""
+                val expDays = if (expDate.isNotBlank()) {
+                    try {
+                        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                        val exp = sdf.parse(expDate)?.time ?: 0L
+                        ((exp - System.currentTimeMillis()) / 86400000L).toInt().coerceAtLeast(0)
+                    } catch (_: Exception) { 0 }
+                } else 0
+                val sessionInfo = activeNames[name]
+                com.example.ui.screens.PppoeSubscriber(
+                    name = name,
+                    profile = profile,
+                    service = r["service"] ?: "pppoe-server",
+                    downloadMbps = dl,
+                    uploadMbps = ul,
+                    disabled = disabled,
+                    comment = comment,
+                    expiryDate = expDate,
+                    expiryDays = expDays,
+                    isOnline = sessionInfo != null,
+                    currentIp = sessionInfo?.first ?: "",
+                    uptimeStr = sessionInfo?.second ?: ""
+                )
+            }
+            Result.success(subs)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** Returns active PPPoE sessions */
+    suspend fun getPppoeActiveSessions(): Result<List<com.example.ui.screens.PppoeActiveSession>> = withContext(Dispatchers.IO) {
+        try {
+            val rows = mikrotikClient.sendCommand("/ppp/active/print")
+            val sessions = rows.map { r ->
+                com.example.ui.screens.PppoeActiveSession(
+                    name = r["name"] ?: "",
+                    address = r["address"] ?: "",
+                    uptime = r["uptime"] ?: "",
+                    service = r["service"] ?: "pppoe-server",
+                    callerId = r["caller-id"] ?: ""
+                )
+            }
+            Result.success(sessions)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** Returns true if PPPoE server exists on this router */
+    suspend fun checkPppoeServerExists(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val servers = mikrotikClient.sendCommand("/interface/pppoe-server/server/print")
+            servers.any { it["disabled"] != "true" }
+        } catch (_: Exception) { false }
+    }
+
+    /** Creates a PPP secret (subscriber account) on the router */
+    suspend fun createPppoeUser(
+        username: String, password: String,
+        downloadMbps: Int, uploadMbps: Int,
+        dataLimitGb: Int = 0, validityDays: Int = 30,
+        profile: String = "pppoe-profile"
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val expDate = sdf.format(Date(System.currentTimeMillis() + validityDays * 86400000L))
+            val rateLimit = if (downloadMbps > 0 || uploadMbps > 0) "${downloadMbps}M/${uploadMbps}M" else ""
+            val comment = "[EXP:$expDate]" + if (dataLimitGb > 0) "[DATA:${dataLimitGb}GB]" else ""
+            val args = mutableMapOf(
+                "name" to username,
+                "password" to password,
+                "service" to "pppoe",
+                "profile" to profile,
+                "comment" to comment
+            )
+            if (rateLimit.isNotBlank()) args["rates"] = rateLimit
+            mikrotikClient.sendCommandWithArgs("/ppp/secret/add", args)
+            Result.success(Unit)
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    /** Removes a PPP secret (kicks active session too) */
+    suspend fun deletePppoeUser(username: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            // First kick active session if online
+            try {
+                val active = mikrotikClient.sendCommand("/ppp/active/print")
+                val activeId = active.firstOrNull { it["name"] == username }?.get(".id")
+                if (activeId != null) {
+                    mikrotikClient.sendCommandWithArgs("/ppp/active/remove", mapOf("numbers" to activeId))
+                }
+            } catch (_: Exception) {}
+            // Remove secret
+            val secrets = mikrotikClient.sendCommand("/ppp/secret/print")
+            val secretId = secrets.firstOrNull { it["name"] == username }?.get(".id")
+                ?: return@withContext Result.failure(Exception("User not found"))
+            mikrotikClient.sendCommandWithArgs("/ppp/secret/remove", mapOf("numbers" to secretId))
+            Result.success(Unit)
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    /** Extends expiry date by adding days to [EXP:] comment tag */
+    suspend fun renewPppoeUser(username: String, days: Int): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val secrets = mikrotikClient.sendCommand("/ppp/secret/print")
+            val secret = secrets.firstOrNull { it["name"] == username }
+                ?: return@withContext Result.failure(Exception("User not found"))
+            val secretId = secret[".id"] ?: return@withContext Result.failure(Exception("No ID"))
+            val comment = secret["comment"] ?: ""
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val existingExp = Regex("\\[EXP:([^]]+)]").find(comment)?.groupValues?.get(1)
+            val baseDate = if (!existingExp.isNullOrBlank()) {
+                try { sdf.parse(existingExp)?.time ?: System.currentTimeMillis() }
+                catch (_: Exception) { System.currentTimeMillis() }
+            } else System.currentTimeMillis()
+            // If existing expiry is in the past, renew from today instead
+            val fromDate = maxOf(baseDate, System.currentTimeMillis())
+            val newExpDate = sdf.format(Date(fromDate + days * 86400000L))
+            val newComment = if (existingExp != null) {
+                comment.replace(Regex("\\[EXP:[^]]+]"), "[EXP:$newExpDate]")
+            } else {
+                "$comment[EXP:$newExpDate]"
+            }
+            mikrotikClient.sendCommandWithArgs("/ppp/secret/set", mapOf("numbers" to secretId, "comment" to newComment))
+            Result.success(Unit)
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    /** Enables or disables a PPP secret */
+    suspend fun disablePppoeUser(username: String, disabled: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val secrets = mikrotikClient.sendCommand("/ppp/secret/print")
+            val secretId = secrets.firstOrNull { it["name"] == username }?.get(".id")
+                ?: return@withContext Result.failure(Exception("User not found"))
+            mikrotikClient.sendCommandWithArgs("/ppp/secret/set",
+                mapOf("numbers" to secretId, "disabled" to if (disabled) "yes" else "no"))
+            if (disabled) {
+                // Kick active session immediately
+                try {
+                    val active = mikrotikClient.sendCommand("/ppp/active/print")
+                    val activeId = active.firstOrNull { it["name"] == username }?.get(".id")
+                    if (activeId != null) {
+                        mikrotikClient.sendCommandWithArgs("/ppp/active/remove", mapOf("numbers" to activeId))
+                    }
+                } catch (_: Exception) {}
+            }
+            Result.success(Unit)
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    /** Configures a PPPoE server on ether1 with 192.168.200.0/24 pool */
+    suspend fun enablePppoeServer(serviceName: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val rsc = """
+                # PPPoE Server Enable
+                :do { /ip pool add name=pppoe-pool ranges=192.168.200.2-192.168.200.254 } on-error={
+                  :do { /ip pool set [find name=pppoe-pool] ranges=192.168.200.2-192.168.200.254 } on-error={} }
+                :do { /ppp profile add name=pppoe-profile local-address=192.168.200.1 remote-address=pppoe-pool dns-server=8.8.8.8,1.1.1.1 use-compression=no } on-error={
+                  :do { /ppp profile set [find name=pppoe-profile] local-address=192.168.200.1 } on-error={} }
+                :do { /interface pppoe-server server add service-name=$serviceName interface=ether1 default-profile=pppoe-profile authentication=chap,mschap1,mschap2 disabled=no } on-error={
+                  :do { /interface pppoe-server server set [find service-name=$serviceName] disabled=no } on-error={} }
+                :do { /ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="PPPoE NAT" } on-error={}
+            """.trimIndent()
+            mikrotikClient.executeScript(rsc)
+            Result.success(Unit)
+        } catch (e: Exception) { Result.failure(e) }
+    }
 }
+
+
 

@@ -2591,12 +2591,59 @@ class MikrotikClient {
         }
     }
 
+    // ── Generic RouterOS API Wrappers (used by PPPoE & other features) ────────
+
+    /** Runs any RouterOS command path (e.g. "/ppp/secret/print") and returns result rows.
+     *  Optionally pass extra params like "?name=xxx" or "=.proplist=name,comment". */
+    suspend fun sendCommand(
+        path: String,
+        vararg params: String
+    ): List<Map<String, String>> = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            val conn = ensureConnectedInternal() ?: return@withContext emptyList()
+            try {
+                conn.execute(path, *params)
+            } catch (e: Exception) {
+                handleApiError(e)
+                emptyList()
+            }
+        }
+    }
+
+    /** Runs a RouterOS command with named key=value parameters.
+     *  e.g. sendCommandWithArgs("/ppp/secret/add", mapOf("name" to "user1", "password" to "pass")) */
+    suspend fun sendCommandWithArgs(
+        path: String,
+        args: Map<String, String>
+    ): List<Map<String, String>> = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            val conn = ensureConnectedInternal()
+                ?: throw IllegalStateException("Router is not connected")
+            try {
+                val params = args.map { (k, v) -> "=$k=$v" }.toTypedArray()
+                conn.execute(path, *params)
+            } catch (e: Exception) {
+                handleApiError(e)
+                throw e
+            }
+        }
+    }
+
+    /** Convenience wrapper — executes an RSC script via executeRscScript and throws on failure */
+    suspend fun executeScript(rscContent: String) {
+        val result = executeRscScript(rscContent)
+        if (!result.success) {
+            throw Exception(result.outputLog.takeLast(200))
+        }
+    }
+
     companion object {
         /**
          * Formats uptime / session-timeout string for MikroTik RouterOS.
          * RouterOS accepts formats like: 15m, 30m, 1h, 2h, 1d, 7d.
          */
         fun formatMikrotikUptime(durationMinutes: Int, validityDays: Int): String {
+
             return when {
                 durationMinutes in 1..59 -> "${durationMinutes}m"
                 durationMinutes in 60..1439 && durationMinutes % 60 == 0 -> "${durationMinutes / 60}h"

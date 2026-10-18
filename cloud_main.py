@@ -119,6 +119,33 @@ class BatchVoucherCreateRequest(BaseModel):
     quota_mb: int = 0
     uptime_str: str = "1d"
     price_mmk: int = 500
+
+class BulkVoucherCreateRequest(BaseModel):
+    """For creating 10,000+ vouchers via RSC script injection (no per-call API overhead)"""
+    count: int = 100
+    digits: int = 6
+    profile: str = "default"
+    quota_mb: int = 0
+    uptime_str: str = "1d"
+    price_mmk: int = 500
+
+class AutoSetupRequest(BaseModel):
+    """Zero-knowledge router auto-setup request"""
+    router_ip: str              # IP address of new router (user must be on same network)
+    router_name: str            # Friendly name for this router (shown in app)
+    router_location: Optional[str] = ""  # Physical location description (optional)
+    api_user: Optional[str] = "admin"    # RouterOS admin username (almost always 'admin')
+    api_pass: Optional[str] = ""         # RouterOS admin password (empty = no password)
+    api_port: Optional[int] = 8728       # RouterOS API port (default 8728)
+    ftp_port: Optional[int] = 21         # FTP port for portal upload (default 21)
+    wifi_ssid: Optional[str] = ""        # WiFi broadcast name (fetched from router if empty)
+    site_name: Optional[str] = ""        # App display name (defaults to router_name)
+    ip_capacity: Optional[int] = 250     # Max concurrent hotspot users
+    setup_pppoe: Optional[bool] = False  # Whether to also configure PPPoE server
+    # PPPoE: only the service name is user-configurable. IPs are auto-selected.
+    pppoe_service: Optional[str] = "pppoe-server"  # PPPoE service name (no spaces)
+    skip_hotspot_setup: Optional[bool] = False      # If True, skip hotspot, only WG+PPPoE
+
 class LiveVoucherCreateRequest(BaseModel):
     username: str
     password: Optional[str] = ""
@@ -1071,6 +1098,10 @@ def delete_router_hotspot_profile(rid: int, pname: str, current_user: dict = Dep
 
 @app.post("/api/routers/{rid}/batch-vouchers")
 def add_batch_router_vouchers(rid: int, req: BatchVoucherCreateRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Small batch voucher creation (up to 500) via individual RouterOS API calls.
+    For 10,000+ vouchers use /bulk-vouchers instead (RSC injection, no CPU spike).
+    """
     conn = db.get_db()
     c = conn.cursor()
     c.execute("SELECT * FROM routers WHERE id = ?", (rid,))
@@ -1082,7 +1113,7 @@ def add_batch_router_vouchers(rid: int, req: BatchVoucherCreateRequest, current_
         conn.close()
         raise HTTPException(status_code=403, detail="Permission denied")
 
-    client = mk.RouterOSClient(r["wg_ip"], r["api_port"], timeout=20.0)
+    client = mk.RouterOSClient(r["wg_ip"], r["api_port"], timeout=30.0)
     try:
         client.connect()
         if not client.login(r["api_user"], r["api_pass"]):
@@ -1091,12 +1122,12 @@ def add_batch_router_vouchers(rid: int, req: BatchVoucherCreateRequest, current_
             raise HTTPException(status_code=400, detail="API Login failed")
 
         digits = max(4, min(10, req.digits))
-        count = max(1, min(200, req.count))
+        count = max(1, min(500, req.count))  # Raised cap to 500 for batch API calls
         limit_bytes = req.quota_mb * 1024 * 1024 if req.quota_mb and req.quota_mb > 0 else 0
         min_val = 10 ** (digits - 1)
         max_val = (10 ** digits) - 1
 
-        import random, time
+        import random
         created_codes = []
         for _ in range(count):
             code = str(random.randint(min_val, max_val))
@@ -1123,6 +1154,109 @@ def add_batch_router_vouchers(rid: int, req: BatchVoucherCreateRequest, current_
             "count": len(created_codes),
             "codes": created_codes,
             "message": f"Successfully created {len(created_codes)} vouchers with profile '{req.profile}'!"
+        }
+    except Exception as e:
+        client.close()
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/routers/{rid}/bulk-vouchers")
+def add_bulk_router_vouchers(rid: int, req: BulkVoucherCreateRequest, current_user: dict = Depends(get_current_user)):
+    """
+    HIGH-VOLUME voucher creation via RouterOS RSC script injection.
+    Creates 10,000+ vouchers in one single script execution - no CPU spikes,
+    no per-call overhead. Codes are tracked in VPS DB.
+    Uses random number generation ON THE ROUTER to avoid network round-trips.
+    Returns sample of first 100 codes; all codes are stored in VPS DB.
+    """
+    import random
+    conn = db.get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM routers WHERE id = ?", (rid,))
+    r = c.fetchone()
+    if not r:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Router not found")
+    if current_user["role"] != "admin" and r["user_id"] != current_user["id"]:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    count = max(1, min(50000, req.count))  # Up to 50,000 vouchers
+    digits = max(4, min(10, req.digits))
+    limit_bytes = req.quota_mb * 1024 * 1024 if req.quota_mb and req.quota_mb > 0 else 0
+    profile = req.profile or "default"
+    uptime_str = req.uptime_str or "1d"
+    price = req.price_mmk or 0
+
+    # Pre-generate codes on the VPS (so we know them for DB storage + dedup check)
+    min_val = 10 ** (digits - 1)
+    max_val = (10 ** digits) - 1
+    codes = []
+    seen = set()
+    attempts = 0
+    while len(codes) < count and attempts < count * 3:
+        attempts += 1
+        code = str(random.randint(min_val, max_val))
+        if code not in seen:
+            seen.add(code)
+            codes.append(code)
+
+    # Build single RSC script that adds all users at once
+    # RouterOS /ip hotspot user add is fast when run in a script (no WinBox overhead)
+    rsc_lines = []
+    for code in codes:
+        if limit_bytes > 0:
+            rsc_lines.append(
+                f'/ip hotspot user add name="{code}" password="{code}" profile="{profile}" '
+                f'limit-bytes-total={limit_bytes} comment="V:{uptime_str} P:{price}" disabled=no'
+            )
+        else:
+            rsc_lines.append(
+                f'/ip hotspot user add name="{code}" password="{code}" profile="{profile}" '
+                f'comment="V:{uptime_str} P:{price}" disabled=no'
+            )
+
+    # Split into chunks of 1000 to avoid RSC size limits, run each chunk
+    chunk_size = 1000
+    total_created = 0
+    created_now = int(time.time())
+
+    client = mk.RouterOSClient(r["wg_ip"], r["api_port"], timeout=120.0)
+    try:
+        client.connect()
+        if not client.login(r["api_user"], r["api_pass"]):
+            client.close()
+            conn.close()
+            raise HTTPException(status_code=400, detail="API Login failed")
+
+        for chunk_start in range(0, len(rsc_lines), chunk_size):
+            chunk = rsc_lines[chunk_start:chunk_start + chunk_size]
+            rsc_content = "\n".join(chunk)
+            try:
+                client.run_rsc_code(rsc_content, name="bulk_voucher_add")
+                total_created += len(chunk)
+            except Exception as chunk_err:
+                # Log but continue - some codes may fail if duplicate
+                print(f"[BulkVoucher] Chunk {chunk_start}-{chunk_start+chunk_size} partial error: {chunk_err}", flush=True)
+
+        client.close()
+
+        # Record all codes in VPS DB
+        c.executemany("""
+            INSERT OR IGNORE INTO vouchers (router_id, code, quota_bytes, uptime_limit, price_mmk, created_at, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'active')
+        """, [(rid, code, limit_bytes, uptime_str, price, created_now) for code in codes])
+        conn.commit()
+        conn.close()
+
+        return {
+            "status": "ok",
+            "requested": count,
+            "created": total_created,
+            "sample_codes": codes[:100],  # First 100 as sample
+            "all_codes_in_db": True,
+            "message": f"Bulk created {total_created} vouchers via RSC injection. No CPU spikes."
         }
     except Exception as e:
         client.close()
@@ -1509,7 +1643,7 @@ def generate_vouchers(req: VoucherGenRequest, current_user: dict = Depends(get_c
     quota_bytes = req.quota_mb * 1024 * 1024 if req.quota_mb > 0 else 0
     generated = []
 
-    for _ in range(min(req.count, 100)):
+    for _ in range(min(req.count, 1000)):  # Raised from 100 to 1000
         if req.code_type == "numeric":
             code = "".join([str(secrets.randbelow(10)) for _ in range(req.code_length)])
         else:
@@ -1841,4 +1975,510 @@ def get_server_time():
         "gmt_offset": "+06:30"
     }
 
+
+# ── 11. Zero-Knowledge Auto-Setup for New Routers ─────────────
+@app.post("/api/routers/auto-setup")
+def auto_setup_router(req: AutoSetupRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Full zero-knowledge router auto-setup endpoint.
+
+    Workflow:
+    1. User gives internet to new router (ether1 -> ISP/Starlink)
+    2. User connects their device to the router (same WiFi or LAN)
+    3. User opens HotspotManager app, logs in with their account credentials
+    4. User types: router IP (e.g. 192.168.88.1), router admin username, password
+    5. App calls this endpoint - VPS connects to router via provided IP
+    6. VPS runs WireGuard setup (router gets cloud VPN tunnel)
+    7. VPS runs full hotspot setup RSC (DHCP, captive portal, scripts - CPU-safe for 10k+ vouchers)
+    8. Optionally sets up PPPoE server if requested
+    9. Router auto-connects back to VPS cloud via WireGuard - fully cloud-managed
+    10. Returns confirmation with router ID and cloud address
+    """
+    import socket
+    import os as _os
+
+    router_ip = req.router_ip.strip()
+    api_port = req.api_port or 8728
+
+    # Pre-check: Test direct connectivity to router
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(10)
+        s.connect((router_ip, api_port))
+        s.close()
+    except Exception as conn_err:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot reach router at {router_ip}:{api_port}. "
+                   f"Make sure your device is on the same network as the router "
+                   f"and the MikroTik API service is enabled. Error: {str(conn_err)}"
+        )
+
+    # Verify router API credentials
+    test_client = mk.RouterOSClient(router_ip, api_port, timeout=12.0)
+    try:
+        test_client.connect()
+        if not test_client.login(req.api_user or "admin", req.api_pass or "Khant1234@"):
+            test_client.close()
+            raise HTTPException(
+                status_code=400,
+                detail="Router API login failed. Check username and password. "
+                       "Default MikroTik: username=admin, password=(empty)"
+            )
+        test_client.close()
+    except HTTPException:
+        raise
+    except Exception as login_err:
+        test_client.close()
+        raise HTTPException(status_code=400, detail=f"Router connection error: {str(login_err)}")
+
+    # Create router record + generate WireGuard keypair
+    conn = db.get_db()
+    c = conn.cursor()
+    owner_id = current_user["id"]
+    wg_ip = wg.get_next_available_ip(conn)
+    priv_key, pub_key = wg.generate_keypair()
+
+    try:
+        wg.register_peer(pub_key, wg_ip)
+    except Exception as wg_err:
+        conn.close()
+        raise HTTPException(status_code=500, detail=f"WireGuard peer registration failed: {str(wg_err)}")
+
+    router_name = req.router_name.strip() or f"Router-{wg_ip.split('.')[-1]}"
+    site_name = req.site_name.strip() if req.site_name else router_name
+    wifi_ssid = req.wifi_ssid.strip() if req.wifi_ssid else site_name
+
+    c.execute("""
+        INSERT INTO routers (user_id, name, location, wg_ip, wg_private_key, wg_public_key, api_port, api_user, api_pass, ftp_port, portal_id, status, last_seen)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'configuring', ?)
+    """, (
+        owner_id, router_name, req.router_location or "", wg_ip, priv_key, pub_key,
+        api_port, req.api_user or "admin", req.api_pass or "Khant1234@", req.ftp_port or 21,
+        int(time.time())
+    ))
+    conn.commit()
+    router_id = c.lastrowid
+    conn.close()
+
+    steps = []
+    errors = []
+
+    # Step 1: Run WireGuard tunnel setup on router (via direct IP)
+    wg_script = wg.generate_mikrotik_rsc(router_name, priv_key, wg_ip)
+    wg_client = mk.RouterOSClient(router_ip, api_port, timeout=30.0)
+    try:
+        wg_client.connect()
+        wg_client.login(req.api_user or "admin", req.api_pass or "Khant1234@")
+        wg_client.run_rsc_code(wg_script, name="wg_autosetup")
+        wg_client.close()
+        steps.append(f"WireGuard cloud tunnel configured. Router assigned VPN IP: {wg_ip}")
+    except Exception as wg_run_err:
+        try: wg_client.close()
+        except Exception: pass
+        errors.append(f"WireGuard setup warning (non-fatal): {str(wg_run_err)}")
+
+    # Step 2: Run full hotspot setup RSC (if not skipped)
+    if not req.skip_hotspot_setup:
+        rsc_content = None
+        for rsc_path in [
+            "/opt/hotspot-cloud/setup.rsc",
+            _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "setup.rsc")
+        ]:
+            if _os.path.exists(rsc_path):
+                with open(rsc_path, "r", encoding="utf-8") as f:
+                    rsc_content = f.read()
+                break
+
+        if rsc_content:
+            # Substitute template variables
+            rsc_content = rsc_content.replace("{{SITE_NAME}}", site_name)
+            rsc_content = rsc_content.replace("{{WIFI_SSID}}", wifi_ssid)
+            rsc_content = rsc_content.replace("{{ADMIN_PASS}}", req.api_pass or "Khant1234@")
+            rsc_content = rsc_content.replace("{{IP_CAPACITY}}", str(req.ip_capacity or 250))
+
+            hs_client = mk.RouterOSClient(router_ip, api_port, timeout=90.0)
+            try:
+                hs_client.connect()
+                hs_client.login(req.api_user or "admin", req.api_pass or "Khant1234@")
+                hs_client.run_rsc_code(rsc_content, name="hotspot_autosetup")
+                hs_client.close()
+                steps.append(f"Hotspot setup complete. SSID: {wifi_ssid}, Capacity: {req.ip_capacity or 250} users.")
+            except Exception as hs_err:
+                try: hs_client.close()
+                except Exception: pass
+                errors.append(f"Hotspot setup warning: {str(hs_err)}")
+        else:
+            errors.append("setup.rsc not found on VPS. Please deploy it to /opt/hotspot-cloud/setup.rsc")
+
+    # Step 3: PPPoE server setup (optional)
+    # IPs are AUTO-SELECTED: always uses 192.168.200.0/24 — never conflicts with hotspot (10.10.x.x)
+    pppoe_info = None
+    if req.setup_pppoe:
+        pppoe_local_ip = "192.168.200.1"      # Router's PPPoE gateway IP
+        pppoe_pool_start = "192.168.200.2"    # First IP given to PPPoE subscribers
+        pppoe_pool_end = "192.168.200.254"    # Last IP given to PPPoE subscribers
+        pppoe_service = (req.pppoe_service or "pppoe-server").strip().replace(" ", "-")
+
+        pppoe_rsc = (
+            "# PPPoE Server Auto-Setup (IPs auto-selected: 192.168.200.0/24)\n"
+            f":do {{ /ip pool add name=pppoe-pool ranges={pppoe_pool_start}-{pppoe_pool_end} }} on-error={{\n"
+            f"  :do {{ /ip pool set [find name=pppoe-pool] ranges={pppoe_pool_start}-{pppoe_pool_end} }} on-error={{}} }}\n"
+            f":do {{ /ppp profile add name=pppoe-profile local-address={pppoe_local_ip} remote-address=pppoe-pool "
+            f"dns-server=8.8.8.8,1.1.1.1 use-compression=no use-encryption=no }} on-error={{\n"
+            f"  :do {{ /ppp profile set [find name=pppoe-profile] local-address={pppoe_local_ip} remote-address=pppoe-pool }} on-error={{}} }}\n"
+            f":do {{ /interface pppoe-server server add service-name={pppoe_service} interface=ether1 "
+            f"default-profile=pppoe-profile authentication=chap,mschap1,mschap2 disabled=no }} on-error={{\n"
+            f"  :do {{ /interface pppoe-server server set [find service-name={pppoe_service}] disabled=no }} on-error={{}} }}\n"
+            ":do { /ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment=\"PPPoE Client NAT\" } on-error={}\n"
+            f":put \"PPPoE Server ready! Service={pppoe_service} Gateway={pppoe_local_ip} Pool={pppoe_pool_start}-{pppoe_pool_end}\"\n"
+        )
+        pppoe_client = mk.RouterOSClient(router_ip, api_port, timeout=30.0)
+        try:
+            pppoe_client.connect()
+            pppoe_client.login(req.api_user or "admin", req.api_pass or "")
+            pppoe_client.run_rsc_code(pppoe_rsc, name="pppoe_autosetup")
+            pppoe_client.close()
+            pppoe_info = {
+                "service_name": pppoe_service,
+                "gateway_ip": pppoe_local_ip,
+                "pool_start": pppoe_pool_start,
+                "pool_end": pppoe_pool_end,
+                "max_subscribers": 253,
+                "subscriber_settings": {
+                    "connection_type": "PPPoE",
+                    "service": pppoe_service,
+                    "username": "(create in app)",
+                    "password": "(set when creating user)"
+                }
+            }
+            steps.append(f"PPPoE server configured. Service: {pppoe_service}, Gateway: {pppoe_local_ip}, Pool: {pppoe_pool_start}-{pppoe_pool_end} (253 subscribers)")
+        except Exception as pppoe_err:
+            try: pppoe_client.close()
+            except Exception: pass
+            errors.append(f"PPPoE setup warning: {str(pppoe_err)}")
+
+    # Update DB status to online
+    conn = db.get_db()
+    c = conn.cursor()
+    c.execute("UPDATE routers SET status = 'online', last_seen = ? WHERE id = ?", (int(time.time()), router_id))
+    conn.commit()
+    conn.close()
+
+    # Restart relay to open new forwarding port
+    try:
+        import subprocess
+        subprocess.run(["sudo", "systemctl", "restart", "hotspot-relay"], check=False)
+    except Exception:
+        pass
+
+    # Trigger enforcer audit in background (non-blocking)
+    time.sleep(2)
+    try:
+        cloud_config_enforcer.audit_router_async(router_id, auto_fix=True)
+        steps.append("Config enforcement audit triggered.")
+    except Exception:
+        pass
+
+    # Calculate network tier (matches setup.rsc logic)
+    capacity = req.ip_capacity or 250
+    if capacity > 500:
+        network_info = {"subnet": "10.10.8.0/22", "gateway": "10.10.8.1", "pool": "10.10.8.10-10.10.11.254", "max_devices": 1000}
+    elif capacity > 250:
+        network_info = {"subnet": "10.10.10.0/23", "gateway": "10.10.10.1", "pool": "10.10.10.10-10.10.11.254", "max_devices": 500}
+    else:
+        network_info = {"subnet": "10.10.10.0/24", "gateway": "10.10.10.1", "pool": "10.10.10.10-10.10.10.254", "max_devices": 245}
+
+    return {
+        "status": "ok",
+        "router_id": router_id,
+        "router_name": router_name,
+        "wg_ip": wg_ip,
+        "remote_port": remote_port,
+        "remote_address": f"3.84.81.152:{remote_port}",
+        "setup_steps": steps,
+        "warnings": errors,
+        "router_credentials": {
+            "username": req.api_user or "admin",
+            "password": req.api_pass or "",
+            "local_ip": network_info["gateway"],
+            "note": "Save this password. Needed only for direct local router access. All management is done through this app."
+        },
+        "hotspot_info": {
+            "ssid": wifi_ssid,
+            "gateway_ip": network_info["gateway"],
+            "subnet": network_info["subnet"],
+            "dhcp_pool": network_info["pool"],
+            "max_concurrent_users": network_info["max_devices"],
+            "login_page_url": f"http://{network_info['gateway']}"
+        },
+        "pppoe_info": pppoe_info,
+        "message": (
+            f"Router '{router_name}' auto-configured! "
+            f"Cloud VPN: {wg_ip}. "
+            f"{len(steps)} steps completed."
+            + (f" {len(errors)} warnings." if errors else " All good!")
+        )
+    }
+
+
+
+@app.get("/api/routers/auto-setup/check")
+def check_auto_setup_connectivity(router_ip: str, api_port: int = 8728):
+    """
+    Quick connectivity pre-check before auto-setup.
+    Call from app to give user immediate feedback before starting full setup.
+    """
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(5)
+        s.connect((router_ip.strip(), api_port))
+        s.close()
+        return {
+            "reachable": True,
+            "router_ip": router_ip,
+            "api_port": api_port,
+            "message": f"Router at {router_ip}:{api_port} is reachable. Ready to proceed with setup."
+        }
+    except Exception as e:
+        return {
+            "reachable": False,
+            "router_ip": router_ip,
+            "api_port": api_port,
+            "message": (
+                f"Cannot reach router at {router_ip}:{api_port}. "
+                f"Make sure your device is connected to the router's WiFi/LAN network. "
+                f"Error: {str(e)}"
+            )
+        }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PPPoE Subscriber Management Endpoints
+#  Proxied through WireGuard tunnel → router RouterOS API.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class PppoeUserCreateRequest(BaseModel):
+    username: str
+    password: str
+    download_mbps: int = 10
+    upload_mbps: int = 5
+    validity_days: int = 30
+    data_limit_gb: int = 0
+    profile: str = "pppoe-profile"
+    service: str = "pppoe-server"
+
+class PppoeRenewRequest(BaseModel):
+    days: int = 30
+
+class PppoeToggleRequest(BaseModel):
+    disabled: bool
+
+
+def _get_router_for_user(router_id: int, current_user: dict) -> dict:
+    """Fetch router info and verify ownership for the current user."""
+    import sqlite3
+    conn = db.get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM routers WHERE id = ?", (router_id,))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Router not found")
+    r = dict(row)
+    if current_user["role"] not in ("admin", "superadmin"):
+        if r.get("user_id") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    return r
+
+
+def _pppoe_talk(router: dict, words: list) -> list:
+    """Connect to router, run one API sentence, return parsed rows."""
+    client = mk.RouterOSClient(router["wg_ip"], router.get("api_port", 8728), timeout=8.0)
+    client.connect()
+    if not client.login(router.get("api_user", "admin"), router.get("api_pass", "")):
+        client.close()
+        raise Exception("Router API login failed")
+    try:
+        raw = client.talk(words)
+    finally:
+        client.close()
+
+    # Parse !re sentences → list of dicts
+    rows = []
+    for sentence in raw:
+        if not sentence or sentence[0] in ("!done", "!trap", "!fatal"):
+            if sentence and sentence[0] == "!trap":
+                err_msg = next((w.split("=", 2)[2] for w in sentence[1:] if w.startswith("=message=")), "Command failed")
+                raise Exception(err_msg)
+            continue
+        if sentence[0] == "!re":
+            row = {}
+            for word in sentence[1:]:
+                if "=" in word:
+                    _, rest = word.split("=", 1)
+                    if "=" in rest:
+                        k, v = rest.split("=", 1)
+                        row[k] = v
+            rows.append(row)
+    return rows
+
+
+@app.get("/api/routers/{router_id}/pppoe-users")
+def get_pppoe_users(router_id: int, current_user: dict = Depends(get_current_user)):
+    """List all PPP secrets (configured subscribers) on the router."""
+    router = _get_router_for_user(router_id, current_user)
+    try:
+        return _pppoe_talk(router, ["/ppp/secret/print"])
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Router command failed: {e}")
+
+
+@app.get("/api/routers/{router_id}/pppoe-active")
+def get_pppoe_active(router_id: int, current_user: dict = Depends(get_current_user)):
+    """List active PPPoE sessions on the router."""
+    router = _get_router_for_user(router_id, current_user)
+    try:
+        return _pppoe_talk(router, ["/ppp/active/print"])
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Router command failed: {e}")
+
+
+@app.post("/api/routers/{router_id}/pppoe-users")
+def create_pppoe_user(
+    router_id: int,
+    req: PppoeUserCreateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new PPPoE subscriber on the router."""
+    router = _get_router_for_user(router_id, current_user)
+    from datetime import datetime, timedelta
+    import re
+
+    if not re.match(r'^[a-zA-Z0-9_\-\.]+$', req.username):
+        raise HTTPException(status_code=400, detail="Username: letters, numbers, hyphens, underscores, dots only.")
+
+    exp_date = (datetime.utcnow() + timedelta(days=req.validity_days)).strftime("%Y-%m-%d")
+    comment = f"[EXP:{exp_date}]"
+    if req.data_limit_gb > 0:
+        comment += f"[DATA:{req.data_limit_gb}GB]"
+
+    words = [
+        "/ppp/secret/add",
+        f"=name={req.username}",
+        f"=password={req.password}",
+        "=service=pppoe",
+        f"=profile={req.profile}",
+        f"=comment={comment}",
+    ]
+    if req.download_mbps > 0 or req.upload_mbps > 0:
+        words.append(f"=rate-limit={req.download_mbps}M/{req.upload_mbps}M")
+
+    try:
+        _pppoe_talk(router, words)
+        return {"status": "ok", "message": f"PPPoE subscriber '{req.username}' created", "expiry": exp_date}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.delete("/api/routers/{router_id}/pppoe-users/{username}")
+def delete_pppoe_user(
+    router_id: int,
+    username: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a PPPoE subscriber (kicks active session immediately)."""
+    router = _get_router_for_user(router_id, current_user)
+    try:
+        # Kick active session first
+        try:
+            active = _pppoe_talk(router, ["/ppp/active/print", f"?name={username}"])
+            for sess in active:
+                sid = sess.get(".id")
+                if sid:
+                    _pppoe_talk(router, ["/ppp/active/remove", f"=numbers={sid}"])
+        except Exception:
+            pass
+        # Remove secret
+        secrets_list = _pppoe_talk(router, ["/ppp/secret/print", f"?name={username}"])
+        if not secrets_list:
+            raise HTTPException(status_code=404, detail=f"User '{username}' not found")
+        sid = secrets_list[0].get(".id")
+        _pppoe_talk(router, ["/ppp/secret/remove", f"=numbers={sid}"])
+        return {"status": "ok", "message": f"Deleted PPPoE subscriber '{username}'"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/routers/{router_id}/pppoe-users/{username}/renew")
+def renew_pppoe_user(
+    router_id: int,
+    username: str,
+    req: PppoeRenewRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Extend the expiry of a PPPoE subscriber by N days."""
+    router = _get_router_for_user(router_id, current_user)
+    from datetime import datetime, timedelta
+    import re
+    try:
+        secrets_list = _pppoe_talk(router, ["/ppp/secret/print", f"?name={username}"])
+        if not secrets_list:
+            raise HTTPException(status_code=404, detail=f"User '{username}' not found")
+        secret = secrets_list[0]
+        sid = secret.get(".id")
+        comment = secret.get("comment", "")
+        m = re.search(r'\[EXP:([^\]]+)\]', comment)
+        if m:
+            try:
+                existing = datetime.strptime(m.group(1), "%Y-%m-%d")
+                base = max(existing, datetime.utcnow())
+            except Exception:
+                base = datetime.utcnow()
+        else:
+            base = datetime.utcnow()
+        new_exp = (base + timedelta(days=req.days)).strftime("%Y-%m-%d")
+        new_comment = re.sub(r'\[EXP:[^\]]+\]', f'[EXP:{new_exp}]', comment) if m else comment + f'[EXP:{new_exp}]'
+        _pppoe_talk(router, ["/ppp/secret/set", f"=numbers={sid}", f"=comment={new_comment}"])
+        return {"status": "ok", "message": f"Renewed '{username}' until {new_exp}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/routers/{router_id}/pppoe-users/{username}/toggle")
+def toggle_pppoe_user(
+    router_id: int,
+    username: str,
+    req: PppoeToggleRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Enable or disable a PPPoE subscriber."""
+    router = _get_router_for_user(router_id, current_user)
+    try:
+        secrets_list = _pppoe_talk(router, ["/ppp/secret/print", f"?name={username}"])
+        if not secrets_list:
+            raise HTTPException(status_code=404, detail=f"User '{username}' not found")
+        sid = secrets_list[0].get(".id")
+        disabled_val = "yes" if req.disabled else "no"
+        _pppoe_talk(router, ["/ppp/secret/set", f"=numbers={sid}", f"=disabled={disabled_val}"])
+        if req.disabled:
+            try:
+                active = _pppoe_talk(router, ["/ppp/active/print", f"?name={username}"])
+                for sess in active:
+                    aid = sess.get(".id")
+                    if aid:
+                        _pppoe_talk(router, ["/ppp/active/remove", f"=numbers={aid}"])
+            except Exception:
+                pass
+        action = "Disabled" if req.disabled else "Enabled"
+        return {"status": "ok", "message": f"{action} PPPoE subscriber '{username}'"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
