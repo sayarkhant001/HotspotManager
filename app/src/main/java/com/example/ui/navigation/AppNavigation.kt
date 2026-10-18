@@ -5,9 +5,18 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -79,8 +88,15 @@ fun AppNavigation(repository: AppRepository, startRoute: String? = null) {
                 exit  = fadeOut() + slideOutVertically { it }
             ) {
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                    tonalElevation = androidx.compose.ui.unit.Dp(0f)
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                        .border(
+                            BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
+                            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                        ),
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                    tonalElevation = 0.dp,
+                    windowInsets = WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
                 ) {
                     val currentDestination = navBackStackEntry?.destination
                     navItems.forEach { dest ->

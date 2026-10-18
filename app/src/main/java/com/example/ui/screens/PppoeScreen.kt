@@ -50,6 +50,7 @@ fun PppoeScreen(viewModel: MainViewModel, navController: NavController) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
                 title = {

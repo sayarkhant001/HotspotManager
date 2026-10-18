@@ -124,6 +124,7 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
 
     Scaffold(
         containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(

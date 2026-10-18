@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.data.remote.CloudApiClient
 import com.example.ui.components.GlassCard
+import com.example.ui.components.PrinterSettingsSection
 import com.example.utils.AppLanguage
 import com.example.utils.LanguageManager
 
@@ -49,6 +50,7 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
                 title = { Text("Settings", fontWeight = FontWeight.Bold) },
@@ -214,6 +216,18 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
                         SettingsRow(icon = Icons.Default.Wifi, label = "Network Topology") {
                             navController.navigate("network_topology")
                         }
+                    }
+                }
+            }
+
+            item { Spacer(Modifier.height(4.dp)) }
+
+            // ── Bluetooth Printer Section ─────────────────────────────────────
+            item {
+                SettingsSectionHeader("Bluetooth Printer")
+                GlassCard {
+                    Column(Modifier.padding(16.dp)) {
+                        PrinterSettingsSection()
                     }
                 }
             }

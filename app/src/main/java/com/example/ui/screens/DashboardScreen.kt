@@ -64,7 +64,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     val connMode by viewModel.connectionMode.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-    var showSettingsDialog by remember { mutableStateOf(false) }
+
     val lowStockProfiles by viewModel.lowStockProfiles.collectAsStateWithLifecycle()
     var selectedProfileForModal by remember { mutableStateOf<String?>(null) }
     var showCustomerLookupDialog by remember { mutableStateOf(false) }
@@ -84,6 +84,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0),  // prevent double nav-bar inset from outer Scaffold
         topBar = {
             TopAppBar(
                 title = {
@@ -131,53 +132,6 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold
                         )
-                    }
-                    IconButton(
-                        onClick = { showSettingsDialog = true }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = strings.settings,
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            if (appUpdateInfo?.isNewer == true) {
-                                viewModel.openUpdateDialog()
-                            } else {
-                                viewModel.checkForAppUpdate(manual = true)
-                            }
-                        }
-                    ) {
-                        if (isCheckingUpdate) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        } else if (appUpdateInfo?.isNewer == true) {
-                            BadgedBox(
-                                badge = {
-                                    Badge(
-                                        containerColor = MaterialTheme.colorScheme.error
-                                    ) {
-                                        Text("NEW", fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.SystemUpdate,
-                                    contentDescription = strings.updateAvailable,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.SystemUpdate,
-                                contentDescription = strings.checkUpdate
-                            )
-                        }
                     }
                 }
             )
@@ -1040,21 +994,6 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                         ) {
                             Text(strings.later)
                         }
-                    }
-                }
-            )
-        }
-
-        if (showSettingsDialog) {
-            com.example.ui.components.DashboardSettingsDialog(
-                viewModel = viewModel,
-                strings = strings,
-                onDismiss = { showSettingsDialog = false },
-                onLogout = {
-                    viewModel.disconnectFromRouter(context)
-                    showSettingsDialog = false
-                    navController.navigate("login") {
-                        popUpTo("dashboard") { inclusive = true }
                     }
                 }
             )

@@ -655,7 +655,7 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 if (repository.mikrotikClient.isConnected() || repository.mikrotikClient.ensureConnected()) {
                     fetchRouterData()
                 }
-                delay(6000) // Poll every 6 seconds for balanced speed and router load
+                delay(12000) // Poll every 12s — reduces router CPU load (was 6s)
             }
         }
     }
@@ -1022,14 +1022,18 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                     repository.recordSessions(users)
                 }
 
-                // Update IP bindings for Whitelist & Banned tabs
-                try {
-                    val bindings = repository.getIpBindings()
-                    ipBindings.value = bindings
-                } catch (_: Exception) {}
-
-                // Periodic AP & Topology auto-sync without needing to open the tab (every 3 cycles ~36s or initial load)
+                // Increment cycle count — used for throttling heavy operations
                 pollCycleCount++
+
+                // Update IP bindings every 3rd cycle (~36s) — reduces router CPU load
+                if (pollCycleCount % 3 == 0 || pollCycleCount == 1) {
+                    try {
+                        val bindings = repository.getIpBindings()
+                        ipBindings.value = bindings
+                    } catch (_: Exception) {}
+                }
+
+                // Periodic AP & Topology auto-sync (every 3 cycles ~36s or initial load)
                 if (pollCycleCount % 3 == 0 || networkTopology.value.accessPoints.isEmpty()) {
                     try {
                         val topo = repository.getNetworkTopology()

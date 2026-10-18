@@ -48,7 +48,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
         viewModel.fetchIpBindings()
         while (isActive) {
             viewModel.fetchActiveUsersFast()
-            delay(2500)
+            delay(8000)
         }
     }
 
@@ -73,6 +73,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
 
     Scaffold(
         containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
                 title = { Text(strings.activeSessionsTitle, fontWeight = FontWeight.Bold) },

@@ -448,6 +448,12 @@ class MikrotikClient {
 
     private var lastLeaseTime = 0L
     private var cachedLeasesMap = mutableMapOf<String, String>()
+    private var lastClockQueryTime = 0L
+    private var cachedClockTime = ""
+    private var cachedClockDate = ""
+    private var cachedClockTz = "Asia/Yangon"
+    private var cachedClockMillis = 0L
+    private var lastHotspotUsersTime = 0L
 
     private fun handleApiError(e: Exception) {
         if (e is RouterApiTrapException) {
@@ -472,19 +478,24 @@ class MikrotikClient {
                 )
                 if (res.isNotEmpty()) {
                     val data = res[0]
-                    var rTime = ""
-                    var rDate = ""
-                    var rTz = "Asia/Yangon"
-                    var rMillis = 0L
-                    try {
-                        val clk = conn.execute("/system/clock/print")
-                        if (clk.isNotEmpty()) {
-                            rTime = clk[0]["time"].orEmpty()
-                            rDate = clk[0]["date"].orEmpty()
-                            rTz = clk[0]["time-zone-name"] ?: "Asia/Yangon"
-                            rMillis = parseRouterClockToMillis(rDate, rTime)
-                        }
-                    } catch (_: Exception) {}
+                    val nowTime = System.currentTimeMillis()
+                    if (nowTime - lastClockQueryTime > 180_000L || cachedClockTime.isBlank()) {
+                        try {
+                            val clk = conn.execute("/system/clock/print")
+                            if (clk.isNotEmpty()) {
+                                cachedClockTime = clk[0]["time"].orEmpty()
+                                cachedClockDate = clk[0]["date"].orEmpty()
+                                cachedClockTz = clk[0]["time-zone-name"] ?: "Asia/Yangon"
+                                cachedClockMillis = parseRouterClockToMillis(cachedClockDate, cachedClockTime)
+                                lastClockQueryTime = nowTime
+                            }
+                        } catch (_: Exception) {}
+                    }
+                    val elapsedClock = if (lastClockQueryTime > 0L) nowTime - lastClockQueryTime else 0L
+                    val rMillis = if (cachedClockMillis > 0L) cachedClockMillis + elapsedClock else 0L
+                    val rTime = cachedClockTime
+                    val rDate = cachedClockDate
+                    val rTz = cachedClockTz
 
                     RouterStats(
                         cpuLoad = data["cpu-load"] ?: "0",
@@ -646,32 +657,36 @@ class MikrotikClient {
                     "=.proplist=.id,server,user,address,mac-address,uptime,session-time-left,limit-uptime,limit-bytes-total,bytes-in,bytes-out,comment,idle-time"
                 )
 
-                // Refresh router hotspot users to obtain live cumulative comments ([USED:...], [BASE:...])
-                try {
-                    val userListRes = conn.execute(
-                        "/ip/hotspot/user/print",
-                        "=.proplist=.id,name,password,profile,limit-bytes-total,limit-uptime,uptime,bytes-in,bytes-out,comment,disabled"
-                    )
-                    if (userListRes.isNotEmpty()) {
-                        cachedHotspotUsers = userListRes.mapNotNull { uMap ->
-                            val uName = uMap["name"] ?: return@mapNotNull null
-                            if (uName.isBlank() || uName == "default-trial") return@mapNotNull null
-                            RouterHotspotUser(
-                                id = uMap[".id"] ?: "",
-                                name = uName,
-                                password = uMap["password"] ?: "",
-                                profile = uMap["profile"] ?: "default",
-                                comment = uMap["comment"] ?: "",
-                                uptime = uMap["uptime"] ?: "0s",
-                                bytesIn = uMap["bytes-in"]?.toLongOrNull() ?: 0L,
-                                bytesOut = uMap["bytes-out"]?.toLongOrNull() ?: 0L,
-                                limitBytesTotal = uMap["limit-bytes-total"]?.toLongOrNull() ?: 0L,
-                                disabled = uMap["disabled"]?.toBooleanStrictOrNull() ?: false,
-                                limitUptime = uMap["limit-uptime"] ?: ""
-                            )
+                // Refresh router hotspot users periodically (every 60s) to obtain live cumulative comments ([USED:...], [BASE:...])
+                // Throttled to 60s to prevent router CPU spiking (running user print on every poll causes 90%+ CPU spikes on low-end routers)
+                if (cachedHotspotUsers.isEmpty() || now - lastHotspotUsersTime > 60_000L) {
+                    try {
+                        val userListRes = conn.execute(
+                            "/ip/hotspot/user/print",
+                            "=.proplist=.id,name,password,profile,limit-bytes-total,limit-uptime,uptime,bytes-in,bytes-out,comment,disabled"
+                        )
+                        if (userListRes.isNotEmpty()) {
+                            cachedHotspotUsers = userListRes.mapNotNull { uMap ->
+                                val uName = uMap["name"] ?: return@mapNotNull null
+                                if (uName.isBlank() || uName == "default-trial") return@mapNotNull null
+                                RouterHotspotUser(
+                                    id = uMap[".id"] ?: "",
+                                    name = uName,
+                                    password = uMap["password"] ?: "",
+                                    profile = uMap["profile"] ?: "default",
+                                    comment = uMap["comment"] ?: "",
+                                    uptime = uMap["uptime"] ?: "0s",
+                                    bytesIn = uMap["bytes-in"]?.toLongOrNull() ?: 0L,
+                                    bytesOut = uMap["bytes-out"]?.toLongOrNull() ?: 0L,
+                                    limitBytesTotal = uMap["limit-bytes-total"]?.toLongOrNull() ?: 0L,
+                                    disabled = uMap["disabled"]?.toBooleanStrictOrNull() ?: false,
+                                    limitUptime = uMap["limit-uptime"] ?: ""
+                                )
+                            }
+                            lastHotspotUsersTime = now
                         }
-                    }
-                } catch (_: Exception) {}
+                    } catch (_: Exception) {}
+                }
 
                 val userMap = cachedHotspotUsers.associateBy { it.name.lowercase() }
 

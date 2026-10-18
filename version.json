@@ -1,7 +1,7 @@
 {
-  "versionName": "1.6.0",
-  "versionCode": 35,
-  "releaseTitle": "Hotspot Manager v1.6.0 - PPPoE Subscriber Management & Settings Redesign",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.6.0.apk",
-  "releaseNotes": "• PPPoE Subscriber Tab: Dynamically shown only when your router has a PPPoE server configured — hidden automatically for hotspot-only setups\n• PPPoE Management: Create, renew, disable/enable, and delete PPPoE subscribers directly from the app\n• Smart Expiry Tracking: Per-subscriber expiry countdown with color-coded warnings (red <3d, yellow <7d, green OK)\n• Speed Limits per User: Set download/upload Mbps and optional data cap per subscriber\n• Active Sessions View: Real-time PPPoE active session list with IP address and uptime\n• Enable PPPoE from Settings: New Settings tab option to configure PPPoE server on any router that doesn't have it yet\n• Settings Screen Redesign: Dedicated Settings tab replacing the old modal — Account, Connection, Routers list, PPPoE control, App preferences\n• Web App PPPoE Tab: hotspot-admin.pages.dev now includes a PPPoE subscriber management tab with search, filter, renew, disable, and delete\n• Stability Tab Removed from Web App: Router stability monitoring merged into Dashboard for cleaner navigation\n• Network-Aware Subnet Selection: IP pool automatically scales with max users (≤245→/24, ≤500→/23, ≤1000→/22)"
+  "versionName": "1.6.1",
+  "versionCode": 36,
+  "releaseTitle": "Hotspot Manager v1.6.1 - CPU Spike Fix & UI Polish",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.6.1.apk",
+  "releaseNotes": "• Router CPU Spike Fix (KyawGyi): Throttled heavy hotspot user database queries to 60s (previously dumping thousands of vouchers every poll cycle and driving CPU to 89%+). Throttled clock queries to 3m and active sessions loop to 8s.\n• Header Cleanup: Removed settings cog and update buttons from the top bar for a minimalist, uncluttered dashboard.\n• Printer in Settings: Thermal Bluetooth printer management relocated directly into the Settings tab.\n• Navigation Bar & Layout Fix: Eliminated double-insets causing blank white padding at the bottom of screens, restored space for content, and added a sleek rounded frosted glass bottom navigation bar.\n• PPPoE Smart Visibility: PPPoE tab is automatically hidden for routers without PPPoE configuration."
 }
