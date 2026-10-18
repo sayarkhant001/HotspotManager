@@ -81,6 +81,7 @@ fun AppNavigation(repository: AppRepository, startRoute: String? = null) {
 
     Scaffold(
         containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0),
         bottomBar = {
             AnimatedVisibility(
                 visible = showBottomBar,
@@ -129,7 +130,7 @@ fun AppNavigation(repository: AppRepository, startRoute: String? = null) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(bottom = innerPadding.calculateBottomPadding())
         ) {
             NavHost(
                 navController    = navController,

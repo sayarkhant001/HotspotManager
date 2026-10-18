@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -81,12 +82,15 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
         viewModel.fetchRouterData()
     }
 
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),  // prevent double nav-bar inset from outer Scaffold
         topBar = {
             TopAppBar(
+                scrollBehavior = scrollBehavior,
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
@@ -119,7 +123,10 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                ),
                 actions = {
                     FilledTonalButton(
                         onClick = { LanguageManager.toggleLanguage(context) },

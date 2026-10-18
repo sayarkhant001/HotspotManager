@@ -22,6 +22,8 @@ import androidx.navigation.NavController
 import com.example.data.remote.CloudApiClient
 import com.example.ui.components.GlassCard
 import com.example.ui.components.PrinterSettingsSection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.example.BuildConfig
 import com.example.utils.AppLanguage
 import com.example.utils.LanguageManager
 
@@ -47,14 +49,20 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
         userMsg?.let { snackbarHostState.showSnackbar(it); viewModel.clearUserMessage() }
     }
 
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
                 title = { Text("Settings", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                scrollBehavior = scrollBehavior,
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                )
             )
         }
     ) { padding ->
@@ -201,7 +209,7 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
                         SettingsRow(
                             icon = Icons.Default.SystemUpdate,
                             label = "Check for Updates",
-                            value = if (appUpdateInfo?.isNewer == true) "Update available!" else "v${appUpdateInfo?.versionName ?: ""}",
+                            value = if (appUpdateInfo?.isNewer == true) "v${BuildConfig.VERSION_NAME} (Update: v${appUpdateInfo?.versionName})" else "v${BuildConfig.VERSION_NAME}",
                             valueColor = if (appUpdateInfo?.isNewer == true) Color(0xFF10B981) else null
                         ) {
                             if (appUpdateInfo?.isNewer == true) {
