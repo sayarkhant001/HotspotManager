@@ -1885,13 +1885,24 @@ def enforce_all_routers(current_user: dict = Depends(get_current_user)):
 def get_routers_stability(current_user: dict = Depends(get_current_user)):
     conn = db.get_db()
     c = conn.cursor()
-    c.execute("""
-        SELECT r.*, u.full_name as owner_name, p.name as portal_name
-        FROM routers r 
-        LEFT JOIN users u ON r.user_id = u.id
-        LEFT JOIN portals p ON r.portal_id = p.id
-        ORDER BY r.id ASC
-    """)
+    is_admin = current_user.get("role") == "admin"
+    if is_admin:
+        c.execute("""
+            SELECT r.*, u.full_name as owner_name, p.name as portal_name
+            FROM routers r 
+            LEFT JOIN users u ON r.user_id = u.id
+            LEFT JOIN portals p ON r.portal_id = p.id
+            ORDER BY r.id ASC
+        """)
+    else:
+        c.execute("""
+            SELECT r.*, u.full_name as owner_name, p.name as portal_name
+            FROM routers r 
+            LEFT JOIN users u ON r.user_id = u.id
+            LEFT JOIN portals p ON r.portal_id = p.id
+            WHERE r.user_id = ?
+            ORDER BY r.id ASC
+        """, (current_user["id"],))
     routers = [dict(row) for row in c.fetchall()]
 
     c.execute("SELECT * FROM router_audits ORDER BY id DESC LIMIT 30")
@@ -1910,9 +1921,9 @@ def get_routers_stability(current_user: dict = Depends(get_current_user)):
         last_seen = r.get("last_seen", 0)
         is_online = (status == "online" and (now - (last_seen or 0)) < 180)
 
-        # Trigger background refresh if online and cache older than 15s
+        # Trigger background refresh if online and cache older than 60s
         cached = ROUTER_STABILITY_CACHE.get(rid, {})
-        if is_online and (time.time() - cached.get("cached_at", 0) > 15):
+        if is_online and (time.time() - cached.get("cached_at", 0) > 60):
             threading.Thread(
                 target=refresh_router_cache_bg,
                 args=(rid, r["wg_ip"], r.get("api_user", "admin"), r.get("api_pass", "Khant1234@"), r.get("api_port", 8728)),
