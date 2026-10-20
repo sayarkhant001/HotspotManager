@@ -983,33 +983,52 @@ fun parseRouterOsUptimeMinutes(uptime: String): Int {
 fun Voucher.isExpired(activeCodes: Set<String> = emptySet()): Boolean {
     // A voucher currently being used is ACTIVE, never expired!
     if (activeCodes.contains(code) || activeCodes.contains(username)) return false
+    // Also protect against hyphen/case mismatches in live session codes
+    val normActive = activeCodes.map { it.replace("-", "").trim().lowercase() }.toSet()
+    if (normActive.contains(code.replace("-", "").trim().lowercase()) ||
+        normActive.contains(username.replace("-", "").trim().lowercase())) return false
 
-    // 1. Explicit expired marker in router comment
-    if (comment.contains("expired", ignoreCase = true)) return true
+    // 1. Explicit router truth tags (set by the V3 enforcement engine on the
+    //    router). THESE are the ONLY reliable "expired" markers — our own local
+    //    dataLimitMb / durationMinutes can be stale and wrongly mark live
+    //    vouchers as expired, which has caused active users to be kicked.
+    if (comment.contains("[EXPIRED:", ignoreCase = true)) return true
+    if (comment.contains("[EXHAUSTED:", ignoreCase = true)) return true
+    // Legacy friendly marker (older portals wrote "expired" plain text) —
+    // still only trust the explicit status keywords, never bare profile text.
+    val lowered = comment.lowercase()
+    if (lowered.contains("[expired]") || lowered.contains("expired=true")) return true
 
-    // 2. Expired by Quota (MB data limit reached)
-    val commentUsedBytes = Regex("\\[USED:(\\d+)\\]").find(comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
-    val totalUsedMb = maxOf(bytesIn + bytesOut, commentUsedBytes) / (1024.0 * 1024.0)
-    if (dataLimitMb > 0 && totalUsedMb >= dataLimitMb) return true
-
-    // 3. Expired by Time / Duration (uptime limit reached)
-    val commentUptime = Regex("\\[USED-UP:([^\\]]+)\\]").find(comment)?.groupValues?.get(1)?.trim() ?: ""
-    val effectiveUptimeMin = maxOf(parseRouterOsUptimeMinutes(uptime), parseRouterOsUptimeMinutes(commentUptime))
-    if (durationMinutes > 0 && effectiveUptimeMin >= durationMinutes) return true
-
-    // 4. Expired by continuous calendar validity (days elapsed since first activation)
+    // 2. Expired by continuous calendar validity ONLY when the voucher truly
+    //    carries fresh activation data AND flag is explicit in router comment.
+    //    (Local activatedAt alone is not authoritative for imported vouchers.)
     val actTime = activatedAt
-    if (actTime != null && validityDays > 0) {
-        val validityMs = validityDays * 24L * 60L * 60L * 1000L
-        if (System.currentTimeMillis() - actTime >= validityMs) return true
+    if (actTime != null && validityDays > 0 && comment.isNotBlank()) {
+        // Only treat as expired if we also see a corresponding RUNABLE marker
+        // [ACT: ...] in the comment (i.e. the router KNOWS the activation time).
+        if (comment.contains("[ACT:", ignoreCase = true)) {
+            val validityMs = validityDays * 24L * 60L * 60L * 1000L
+            if (System.currentTimeMillis() - actTime >= validityMs) return true
+        }
     }
+
+    // 3. Local quota/time — use ONLY as a soft hint when the router already
+    //    shows exhaustion via [USED:] >= [ORIG-LIMIT:], never from our own
+    //    configured dataLimitMb (which can disagree with the router).
+    val commentOrig = Regex("\\[ORIG-LIMIT:(\\d+)\\]").find(comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+    val commentUsedBytes = Regex("\\[USED:(\\d+)\\]").find(comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+    if (commentOrig > 0L && commentUsedBytes >= commentOrig) return true
 
     return false
 }
 
 fun Voucher.isCurrentlyUsing(activeCodes: Set<String> = emptySet()): Boolean {
     if (activeCodes.contains(code)) return true
-    return false
+    if (activeCodes.contains(username)) return true
+    val codeNorm = code.replace("-", "").trim().lowercase()
+    val userNorm = username.replace("-", "").trim().lowercase()
+    val normActive = activeCodes.map { it.replace("-", "").trim().lowercase() }.toSet()
+    return normActive.contains(codeNorm) || normActive.contains(userNorm)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

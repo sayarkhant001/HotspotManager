@@ -39,11 +39,12 @@ fun GlassCard(
     content: @Composable () -> Unit
 ) {
     val isDark = isSystemInDarkTheme()
-    val containerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.35f)
-    val borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.5f)
-    
-    val shape = RoundedCornerShape(24.dp)
-    
+    // Higher-opacity surfaces so card text stays readable.
+    val containerColor = if (isDark) Color(0xE62A3550) else Color(0xE6FFFFFF)
+    val borderColor = if (isDark) Color(0xFF4A5878) else Color(0xFF94A3B8)
+
+    val shape = RoundedCornerShape(12.dp)
+
     if (onClick != null) {
         Card(
             onClick = onClick,
@@ -51,7 +52,7 @@ fun GlassCard(
             colors = CardDefaults.cardColors(containerColor = containerColor),
             border = BorderStroke(1.dp, borderColor),
             shape = shape,
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) { content() }
     } else {
         Card(
@@ -59,7 +60,7 @@ fun GlassCard(
             colors = CardDefaults.cardColors(containerColor = containerColor),
             border = BorderStroke(1.dp, borderColor),
             shape = shape,
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) { content() }
     }
 }

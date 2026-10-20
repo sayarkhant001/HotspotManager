@@ -1194,19 +1194,26 @@ class AppRepository(
         return Result.success(Unit)
     }
 
-    suspend fun deleteUsedVouchers(): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun deleteUsedVouchers(protectedActiveCodes: Set<String> = emptySet()): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val used = dao.getAllUsedVouchersSync()
             if (used.isEmpty()) return@withContext Result.success(Unit)
+            // SAFETY: exclude any voucher currently active on the router so we
+            // never kick a live customer offline.
+            val activeNorm = protectedActiveCodes.map { it.replace("-", "").trim().lowercase() }.toSet()
+            val safeUsed = used.filter { v ->
+                val norm = v.code.replace("-", "").trim().lowercase()
+                !activeNorm.contains(norm)
+            }
             // 1. Optimistic Room DB deletion: instant UI update in < 5ms!
-            dao.deleteAllUsedVouchers()
+            dao.deleteVouchersByCodes(safeUsed.map { it.code })
 
             // 2. Synchronize deletion with router
             if (!mikrotikClient.isConnected()) {
                 mikrotikClient.ensureConnected()
             }
             if (mikrotikClient.isConnected()) {
-                val ok = mikrotikClient.deleteHotspotUsersBatch(used.map { it.code })
+                val ok = mikrotikClient.deleteHotspotUsersBatch(safeUsed.map { it.code })
                 if (!ok) {
                     return@withContext Result.failure(Exception("Router rejected deleting used vouchers."))
                 }

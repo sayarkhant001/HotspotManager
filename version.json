@@ -1,7 +1,7 @@
 {
-  "versionName": "1.8.0",
-  "versionCode": 40,
-  "releaseTitle": "Hotspot Manager v1.8.0 - Portal Theme Gallery + Enterprise Modernization",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.8.0.apk",
-  "releaseNotes": "• 🎨 NEW: Portal Themes - 10 premium captive portal themes (Emerald Glass, Golden Buddha, Sunset Mandalay, Cyber Neon + 6 more) with one-tap deploy, auto price-list & SSID injection\n• 🔧 FIXED: active-session crash (app no longer exits when tapping sessions)\n• 🔧 FIXED: expired voucher reuse lockout\n• 🔧 FIXED: router CPU spike (no more API overload)\n• 💰 Revenue Hero dashboard\n• ⚠️ IMPORTANT: This release carries the SAME signature as v1.6.3 - installs OVER it without uninstalling."
+  "versionName": "1.9.0",
+  "versionCode": 41,
+  "releaseTitle": "Hotspot Manager v1.9.0 - Critical Safety + Readability Fixes",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.9.0.apk",
+  "releaseNotes": "• 🛡️ CRITICAL: Deleting vouchers can NO LONGER kick active users offline (active vouchers are automatically protected/skipped in all delete operations)\n• ⚠️ Expired tab now shows ONLY truly expired vouchers (by time or quota as marked by the router) — valid/using vouchers never appear or get deleted\n• 📊 Metrics show activated counts only (no more confusing '1/289' style)\n• 🎨 FIXED unreadable text: removed dynamic wallpaper coloring, added fixed high-contrast emerald/slate palette + readable cards\n• 🔧 Same-signature update — installs directly over v1.6.3 without uninstalling\n\nInstalls over v1.6.3/v1.8.0 with NO data loss."
 }

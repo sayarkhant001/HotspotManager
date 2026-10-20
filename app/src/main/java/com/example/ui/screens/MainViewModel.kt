@@ -1154,13 +1154,26 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
 
     fun deleteSelectedVouchers(codes: Set<String>) {
         if (codes.isEmpty()) return
-        val count = codes.size
+        // SAFETY: never delete vouchers that are currently ACTIVE on the router.
+        // Deleting an active hotspot user kicks them offline instantly.
+        val activeSet = activeUsers.value.map { it.user }.map { it.replace("-", "").trim().lowercase() }.toSet()
+        val protectedCodes = codes.filter { c ->
+            activeSet.contains(c.replace("-", "").trim().lowercase())
+        }
+        val safeCodes = codes.filterNot { c ->
+            activeSet.contains(c.replace("-", "").trim().lowercase())
+        }
+        if (protectedCodes.isNotEmpty()) {
+            userMessage.value = "⛔ Skipped ${protectedCodes.size} ACTIVE voucher(s) (would kick users offline). Deleting ${safeCodes.size}..."
+        } else {
+            userMessage.value = "Deleting ${safeCodes.size} vouchers..."
+        }
+        if (safeCodes.isEmpty()) return
         viewModelScope.launch(exceptionHandler) {
             try {
-                userMessage.value = "Deleting $count vouchers..."
-                val res = repository.deleteVouchersByCodes(codes)
+                val res = repository.deleteVouchersByCodes(safeCodes)
                 if (res.isSuccess) {
-                    userMessage.value = "✓ Deleted $count vouchers!"
+                    userMessage.value = "✓ Deleted ${safeCodes.size} vouchers!"
                 } else {
                     userMessage.value = "✗ Router Error: ${res.exceptionOrNull()?.message ?: "Failed to delete vouchers"}"
                 }
@@ -1188,8 +1201,11 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     fun deleteUsedVouchers() {
         viewModelScope.launch(exceptionHandler) {
             try {
-                userMessage.value = "Deleting used vouchers..."
-                val res = repository.deleteUsedVouchers()
+                // SAFETY: never delete vouchers currently ACTIVE on the router.
+                // Delete "used but not currently online" only.
+                val activeSet = activeUsers.value.map { it.user }.map { it.replace("-", "").trim().lowercase() }.toSet()
+                userMessage.value = "Deleting used vouchers (protecting active users)..."
+                val res = repository.deleteUsedVouchers(protectedActiveCodes = activeSet)
                 if (res.isSuccess) {
                     userMessage.value = "✓ Cleaned used vouchers from router!"
                 } else {

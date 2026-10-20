@@ -654,10 +654,10 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Text(
-                                                    text = "${strings.vouchersSoldLabel}: ${stat.vouchersSold} / ${stat.totalVouchers}",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
+                                                text = "${strings.vouchersSoldLabel}: ${stat.vouchersSold} (Activated)",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
                                                 Text(
                                                     text = "${strings.exactDataConsumedLabel}: ${stat.exactGbFormatted.ifBlank { stat.dataUsedFormatted }}",
                                                     style = MaterialTheme.typography.bodySmall,
