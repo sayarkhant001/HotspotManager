@@ -1,7 +1,7 @@
 {
-  "versionName": "1.7.1",
-  "versionCode": 39,
-  "releaseTitle": "Hotspot Manager v1.7.1 - CPU Fix + Revenue Dashboard + Stability",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/releases/download/v1.7.1/HotspotManager-v1.7.1.apk",
-  "releaseNotes": "• 🔧 FIXED: App no longer crashes/exits when tapping Active Sessions (duplicate key crash resolved + new session detail bottom sheet)\n• 🔧 FIXED: Expired vouchers can no longer be reused (exact quota/time cutoff now kernel-enforced)\n• 🔧 FIXED: Router CPU spike caused by excessive API polling (probe throttled 5s->60s, quota read from session comment)\n• 💰 NEW: Revenue Hero on Dashboard - total Ks sales, vouchers sold, top profile, data consumed\n• 🛡️ V3 AirTight enforcement deployed to all routers (exact byte/time cutoff, boot self-heal, auto-reboot)"
+  "versionName": "1.8.0",
+  "versionCode": 40,
+  "releaseTitle": "Hotspot Manager v1.8.0 - Portal Theme Gallery + Enterprise Modernization",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/releases/download/v1.8.0/HotspotManager-v1.8.0.apk",
+  "releaseNotes": "• 🎨 NEW: Portal Themes - 10 premium captive portal themes (Emerald Glass, Golden Buddha, Sunset Mandalay, Cyber Neon + 6 more) with one-tap deploy, auto price-list & SSID injection\n• 🔧 v1.7.1 fixes preserved: active-session crash fix, expired voucher lockout, CPU spike fix, Revenue Hero dashboard\n• 🏗️ Modernized: dedicated theme screen, context-safe preferences, featured + grid layout\n\nInstall this update to get the latest fixes and the Portal Theme Gallery."
 }
