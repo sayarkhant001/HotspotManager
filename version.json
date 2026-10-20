@@ -1,7 +1,7 @@
 {
-  "versionName": "1.6.3",
-  "versionCode": 38,
-  "releaseTitle": "Hotspot Manager v1.6.3 - UI Position & Version Display Polish",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.6.3.apk",
-  "releaseNotes": "• Fixed UI Upper Position Alignment: Fixed outer Scaffold double-padding bug that was causing massive empty space above the dashboard header.\n• Fixed Version Display in Settings: 'Check for Updates' now accurately displays the current installed version (v1.6.3) and indicates updates cleanly.\n• Smooth Pinned Scroll Behavior: Top bar transitions cleanly when scrolling, preventing cards from bleeding through.\n• KyawGyi CPU Optimization: Tuned Connection Tracking idle socket timeout and internal quota checkpoints, significantly lowering dual-core CPU strain under heavy loads."
+  "versionName": "1.7.1",
+  "versionCode": 39,
+  "releaseTitle": "Hotspot Manager v1.7.1 - CPU Fix + Revenue Dashboard + Stability",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/releases/download/v1.7.1/HotspotManager-v1.7.1.apk",
+  "releaseNotes": "• 🔧 FIXED: App no longer crashes/exits when tapping Active Sessions (duplicate key crash resolved + new session detail bottom sheet)\n• 🔧 FIXED: Expired vouchers can no longer be reused (exact quota/time cutoff now kernel-enforced)\n• 🔧 FIXED: Router CPU spike caused by excessive API polling (probe throttled 5s->60s, quota read from session comment)\n• 💰 NEW: Revenue Hero on Dashboard - total Ks sales, vouchers sold, top profile, data consumed\n• 🛡️ V3 AirTight enforcement deployed to all routers (exact byte/time cutoff, boot self-heal, auto-reboot)"
 }
