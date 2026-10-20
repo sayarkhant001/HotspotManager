@@ -46,6 +46,11 @@ fun LoginScreen(
     val strings = LanguageManager.strings
     val prefs = remember { context.getSharedPreferences("hotspot_login_prefs", Context.MODE_PRIVATE) }
 
+    // Install global crash logger so unexpected exits are NEVER silent.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        com.example.utils.GlobalCrashCatcher.install(context)
+    }
+
     val authState by viewModel.authState.collectAsStateWithLifecycle()
     val cloudLoginStatus by viewModel.cloudLoginStatus.collectAsStateWithLifecycle()
 

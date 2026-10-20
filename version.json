@@ -1,7 +1,7 @@
 {
-  "versionName": "1.9.0",
-  "versionCode": 41,
-  "releaseTitle": "Hotspot Manager v1.9.0 - Critical Safety + Readability Fixes",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.9.0.apk",
-  "releaseNotes": "• 🛡️ CRITICAL: Deleting vouchers can NO LONGER kick active users offline (active vouchers are automatically protected/skipped in all delete operations)\n• ⚠️ Expired tab now shows ONLY truly expired vouchers (by time or quota as marked by the router) — valid/using vouchers never appear or get deleted\n• 📊 Metrics show activated counts only (no more confusing '1/289' style)\n• 🎨 FIXED unreadable text: removed dynamic wallpaper coloring, added fixed high-contrast emerald/slate palette + readable cards\n• 🔧 Same-signature update — installs directly over v1.6.3 without uninstalling\n\nInstalls over v1.6.3/v1.8.0 with NO data loss."
+  "versionName": "1.9.1",
+  "versionCode": 42,
+  "releaseTitle": "Hotspot Manager v1.9.1 - Active Sessions Crash Fix (2-layer) + Crash Logger",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.9.1.apk",
+  "releaseNotes": "• 🛡️ ACTIVE SESSIONS CRASH FIXED (2-layer):\n   - Layer 1 (source): duplicate router session rows are now de-duplicated by user+MAC+IP before reaching the UI — the real cause of 'Key was already used' crashes.\n   - Layer 2 (UI): session list key is now a unique content composite (never just .id) so identical rows can never collide.\n• 🛡️ NEW: Global Crash Logger — if an unexpected exit EVER happens again, the app records the full stack trace (Settings > Diagnostics > Last Crash) so we can fix it instantly without guessing.\n• 📶 Seamless install over v1.6.3 / v1.8.0 / v1.9.0 (same signature) — no uninstall needed.\n\nIf you still see a crash after updating, open Settings > Last Crash and tell me the stack trace — it will be preserved forever."
 }

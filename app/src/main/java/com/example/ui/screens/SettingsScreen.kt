@@ -3,7 +3,9 @@ package com.example.ui.screens
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -44,6 +46,8 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
     var showPppoeSetup   by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
     var showServerUrl    by remember { mutableStateOf(false) }
+    var showCrashLog     by remember { mutableStateOf(false) }
+    val crashInfo        by remember { mutableStateOf(com.example.utils.GlobalCrashCatcher.lastCrash(context)) }
 
     LaunchedEffect(userMsg) {
         userMsg?.let { snackbarHostState.showSnackbar(it); viewModel.clearUserMessage() }
@@ -230,6 +234,33 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
 
             item { Spacer(Modifier.height(4.dp)) }
 
+            // ── Diagnostics Section (crash log + app info) ─────────────────
+            item {
+                SettingsSectionHeader("Diagnostics")
+                GlassCard {
+                    Column(Modifier.padding(4.dp)) {
+                        val crashInfo = remember {
+                            com.example.utils.GlobalCrashCatcher.lastCrash(context)
+                        }
+                        SettingsRow(
+                            icon = Icons.Default.BugReport,
+                            label = "App Version",
+                            value = "v${com.example.BuildConfig.VERSION_NAME} (${com.example.BuildConfig.VERSION_CODE})"
+                        ) {}
+                        HorizontalDivider(Modifier.padding(horizontal = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                        SettingsRow(
+                            icon = Icons.Default.BugReport,
+                            label = "Last Crash",
+                            value = if (crashInfo != null) "View details" else "No crashes logged"
+                        ) {
+                            if (crashInfo != null) { showCrashLog = true }
+                        }
+                    }
+                }
+            }
+
+            item { Spacer(Modifier.height(4.dp)) }
+
             // ── Bluetooth Printer Section ─────────────────────────────────────
             item {
                 SettingsSectionHeader("Bluetooth Printer")
@@ -242,6 +273,32 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
 
             item { Spacer(Modifier.height(80.dp)) }
         }
+    }
+
+    // ── Crash Log Dialog ─────────────────────────────────────────────────────
+    if (showCrashLog && crashInfo != null) {
+        val crashText = crashInfo ?: ""
+        AlertDialog(
+            onDismissRequest = { showCrashLog = false },
+            title = { Text("Last Crash Log") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        crashText,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCrashLog = false }) { Text("Close") }
+            }
+        )
     }
 
     // ── Enable PPPoE Dialog ───────────────────────────────────────────────────

@@ -741,8 +741,8 @@ class MikrotikClient {
                         id = it[".id"] ?: "",
                         server = it["server"] ?: "",
                         user = uName,
-                        address = it["address"] ?: "",
-                        macAddress = it["mac-address"] ?: "",
+                        address = ip,
+                        macAddress = mac,
                         uptime = it["uptime"] ?: "",
                         bytesIn = it["bytes-in"] ?: "0",
                         bytesOut = it["bytes-out"] ?: "0",
@@ -755,6 +755,21 @@ class MikrotikClient {
                         limitBytesTotal = lbt
                     )
                 }
+                // CRASH-PREVENTION: RouterOS can return duplicate rows with the SAME
+                // user (or same .id) from paginated/aggregated API responses. Deduplicate
+                // by normalized (user, mac, address) keeping the row with the most bytes,
+                // so the UI LazyColumn never sees duplicate keys.
+                .groupBy { u ->
+                    u.user.replace("-", "").trim().lowercase() + "|" +
+                        u.macAddress.replace(":", "").uppercase().trim() + "|" +
+                        u.address.trim()
+                }
+                .values
+                .map { rows ->
+                    rows.maxByOrNull { (it.bytesIn.toLongOrNull() ?: 0L) + (it.bytesOut.toLongOrNull() ?: 0L) }
+                        ?: rows.first()
+                }
+                .sortedBy { it.user.lowercase() }
             } catch (e: Exception) {
                 handleApiError(e)
                 emptyList()

@@ -198,7 +198,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                             }
                         }
 
-                        items(filteredUsers, key = { it.id.ifBlank { "${it.user}|${it.address}|${it.macAddress}" } }) { user ->
+                        items(filteredUsers, key = { "u:${it.user}|m:${it.macAddress}|a:${it.address}|i:${it.id}" }) { user ->
                             ActiveUserCard(
                                 user = user,
                                 strings = strings,
