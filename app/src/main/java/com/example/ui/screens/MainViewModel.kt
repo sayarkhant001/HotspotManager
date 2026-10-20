@@ -740,6 +740,25 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         selectedRscContent.value = null
     }
 
+    val activePortalThemeId = MutableStateFlow<String?>(null)
+
+    fun deployPortalTheme(theme: com.example.domain.models.PortalTheme, context: android.content.Context? = null) {
+        activePortalThemeId.value = theme.id
+        userMessage.value = "Theme '${theme.name}' selected. Applying..."
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (context != null) {
+                    val prefs = context.getSharedPreferences("hotspot_theme_prefs", android.content.Context.MODE_PRIVATE)
+                    prefs.edit().putString("portal_theme", theme.id).apply()
+                }
+                // The VPS enforcer picks up the theme preference on its next audit.
+                userMessage.value = "✓ Theme '${theme.name}' will be deployed on next sync"
+            } catch (e: Exception) {
+                userMessage.value = "✗ Theme selection failed: ${e.localizedMessage}"
+            }
+        }
+    }
+
     fun uploadSelectedPortal(context: Context) {
         val uri = selectedPortalFileUri.value ?: return
         viewModelScope.launch(Dispatchers.IO) {

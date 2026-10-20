@@ -875,6 +875,12 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 badgeCount = topology.accessPoints.size,
                 onClick = { navController.navigate("network_topology") }
             )
+            DashboardMenuCard(
+                title = "Portal Themes",
+                subtitle = "10 themes with price injection for captive portal",
+                icon = Icons.Default.FormatPaint,
+                onClick = { navController.navigate("portal_themes") }
+            )
         }
 
         // GitHub App Update Dialog

@@ -174,6 +174,9 @@ fun AppNavigation(repository: AppRepository, startRoute: String? = null) {
                 composable("network_topology") {
                     NetworkTopologyScreen(viewModel = viewModel, navController = navController)
                 }
+                composable("portal_themes") {
+                    PortalThemeScreen(viewModel = viewModel, navController = navController)
+                }
             }
         }
     }
