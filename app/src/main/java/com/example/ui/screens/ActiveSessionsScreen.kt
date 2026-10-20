@@ -1,7 +1,10 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -43,6 +46,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
     var userToKick by remember { mutableStateOf<ActiveUser?>(null) }
     var userToWhitelist by remember { mutableStateOf<ActiveUser?>(null) }
     var clientToUndoWhitelist by remember { mutableStateOf<IpBinding?>(null) }
+    var selectedUserDetail by remember { mutableStateOf<ActiveUser?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.fetchIpBindings()
@@ -194,13 +198,14 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                             }
                         }
 
-                        items(filteredUsers, key = { it.id }) { user ->
+                        items(filteredUsers, key = { it.id.ifBlank { "${it.user}|${it.address}|${it.macAddress}" } }) { user ->
                             ActiveUserCard(
                                 user = user,
                                 strings = strings,
                                 onWhitelist = { userToWhitelist = user },
                                 onKick = { userToKick = user },
-                                onReleaseMac = { userToRelease = user }
+                                onReleaseMac = { userToRelease = user },
+                                onDetails = { selectedUserDetail = user }
                             )
                         }
                         if (filteredUsers.isEmpty()) {
@@ -487,6 +492,112 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                 }
             )
         }
+
+        // Session Detail Bottom Sheet (tap on session card)
+        if (selectedUserDetail != null) {
+            val detail = selectedUserDetail!!
+            ModalBottomSheet(
+                onDismissRequest = { selectedUserDetail = null },
+                containerColor = MaterialTheme.colorScheme.surface,
+                dragHandle = { BottomSheetDefaults.DragHandle() }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 24.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(52.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Person, contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(26.dp))
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(text = detail.user, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            if (detail.profileName.isNotBlank()) {
+                                Text(text = "📶 ${detail.profileName}", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    if (detail.quotaTotalMb > 0) {
+                        val progress = (detail.quotaUsedMb / detail.quotaTotalMb).toFloat().coerceIn(0f, 1f)
+                        Text(text = "📊 ${strings.totalDataUsage}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Used: ${detail.quotaUsedMb.toInt()} MB / ${detail.quotaTotalMb} MB",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(text = "${detail.quotaRemainingMb.toInt()} MB left", style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (progress > 0.85f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth().height(6.dp),
+                            color = if (progress > 0.85f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant)
+                        Spacer(modifier = Modifier.height(14.dp))
+                    }
+                    SessionDetailRow(icon = "🖥", label = "IP Address", value = detail.address.ifBlank { "—" })
+                    SessionDetailRow(icon = "🔗", label = "MAC Address", value = detail.macAddress.ifBlank { "—" })
+                    SessionDetailRow(icon = "🏷", label = "Hostname", value = detail.hostName.ifBlank { "—" })
+                    SessionDetailRow(icon = "⏱", label = "Uptime", value = detail.uptime.ifBlank { "—" })
+                    if (detail.sessionTimeLeft.isNotBlank()) {
+                        SessionDetailRow(icon = "⏳", label = "Time Left", value = detail.sessionTimeLeft)
+                    }
+                    SessionDetailRow(icon = "⬇", label = "Downloaded", value = formatBytes(detail.bytesIn.toLongOrNull() ?: 0L))
+                    SessionDetailRow(icon = "⬆", label = "Uploaded", value = formatBytes(detail.bytesOut.toLongOrNull() ?: 0L))
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Actions
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { selectedUserDetail = null; userToKick = detail },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.6f))
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(strings.kickClient, fontWeight = FontWeight.Bold)
+                        }
+                        OutlinedButton(
+                            onClick = { selectedUserDetail = null; userToRelease = detail },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.6f))
+                        ) {
+                            Icon(Icons.Default.RemoveCircleOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(strings.releaseAction, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { selectedUserDetail = null; userToWhitelist = detail },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                    ) {
+                        Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(strings.whitelistAction, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -496,7 +607,8 @@ fun ActiveUserCard(
     strings: com.example.utils.AppStrings,
     onWhitelist: () -> Unit,
     onKick: () -> Unit,
-    onReleaseMac: () -> Unit
+    onReleaseMac: () -> Unit,
+    onDetails: () -> Unit
 ) {
     val modelInfo = remember(user.macAddress, user.hostName, user.user) {
         DeviceModelDetector.detectApOrClient(
@@ -511,6 +623,7 @@ fun ActiveUserCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
+            .clickable(onClick = onDetails)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -929,3 +1042,41 @@ fun WhitelistedUserCard(
         }
     }
 }
+
+@Composable
+private fun SessionDetailRow(icon: String, label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = "$icon ", style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        )
+    }
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes <= 0L) return "0 B"
+    val units = arrayOf("B", "KB", "MB", "GB", "TB")
+    var value = bytes.toDouble()
+    var idx = 0
+    while (value >= 1024.0 && idx < units.size - 1) {
+        value /= 1024.0
+        idx++
+    }
+    return if (idx == 0) "${bytes} B" else String.format("%.2f %s", value, units[idx])
+}
+

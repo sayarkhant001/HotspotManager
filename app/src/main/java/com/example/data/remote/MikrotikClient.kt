@@ -767,9 +767,29 @@ class MikrotikClient {
             try {
                 val conn = ensureConnectedInternal() ?: return@withContext false
                 val activeList = conn.execute("/ip/hotspot/active/print", "=.proplist=.id,user,address,mac-address")
-                val target = activeList.firstOrNull { it[".id"] == id }
-                conn.execute("/ip/hotspot/active/remove", ".id=$id")
+
+                // If id is blank or not found, fall back to matching by user/address/mac
+                var target = activeList.firstOrNull { it[".id"] == id }
+                if (target == null) {
+                    target = activeList.firstOrNull {
+                        val u = it["user"] ?: ""
+                        val a = it["address"] ?: ""
+                        val m = (it["mac-address"] ?: "").uppercase()
+                        u == id || a == id || m == id
+                    }
+                }
+
                 if (target != null) {
+                    val tId = target[".id"]
+                    if (!tId.isNullOrBlank()) {
+                        conn.execute("/ip/hotspot/active/remove", ".id=$tId")
+                    } else {
+                        // No .id available — remove by matching user filter
+                        val user = target["user"] ?: ""
+                        if (user.isNotBlank()) {
+                            conn.execute("/ip/hotspot/active/remove", "?user=$user")
+                        }
+                    }
                     val user = target["user"] ?: ""
                     val ip = target["address"] ?: ""
                     val mac = target["mac-address"] ?: ""
@@ -795,6 +815,9 @@ class MikrotikClient {
                             }
                         }
                     } catch (_: Exception) {}
+                } else if (id.isNotBlank()) {
+                    // Last resort: direct remove attempt (RouterOS tolerates missing targets gracefully)
+                    try { conn.execute("/ip/hotspot/active/remove", ".id=$id") } catch (_: Exception) {}
                 }
                 true
             } catch (e: Exception) {

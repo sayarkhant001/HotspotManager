@@ -394,6 +394,75 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             val totalActivatedCount = if (profileUsageBreakdown.isNotEmpty()) profileUsageBreakdown.sumOf { it.vouchersSold } else (if (voucherCount > 0) voucherCount else filteredSessions.size)
             val totalActivatedRevenue = if (profileUsageBreakdown.isNotEmpty()) profileUsageBreakdown.sumOf { it.totalRevenue } else activatedSales
 
+            // ═══════════ REVENUE HERO — Money First, Enterprise Style ═══════════
+            if (totalActivatedRevenue > 0.0 || totalActivatedCount > 0) {
+                val topProf = profileUsageBreakdown.sortedByDescending { it.totalRevenue }.firstOrNull()
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF00E676).copy(alpha = 0.10f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF00E676).copy(alpha = 0.45f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = strings.activatedVoucherSales, style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF00E676).copy(alpha = 0.9f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(text = String.format(java.util.Locale.US, "%,d", totalActivatedRevenue.toLong()) + " Ks",
+                                    style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF00E676))
+                            }
+                            Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF00E676).copy(alpha = 0.15f),
+                                modifier = Modifier.size(60.dp)) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color(0xFF00E676),
+                                        modifier = Modifier.size(30.dp))
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Surface(shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)) {
+                                    Icon(Icons.Default.ConfirmationNumber, contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("$totalActivatedCount ${strings.vouchersSoldLabel}", style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                            if (topProf != null) {
+                                Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF00E676).copy(alpha = 0.15f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)) {
+                                        Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFF00E676),
+                                            modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Top: ${topProf.profileName} • ${String.format(java.util.Locale.US, "%,d", topProf.totalRevenue.toLong())} Ks",
+                                            style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF00E676))
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text("${strings.totalDataUsage}: $formattedDataUsage", style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f))
+                            TextButton(onClick = { navController.navigate("vouchers") },
+                                contentPadding = PaddingValues(horizontal = 8.dp)) {
+                                Text("Sell More →", fontWeight = FontWeight.Bold, color = Color(0xFF00E676))
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             GlassCard(
                 modifier = Modifier
                     .fillMaxWidth()

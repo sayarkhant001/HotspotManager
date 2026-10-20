@@ -1,36 +1,25 @@
-import sys, os
-import json
-import time
+import sys, os, json, time, threading, traceback
 from datetime import datetime, timedelta
-import threading
-import traceback
-
 sys.path.append('/opt/hotspot-cloud')
 try:
     import cloud_database as db
 except ImportError:
     db = None
-
 from cloud_mikrotik import RouterOSClient
 
-# ═════════════════════════════════════════════════════════════════════════
-#  ROUTER ECONOMIC & AIRTIGHT QUOTA ENFORCER
-#  Applied automatically by Hotspot Cloud VPS Controller
-# ═════════════════════════════════════════════════════════════════════════
+# V3: AIRTIGHT QUOTA & TIME ENFORCER
+# RouterOS kernel does the cutting; VPS is backup-only sweeper.
 
-VOUCHER_ACTIVATE_SOURCE = """# Airtight Voucher Activation & Continuous Timer Engine
+VOUCHER_ACTIVATE_SOURCE = """# V3 Airtight Voucher Activation - REMAINING as hard limit
 :global hsUser;
 :local u $hsUser;
 :if ([:len $u] = 0 or $u = "admin" or $u = "default-trial") do={ :return "" };
-
 :local uList [/ip hotspot user find name=$u];
 :if ([:len $uList] = 0) do={ :return "" };
 :local uObj [:pick $uList 0];
-
 :local curComm [/ip hotspot user get $uObj comment];
 :local profName [/ip hotspot user get $uObj profile];
 :local isDis [/ip hotspot user get $uObj disabled];
-
 :local parseTag do={
   :local idx [:find $comm $tag];
   :if ($idx >= 0) do={
@@ -41,7 +30,6 @@ VOUCHER_ACTIVATE_SOURCE = """# Airtight Voucher Activation & Continuous Timer En
   };
   :return "";
 };
-
 :local setTag do={
   :local idx [:find $comm $tag];
   :if ($idx >= 0) do={
@@ -54,62 +42,102 @@ VOUCHER_ACTIVATE_SOURCE = """# Airtight Voucher Activation & Continuous Timer En
     :return ($comm . " " . $tag . $val . "]");
   };
 };
-
-# 1. STRICT CHECK: If user is disabled or has EXPIRED/EXHAUSTED tags, REJECT IMMEDIATELY
+# REJECT disabled/expired/exhausted
 :if ($isDis = true or [:find $curComm "[EXPIRED:"] >= 0 or [:find $curComm "[EXHAUSTED:"] >= 0) do={
-  :log warning ("Hotspot: Rejected login for expired/exhausted user " . $u . ". Kicking immediately.");
   /ip hotspot active remove [find user=$u];
   /ip hotspot cookie remove [find user=$u];
   /ip hotspot user set $uObj disabled=yes limit-bytes-total=1 limit-uptime=1s;
   :return "";
 };
-
-# 2. RESOLVE ORIGINAL QUOTA LIMIT
+# RESOLVE ORIG LIMIT
 :local origLim 0;
 :local lStr [$parseTag comm=$curComm tag="[ORIG-LIMIT:"];
 :if ([:len $lStr] > 0) do={ :set origLim [:tonum $lStr] };
 :if ($origLim = 0) do={
-  :if ($profName = "50GB-30000" or $curComm ~ "50GB") do={ :set origLim 53687091200 };
-  :if ($profName = "40G_30D" or $curComm ~ "40G") do={ :set origLim 42949672960 };
-  :if ($profName = "30Day" or $curComm ~ "30Day") do={ :set origLim 32212254720 };
-  :if ($profName = "4GB" or $curComm ~ "4GB") do={ :set origLim 4294967296 };
-  :if ($profName = "2GB" or $curComm ~ "2GB") do={ :set origLim 2147483648 };
-  :if ($profName = "1GB_1H" or $curComm ~ "1GB") do={ :set origLim 1073741824 };
-  :if ($profName = "1000Ks" or $curComm ~ "1000Ks") do={ :set origLim 1782579200 };
-  :if ($profName = "500Ks" or $curComm ~ "500Ks") do={ :set origLim 786432000 };
-  :if ($profName = "test") do={ :set origLim 52428800 };
-  :if ($profName = "default") do={ :set origLim 1073741824 };
-  :set curComm [$setTag comm=$curComm tag="[ORIG-LIMIT:" val=[:tostr $origLim]];
+  :local cU ($profName . " " . $curComm);
+  :if ($cU ~ "100GB") do={ :set origLim 107374182400 };
+  :if ($cU ~ "50GB") do={ :set origLim 53687091200 };
+  :if ($cU ~ "40G") do={ :set origLim 42949672960 };
+  :if ($cU ~ "30GB" or $cU ~ "30Day") do={ :set origLim 32212254720 };
+  :if ($cU ~ "20GB") do={ :set origLim 21474836480 };
+  :if ($cU ~ "10GB") do={ :set origLim 10737418240 };
+  :if ($cU ~ "5GB") do={ :set origLim 5368709120 };
+  :if ($cU ~ "4GB") do={ :set origLim 4294967296 };
+  :if ($cU ~ "3GB") do={ :set origLim 3221225472 };
+  :if ($cU ~ "2GB") do={ :set origLim 2147483648 };
+  :if ($cU ~ "1.5GB" or $cU ~ "1000Ks") do={ :set origLim 1782579200 };
+  :if ($cU ~ "1GB") do={ :set origLim 1073741824 };
+  :if ($cU ~ "750MB" or $cU ~ "500Ks") do={ :set origLim 786432000 };
+  :if ($cU ~ "500MB") do={ :set origLim 524288000 };
+  :if ($cU ~ "250MB") do={ :set origLim 262144000 };
+  :if ($cU ~ "100MB") do={ :set origLim 104857600 };
+  :if ($cU ~ "50MB" or $cU ~ "test") do={ :set origLim 52428800 };
+  :if ($origLim = 0) do={
+    :local curLim [/ip hotspot user get $uObj limit-bytes-total];
+    :if ($curLim > 0) do={ :set origLim $curLim };
+  };
+  :if ($origLim > 0) do={
+    :set curComm [$setTag comm=$curComm tag="[ORIG-LIMIT:" val=[:tostr $origLim]];
+  };
 };
-
-# 3. QUOTA CHECK & HARDWARE REMAINING LIMIT
+# CALCULATE USED from [USED:] + hw counters
 :local usedBytes 0;
 :local udStr [$parseTag comm=$curComm tag="[USED:"];
 :if ([:len $udStr] > 0) do={ :set usedBytes [:tonum $udStr] };
-
-# Check hardware counters on user object in case they exceeded before reset
-:local hwUsed ([/ip hotspot user get $uObj bytes-in] + [/ip hotspot user get $uObj bytes-out]);
-:if ($hwUsed > $usedBytes) do={ :set usedBytes $hwUsed };
-
-:local remBytes ($origLim - $usedBytes);
-:if ($origLim > 0 and $remBytes <= 0) do={
-  :log warning ("Hotspot: User " . $u . " quota already exhausted (" . [:tostr $usedBytes] . " >= " . [:tostr $origLim] . ")! Kicking.");
+:local hwIn [/ip hotspot user get $uObj bytes-in];
+:local hwOut [/ip hotspot user get $uObj bytes-out];
+:local baseBytes 0;
+:local bStr [$parseTag comm=$curComm tag="[BASE:"];
+:if ([:len $bStr] > 0) do={ :set baseBytes [:tonum $bStr] };
+:local hwTotal ($baseBytes + $hwIn + $hwOut);
+:if ($hwTotal > $usedBytes) do={ :set usedBytes $hwTotal };
+# REJECT if exhausted
+:if ($origLim > 0 and $usedBytes >= $origLim) do={
   /ip hotspot active remove [find user=$u];
   /ip hotspot cookie remove [find user=$u];
+  :set curComm [$setTag comm=$curComm tag="[USED:" val=[:tostr $usedBytes]];
   /ip hotspot user set $uObj disabled=yes limit-bytes-total=1 comment=($curComm . " [EXHAUSTED:DATA]");
   :return "";
 };
-
-# Record BASE as the starting point for this active session
+# KEY FIX: limit-bytes-total = REMAINING so RouterOS kernel cuts exactly
 :set curComm [$setTag comm=$curComm tag="[BASE:" val=[:tostr $usedBytes]];
 :set curComm [$setTag comm=$curComm tag="[USED:" val=[:tostr $usedBytes]];
-
 :if ($origLim > 0) do={
+  :local remBytes ($origLim - $usedBytes);
   /ip hotspot user set $uObj limit-bytes-total=$remBytes;
+  /ip hotspot user reset-counters $uObj;
 };
-/ip hotspot user reset-counters $uObj;
-
-# 4. RECORD MAC ADDRESS (Do NOT lock mac-address on user object to allow seamless re-login)
+# ACTIVATION TIME (first login = continuous countdown start)
+:local cDate [/system clock get date];
+:local cTime [/system clock get time];
+:local isFirst true;
+:if ([:find $curComm "[ACT:"] >= 0) do={ :set isFirst false };
+:if ($isFirst) do={
+  :set curComm [$setTag comm=$curComm tag="[ACT:" val=([:tostr $cDate] . " " . [:tostr $cTime])];
+};
+# RESOLVE & SET REMAINING UPTIME
+:local origUp [:totime "0s"];
+:local upStr [$parseTag comm=$curComm tag="[ORIG-UP:"];
+:if ([:len $upStr] > 0) do={ :set origUp [:totime $upStr] };
+:if ($origUp = [:totime "0s"]) do={
+  :local p ($profName . " " . $curComm);
+  :if ($p ~ "30d" or $p ~ "30Day" or $p ~ "4w") do={ :set origUp 30d };
+  :if ($p ~ "7d" or $p ~ "1w") do={ :set origUp 7d };
+  :if ($p ~ "3d") do={ :set origUp 3d };
+  :if ($p ~ "1d" or $p ~ "24h") do={ :set origUp 1d };
+  :if ($p ~ "12h") do={ :set origUp 12h };
+  :if ($p ~ "6h") do={ :set origUp 6h };
+  :if ($p ~ "2h") do={ :set origUp 2h };
+  :if ($p ~ "1h") do={ :set origUp 1h };
+  :if ($p ~ "test") do={ :set origUp 3m };
+  :if ($origUp > [:totime "0s"]) do={
+    :set curComm [$setTag comm=$curComm tag="[ORIG-UP:" val=[:tostr $origUp]];
+  };
+};
+:if ($origUp > [:totime "0s"]) do={
+  /ip hotspot user set $uObj limit-uptime=$origUp;
+};
+# RECORD MAC for roaming (don't lock user mac-address)
 :local m "";
 :foreach a in=[/ip hotspot active find user=$u] do={
   :set m [/ip hotspot active get $a mac-address];
@@ -117,113 +145,72 @@ VOUCHER_ACTIVATE_SOURCE = """# Airtight Voucher Activation & Continuous Timer En
 :if ([:len $m] > 0) do={
   :set curComm [$setTag comm=$curComm tag="[MAC:" val=$m];
 };
-
-# 5. RECORD ACTIVATION TIME (first login only)
-# Time expiry is handled by hs-continuous-expire-monitor (every 1m) + VPS sweep (every 5m)
-# Per-user schedulers are NOT created — they cause unnecessary CPU load on the router.
-:local isFirstLogin true;
-:if ([:find $curComm "[ACT:"] >= 0) do={ :set isFirstLogin false };
-
-:local cDate [/system clock get date];
-:local cTime [/system clock get time];
-
-:if ($isFirstLogin) do={
-  :set curComm [$setTag comm=$curComm tag="[ACT:" val=([:tostr $cDate] . " " . [:tostr $cTime])];
-  /ip hotspot user set $uObj comment=$curComm;
-  :log info ("Hotspot: Voucher " . $u . " first activated at " . [:tostr $cDate] . " " . [:tostr $cTime]);
-} else={
-  /ip hotspot user set $uObj comment=$curComm;
-};
+/ip hotspot user set $uObj comment=$curComm;
 """
 
-HS_QUOTA_SAVE_SOURCE = """# Airtight Realtime Quota Saver & Hardware Cutoff
+HS_QUOTA_SAVE_SOURCE = """# V3 Lightweight Quota Saver - writes only when delta >= 5MB
 :foreach a in=[/ip hotspot active find] do={
   :local uName [/ip hotspot active get $a user];
   :if ($uName != "admin" and $uName != "default-trial") do={
     :local uList [/ip hotspot user find name=$uName];
     :if ([:len $uList] > 0) do={
       :local u [:pick $uList 0];
-      :local sessionBytes ([/ip hotspot active get $a bytes-in] + [/ip hotspot active get $a bytes-out]);
+      :local sB ([/ip hotspot active get $a bytes-in] + [/ip hotspot active get $a bytes-out]);
       :local comm [/ip hotspot user get $u comment];
-      
       :local baseBytes 0;
       :local bIdx [:find $comm "[BASE:"];
       :if ($bIdx >= 0) do={
-        :local bRest [:pick $comm ($bIdx + 6) [:len $comm]];
-        :local bEnd [:find $bRest "]"];
-        :if ($bEnd >= 0) do={ :set bRest [:pick $bRest 0 $bEnd] };
-        :set baseBytes [:tonum $bRest];
+        :local bR [:pick $comm ($bIdx + 6) [:len $comm]];
+        :local bE [:find $bR "]"];
+        :if ($bE >= 0) do={ :set bR [:pick $bR 0 $bE] };
+        :set baseBytes [:tonum $bR];
       };
-
-      :local curStoredUsed 0;
+      :local curUsed 0;
       :local uIdx [:find $comm "[USED:"];
       :if ($uIdx >= 0) do={
-        :local uRest [:pick $comm ($uIdx + 6) [:len $comm]];
-        :local uEnd [:find $uRest "]"];
-        :if ($uEnd >= 0) do={ :set uRest [:pick $uRest 0 $uEnd] };
-        :set curStoredUsed [:tonum $uRest];
+        :local uR [:pick $comm ($uIdx + 6) [:len $comm]];
+        :local uE [:find $uR "]"];
+        :if ($uE >= 0) do={ :set uR [:pick $uR 0 $uE] };
+        :set curUsed [:tonum $uR];
       };
-
-      # Promote stored used if baseBytes was missing or uninitialized
-      :if ($baseBytes = 0 and $curStoredUsed > $sessionBytes) do={
-        :set baseBytes $curStoredUsed;
-        :local bEnd [:find $comm "]" $bIdx];
-        :if ($bIdx >= 0) do={
-          :local pfx [:pick $comm 0 $bIdx];
-          :local sfx "";
-          :if ($bEnd >= 0) do={ :set sfx [:pick $comm ($bEnd + 1) [:len $comm]] };
-          :set comm ($pfx . "[BASE:" . [:tostr $baseBytes] . "]" . $sfx);
-        } else={
-          :set comm ($comm . " [BASE:" . [:tostr $baseBytes] . "]");
-        };
-      };
-      
-      :local totalUsed ($baseBytes + $sessionBytes);
+      :local totalUsed ($baseBytes + $sB);
       :local origLim 0;
       :local lIdx [:find $comm "[ORIG-LIMIT:"];
       :if ($lIdx >= 0) do={
-        :local lRest [:pick $comm ($lIdx + 12) [:len $comm]];
-        :local lEnd [:find $lRest "]"];
-        :if ($lEnd >= 0) do={ :set lRest [:pick $lRest 0 $lEnd] };
-        :set origLim [:tonum $lRest];
+        :local lR [:pick $comm ($lIdx + 12) [:len $comm]];
+        :local lE [:find $lR "]"];
+        :if ($lE >= 0) do={ :set lR [:pick $lR 0 $lE] };
+        :set origLim [:tonum $lR];
       };
-      :if ($origLim = 0) do={
-        :local profName [/ip hotspot user get $u profile];
-        :if ($profName = "50GB-30000" or $comm ~ "50GB") do={ :set origLim 53687091200 };
-        :if ($profName = "40G_30D" or $comm ~ "40G") do={ :set origLim 42949672960 };
-        :if ($profName = "30Day" or $comm ~ "30Day") do={ :set origLim 32212254720 };
-        :if ($profName = "4GB" or $comm ~ "4GB") do={ :set origLim 4294967296 };
-        :if ($profName = "2GB" or $comm ~ "2GB") do={ :set origLim 2147483648 };
-        :if ($profName = "1GB_1H" or $comm ~ "1GB") do={ :set origLim 1073741824 };
-        :if ($profName = "1000Ks" or $comm ~ "1000Ks") do={ :set origLim 1782579200 };
-        :if ($profName = "500Ks" or $comm ~ "500Ks") do={ :set origLim 786432000 };
-        :if ($profName = "test") do={ :set origLim 52428800 };
-        :if ($profName = "default") do={ :set origLim 1073741824 };
-        :set comm ($comm . " [ORIG-LIMIT:" . [:tostr $origLim] . "]");
-      };
-      
-      # Update [USED:...] in comment
-      :set uIdx [:find $comm "[USED:"];
-      :if ($uIdx >= 0) do={
-        :local endIdx [:find $comm "]" $uIdx];
-        :local prefix [:pick $comm 0 $uIdx];
-        :local suffix "";
-        :if ($endIdx >= 0) do={ :set suffix [:pick $comm ($endIdx + 1) [:len $comm]] };
-        :set comm ($prefix . "[USED:" . [:tostr $totalUsed] . "]" . $suffix);
-      } else={
-        :set comm ($comm . " [USED:" . [:tostr $totalUsed] . "]");
-      };
-      
-      # EXACT DATA CUTOFF TRIGGER
+      # EXACT CUTOFF: if totalUsed >= origLim, kick NOW
       :if ($origLim > 0 and $totalUsed >= $origLim) do={
-        :log warning ("Hotspot: Quota exceeded for " . $uName . " (" . [:tostr $totalUsed] . " >= " . [:tostr $origLim] . ") - KICKING AND DISABLING");
         /ip hotspot active remove $a;
         /ip hotspot cookie remove [find user=$uName];
-        /ip hotspot user set $u disabled=yes limit-bytes-total=1 comment=($comm . " [EXHAUSTED:DATA]");
+        :local nC $comm;
+        :local ui [:find $nC "[USED:"];
+        :if ($ui >= 0) do={
+          :local eI [:find $nC "]" $ui];
+          :local px [:pick $nC 0 $ui];
+          :local sx "";
+          :if ($eI >= 0) do={ :set sx [:pick $nC ($eI+1) [:len $nC]] };
+          :set nC ($px . "[USED:" . [:tostr $totalUsed] . "]" . $sx);
+        } else={ :set nC ($nC . " [USED:" . [:tostr $totalUsed] . "]") };
+        /ip hotspot user set $u disabled=yes limit-bytes-total=1 comment=($nC . " [EXHAUSTED:DATA]");
       } else={
-        # Only write comment to flash if delta is >= 10MB to eliminate CPU/log churn
-        :if (($totalUsed - $curStoredUsed) > 10485760 or ($curStoredUsed - $totalUsed) > 10485760) do={
-          /ip hotspot user set $u comment=$comm;
+        # Only write to flash if delta >= 5MB (5242880 bytes)
+        :local delta ($totalUsed - $curUsed);
+        :if ($delta < 0) do={ :set delta (0 - $delta) };
+        :if ($delta > 5242880) do={
+          :local nC $comm;
+          :local ui [:find $nC "[USED:"];
+          :if ($ui >= 0) do={
+            :local eI [:find $nC "]" $ui];
+            :local px [:pick $nC 0 $ui];
+            :local sx "";
+            :if ($eI >= 0) do={ :set sx [:pick $nC ($eI+1) [:len $nC]] };
+            :set nC ($px . "[USED:" . [:tostr $totalUsed] . "]" . $sx);
+          } else={ :set nC ($nC . " [USED:" . [:tostr $totalUsed] . "]") };
+          /ip hotspot user set $u comment=$nC;
         };
       };
     };
@@ -231,46 +218,34 @@ HS_QUOTA_SAVE_SOURCE = """# Airtight Realtime Quota Saver & Hardware Cutoff
 };
 """
 
-VOUCHER_EXPIRE_CHECK_SOURCE = """# Continuous monitor & garbage collector for expired/exhausted vouchers
+VOUCHER_EXPIRE_CHECK_SOURCE = """# V3 Expired/exhausted session garbage collector
 :foreach a in=[/ip hotspot active find] do={
   :local aUser [/ip hotspot active get $a user];
   :if ($aUser != "admin" and $aUser != "default-trial") do={
     :local uList [/ip hotspot user find name=$aUser];
     :if ([:len $uList] = 0) do={
-      :do {
-        /ip hotspot active remove $a;
-        /ip hotspot cookie remove [find user=$aUser];
-      } on-error={};
+      :do { /ip hotspot active remove $a; /ip hotspot cookie remove [find user=$aUser] } on-error={};
     } else={
       :local uObj [:pick $uList 0];
       :local isDis [/ip hotspot user get $uObj disabled];
       :local comm [/ip hotspot user get $uObj comment];
       :if ($isDis = true or [:find $comm "[EXHAUSTED:"] >= 0 or [:find $comm "[EXPIRED:"] >= 0) do={
-        :log warning ("Hotspot: Active session found for disabled/expired user " . $aUser . " - Kicking immediately");
-        :do {
-          /ip hotspot active remove $a;
-          /ip hotspot cookie remove [find user=$aUser];
-        } on-error={};
+        :do { /ip hotspot active remove $a; /ip hotspot cookie remove [find user=$aUser] } on-error={};
       };
     };
   };
 };
-
 :foreach s in=[/system scheduler find comment~"Voucher continuous timer"] do={
   :local sName [/system scheduler get $s name];
   :local uList [/ip hotspot user find name=$sName];
-  :if ([:len $uList] = 0) do={
-    :do { /system scheduler remove $s } on-error={};
-  };
+  :if ([:len $uList] = 0) do={ :do { /system scheduler remove $s } on-error={} };
 };
 """
 
-HS_ON_LOGOUT_SOURCE = """# Save quota and sync base state on user logout
+HS_ON_LOGOUT_SOURCE = """# V3 On-Logout: Save final bytes to [USED:] and [BASE:]
 :global hsUser;
 :local u $hsUser;
-:if ([:len $u] = 0) do={
-  :set u $user;
-};
+:if ([:len $u] = 0) do={ :set u $user };
 :if ([:len $u] > 0 and $u != "admin" and $u != "default-trial") do={
   :local uList [/ip hotspot user find name=$u];
   :if ([:len $uList] > 0) do={
@@ -279,41 +254,38 @@ HS_ON_LOGOUT_SOURCE = """# Save quota and sync base state on user logout
     :local hwIn [/ip hotspot user get $uObj bytes-in];
     :local hwOut [/ip hotspot user get $uObj bytes-out];
     :local hwTotal ($hwIn + $hwOut);
-    
     :local base 0;
     :local bIdx [:find $comm "[BASE:"];
     :if ($bIdx >= 0) do={
-      :local bRest [:pick $comm ($bIdx + 6) [:len $comm]];
-      :local bEnd [:find $bRest "]"];
-      :if ($bEnd >= 0) do={ :set bRest [:pick $bRest 0 $bEnd] };
-      :set base [:tonum $bRest];
+      :local bR [:pick $comm ($bIdx + 6) [:len $comm]];
+      :local bE [:find $bR "]"];
+      :if ($bE >= 0) do={ :set bR [:pick $bR 0 $bE] };
+      :set base [:tonum $bR];
     };
-    
     :local total ($base + $hwTotal);
+    # Update [USED:]
     :local uIdx [:find $comm "[USED:"];
     :if ($uIdx >= 0) do={
-      :local endIdx [:find $comm "]" $uIdx];
-      :local prefix [:pick $comm 0 $uIdx];
-      :local suffix "";
-      :if ($endIdx >= 0) do={ :set suffix [:pick $comm ($endIdx + 1) [:len $comm]] };
-      :set comm ($prefix . "[USED:" . [:tostr $total] . "]" . $suffix);
-    } else={
-      :set comm ($comm . " [USED:" . [:tostr $total] . "]");
-    };
+      :local eI [:find $comm "]" $uIdx];
+      :local px [:pick $comm 0 $uIdx];
+      :local sx "";
+      :if ($eI >= 0) do={ :set sx [:pick $comm ($eI+1) [:len $comm]] };
+      :set comm ($px . "[USED:" . [:tostr $total] . "]" . $sx);
+    } else={ :set comm ($comm . " [USED:" . [:tostr $total] . "]") };
+    # Update [BASE:]
     :set bIdx [:find $comm "[BASE:"];
     :if ($bIdx >= 0) do={
-      :local endIdx [:find $comm "]" $bIdx];
-      :local prefix [:pick $comm 0 $bIdx];
-      :local suffix "";
-      :if ($endIdx >= 0) do={ :set suffix [:pick $comm ($endIdx + 1) [:len $comm]] };
-      :set comm ($prefix . "[BASE:" . [:tostr $total] . "]" . $suffix);
-    } else={
-      :set comm ($comm . " [BASE:" . [:tostr $total] . "]");
-    };
+      :local eI [:find $comm "]" $bIdx];
+      :local px [:pick $comm 0 $bIdx];
+      :local sx "";
+      :if ($eI >= 0) do={ :set sx [:pick $comm ($eI+1) [:len $comm]] };
+      :set comm ($px . "[BASE:" . [:tostr $total] . "]" . $sx);
+    } else={ :set comm ($comm . " [BASE:" . [:tostr $total] . "]") };
     /ip hotspot user set $uObj comment=$comm;
   };
 };
 """
+
 
 class RouterAuditor:
     def __init__(self, router_dict):
@@ -334,7 +306,7 @@ class RouterAuditor:
             try:
                 client.connect()
                 if not client.login(self.user, self.pwd):
-                    issues.append("API Authentication failed on router.")
+                    issues.append("API Authentication failed.")
                 else:
                     def parse_re(r):
                         res = {}
@@ -345,260 +317,73 @@ class RouterAuditor:
                                     res[parts[0]] = parts[1]
                         return res
 
-                    # Helper to set or create script safely via API
                     def apply_script(name, source, comment=""):
                         s_res = client.talk(['/system/script/print', f'?name={name}'])
-                        sid = None
-                        for r in s_res:
-                            if r[0] == '!re':
-                                for item in r[1:]:
-                                    if item.startswith('=.id='): sid = item[5:]
-                        if sid:
-                            client.talk(['/system/script/set', f'=.id={sid}', f'=source={source}', f'=comment={comment}'])
+                        existing = [parse_re(x) for x in s_res if x[0] == '!re']
+                        if existing:
+                            sid = existing[0].get('.id')
+                            if sid:
+                                client.talk(['/system/script/set', f'=.id={sid}', f'=source={source}', f'=comment={comment}'])
                         else:
-                            client.talk(['/system/script/add', f'=name={name}', f'=source={source}', f'=comment={comment}', '=policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon'])
+                            client.talk(['/system/script/add', f'=name={name}', f'=source={source}', f'=comment={comment}'])
+                        fixes.append(f"Script '{name}' deployed.")
 
-                    # 1. Enforce Airtight Scripts via API
-                    apply_script('voucher-activate', VOUCHER_ACTIVATE_SOURCE, "Airtight Voucher Activation & Continuous Timer")
-                    apply_script('hs-quota-save', HS_QUOTA_SAVE_SOURCE, "Airtight Realtime Quota Saver & Hardware Cutoff")
-                    apply_script('voucher-expire-check', VOUCHER_EXPIRE_CHECK_SOURCE, "Garbage Collector & Disabled Cutter")
-                    apply_script('hs-on-logout', HS_ON_LOGOUT_SOURCE, "On Logout Quota Saver")
+                    # 1. Deploy V3 scripts
+                    apply_script('voucher-activate', VOUCHER_ACTIVATE_SOURCE, "V3 Airtight Activation")
+                    apply_script('hs-quota-save', HS_QUOTA_SAVE_SOURCE, "V3 Lightweight Quota Saver")
+                    apply_script('voucher-expire-check', VOUCHER_EXPIRE_CHECK_SOURCE, "V3 Expire GC")
+                    apply_script('hs-on-logout', HS_ON_LOGOUT_SOURCE, "V3 On Logout Saver")
 
-                    # 2. Enforce Fast Schedulers (Quota: 3s, Continuous Expire: 1m)
+                    # 2. Ensure schedulers exist
                     def ensure_scheduler(name, interval, on_event, comment=""):
-                        sc_res = client.talk(['/system/scheduler/print', f'?name={name}'])
-                        sc_id = None
-                        for r in sc_res:
-                            if r[0] == '!re':
-                                for item in r[1:]:
-                                    if item.startswith('=.id='): sc_id = item[5:]
-                        if sc_id:
-                            client.talk(['/system/scheduler/set', f'=.id={sc_id}', f'=interval={interval}', f'=on-event={on_event}', '=disabled=no'])
+                        sc = client.talk(['/system/scheduler/print', f'?name={name}'])
+                        sc_list = [parse_re(x) for x in sc if x[0] == '!re']
+                        if sc_list:
+                            sid = sc_list[0].get('.id')
+                            if sid:
+                                client.talk(['/system/scheduler/set', f'=.id={sid}', f'=interval={interval}', f'=on-event={on_event}'])
                         else:
-                            client.talk(['/system/scheduler/add', f'=name={name}', f'=interval={interval}', f'=on-event={on_event}', f'=comment={comment}', '=start-time=startup'])
+                            client.talk(['/system/scheduler/add', f'=name={name}', f'=interval={interval}', f'=on-event={on_event}', '=start-time=startup', f'=comment={comment}'])
 
-                    ensure_scheduler('hs-quota-saver', '30s', '/system script run hs-quota-save', "Realtime Quota Saver (every 30s)")
-                    ensure_scheduler('hs-continuous-expire-monitor', '1m', '/system script run voucher-expire-check', "Hotspot continuous expiration monitor (every 1m)")
+                    ensure_scheduler('hs-quota-saver', '30s', '/system script run hs-quota-save', 'V3 quota saver')
+                    ensure_scheduler('hs-continuous-expire-monitor', '1m', '/system script run voucher-expire-check', 'V3 expire monitor')
 
-                    # Clean up device-mode failing cloud-heartbeat scheduler if present
-                    hb_res = client.talk(['/system/scheduler/print', '?name=cloud-heartbeat'])
-                    for r in hb_res:
-                        if r[0] == '!re':
-                            for item in r[1:]:
-                                if item.startswith('=.id='):
-                                    client.talk(['/system/scheduler/remove', f'=.id={item[5:]}'])
+                    # 3. Set profile hooks: on-login → voucher-activate, on-logout → on-logout saver
+                    on_login = ':global hsUser $user; :do { /system script run voucher-activate } on-error={}'
+                    on_logout = ':do { /system script run hs-on-logout } on-error={}'
+                    profiles = client.talk(['/ip/hotspot/user/profile/print', '=.proplist=.id,name'])
+                    for p in [parse_re(x) for x in profiles if x[0] == '!re']:
+                        pid = p.get('.id')
+                        if pid:
+                            client.talk([
+                                '/ip/hotspot/user/profile/set', f'=.id={pid}',
+                                '=shared-users=1', '=add-mac-cookie=yes', '=mac-cookie-timeout=30d',
+                                '=keepalive-timeout=2m', '=idle-timeout=3m',
+                                f'=on-login={on_login}', f'=on-logout={on_logout}'
+                            ])
+                    fixes.append("All profiles updated with V3 hooks.")
 
-                    # Clean up any leftover per-user schedulers (they cause heavy RouterOS CPU load)
-                    all_scheds = client.talk(['/system/scheduler/print', '=.proplist=.id,name'])
-                    sys_sched_names = {'hs-quota-saver', 'hs-continuous-expire-monitor', 'cloud-heartbeat', 'cloud_heartbeat'}
-                    for r in all_scheds:
-                        if r[0] == '!re':
-                            d = parse_re(r)
-                            sname = d.get('name', '')
-                            sid = d.get('.id')
-                            if sname and sname not in sys_sched_names and sid:
-                                try:
-                                    client.talk(['/system/scheduler/remove', f'=.id={sid}'])
-                                except Exception:
-                                    pass
+                    # 4. Remove per-user schedulers (CPU spike killers)
+                    sys_names = {'hs-quota-saver', 'hs-continuous-expire-monitor', 'cloud-heartbeat', 'cloud_heartbeat', 'hs-quota-restorer'}
+                    all_sc = client.talk(['/system/scheduler/print', '=.proplist=.id,name'])
+                    for sc in [parse_re(x) for x in all_sc if x[0] == '!re']:
+                        sn = sc.get('name', '')
+                        if sn and sn not in sys_names:
+                            client.talk(['/system/scheduler/remove', f'=.id={sc.get(".id")}'])
+                            fixes.append(f"Removed per-user scheduler: {sn}")
 
-                    # 3. Enforce User Profiles
-                    profiles = client.talk(['/ip/hotspot/user/profile/print'])
-                    for r in profiles:
-                        if r[0] == '!re':
-                            d = parse_re(r)
-                            pid = d.get('.id')
-                            pname = d.get('name', '')
-                            if pid and pname:
-                                # session-timeout MUST be empty string via API (not 'none').
-                                # MikroTik API rejects 'none' with !trap on many RouterOS versions.
-                                # Empty string '' = no session timeout so MikroTik does NOT
-                                # auto-disconnect users at a timer boundary. VPS enforcer +
-                                # per-user schedulers are the authoritative cutoff mechanism.
-                                cookie_time = "1d"
-                                if any(k in pname for k in ["50GB", "30D", "30Day", "Month", "40G"]):
-                                    cookie_time = "4w2d"
-                                elif any(k in pname for k in ["1H", "1Hour"]):
-                                    cookie_time = "1h"
-                                elif any(k in pname for k in ["2H", "2Hour"]):
-                                    cookie_time = "2h"
-
-                                # Set session-timeout=0s = no timeout (disabled).
-                                # '0s' is the correct RouterOS API value - returns !done with no trap.
-                                # When set, the field is omitted from API responses (the "not set" state).
-                                # Empty string silently fails on some RouterOS versions.
-                                try:
-                                    client.talk([
-                                        '/ip/hotspot/user/profile/set',
-                                        f'=.id={pid}',
-                                        '=on-login=:global hsUser $user; :do { /system script run voucher-activate } on-error={}',
-                                        '=on-logout=/system script run hs-on-logout',
-                                        '=session-timeout=0s',
-                                        f'=mac-cookie-timeout={cookie_time}',
-                                        '=keepalive-timeout=2m',
-                                        '=idle-timeout=3m',
-                                        '=status-autorefresh=1m',
-                                        '=shared-users=1',
-                                        '=add-mac-cookie=yes'
-                                    ])
-                                except Exception:
-                                    # Fallback: set without session-timeout
-                                    client.talk([
-                                        '/ip/hotspot/user/profile/set',
-                                        f'=.id={pid}',
-                                        '=on-login=:global hsUser $user; :do { /system script run voucher-activate } on-error={}',
-                                        '=on-logout=/system script run hs-on-logout',
-                                        f'=mac-cookie-timeout={cookie_time}',
-                                        '=keepalive-timeout=2m',
-                                        '=idle-timeout=3m',
-                                        '=status-autorefresh=1m',
-                                        '=shared-users=1',
-                                        '=add-mac-cookie=yes'
-                                    ])
-
-                    # 4. Enforce Reyee Hardware / APs / Bridges Bypassed
-                    reyee_macs = [
-                        ("98:4A:6B:AE:30:20", "Reyee EW3000GX AP - Primary"),
-                        ("98:4A:6B:AE:30:28", "Reyee EW3000GX AP - Secondary BSSID/LAN"),
-                        ("4C:49:68:2D:0D:7D", "Reyee EW3000GX AP 2 - Primary"),
-                        ("4C:49:68:2D:0D:85", "Reyee EW3000GX AP 2 - Secondary BSSID/LAN"),
-                        ("98:4A:6B:F3:89:CD", "Ruijie AirMetro 460G Bridge 1"),
-                        ("98:4A:6B:F3:8B:BD", "Ruijie AirMetro 460G Bridge 2")
-                    ]
-                    for mac, desc in reyee_macs:
-                        b_res = client.talk(['/ip/hotspot/ip-binding/print', f'?mac-address={mac}'])
-                        has_binding = any(r[0] == '!re' for r in b_res)
-                        if not has_binding:
-                            client.talk(['/ip/hotspot/ip-binding/add', f'=mac-address={mac}', '=type=bypassed', f'=comment={desc}'])
-
-                    # 5. Voucher Sweep / MAC Unbinding
-                    clk_res = client.talk(['/system/clock/print'])
-                    clk_entries = [parse_re(r) for r in clk_res if r[0] == '!re']
-                    if clk_entries:
-                        clk_date = clk_entries[0].get('date') or ''
-                        clk_time = clk_entries[0].get('time') or ''
-                    else:
-                        clk_date, clk_time = '', ''
-                    try:
-                        router_now = datetime.strptime(f"{clk_date} {clk_time}", "%Y-%m-%d %H:%M:%S")
-                        if router_now.year < 2025:
-                            raise ValueError("clock unsynchronized")
-                    except Exception:
-                        router_now = datetime.now()
-
-                    users = [parse_re(r) for r in client.talk(['/ip/hotspot/user/print']) if r[0] == '!re']
-                    disabled_count = 0
-                    unbound_count = 0
-
-                    for u in users:
-                        uid = u.get('.id')
-                        name = u.get('name')
-                        if name in ['admin', 'default-trial']:
-                            continue
-                        comm = u.get('comment', '')
-                        prof = u.get('profile', '')
-                        b_in = int(u.get('bytes-in', 0))
-                        b_out = int(u.get('bytes-out', 0))
-                        hw_used = b_in + b_out
-
-                        orig_lim = 0
-                        if '[ORIG-LIMIT:' in comm:
-                            try: orig_lim = int(comm.split('[ORIG-LIMIT:')[1].split(']')[0])
-                            except Exception: pass
-                        if orig_lim == 0:
-                            if '50GB' in prof or '50GB' in comm: orig_lim = 53687091200
-                            elif '40G' in prof or '40G' in comm: orig_lim = 42949672960
-                            elif '30D' in prof or '30Day' in prof or '30Day' in comm: orig_lim = 32212254720
-                            elif '4GB' in prof or '4GB' in comm: orig_lim = 4294967296
-                            elif '2GB' in prof or '2GB' in comm: orig_lim = 2147483648
-                            elif '1000Ks' in prof or '1000Ks' in comm: orig_lim = 1782579200
-                            elif '1GB' in prof or '1GB' in comm: orig_lim = 1073741824
-                            elif '500Ks' in prof or '500Ks' in comm: orig_lim = 786432000
-                            elif 'test' in prof: orig_lim = 52428800
-                            else: orig_lim = 1073741824
-
-                        stored_used = 0
-                        if '[USED:' in comm:
-                            try: stored_used = int(comm.split('[USED:')[1].split(']')[0])
-                            except Exception: pass
-                        total_used = max(stored_used, hw_used)
-
-                        is_time_expired = False
-                        if '[ACT:' in comm:
-                            act_str = comm.split('[ACT:')[1].split(']')[0].strip()
-                            try:
-                                if '-' in act_str: act_dt = datetime.strptime(act_str, "%Y-%m-%d %H:%M:%S")
-                                else: act_dt = datetime.strptime(act_str, "%b/%d/%Y %H:%M:%S")
-                                dur = timedelta(days=1)
-                                if '50GB' in prof or '30D' in prof or '30Day' in prof or 'Month' in prof: dur = timedelta(days=30)
-                                elif '1H' in prof or '1Hour' in prof: dur = timedelta(hours=1)
-                                elif '2H' in prof or '2Hour' in prof: dur = timedelta(hours=2)
-                                elif 'test' in prof: dur = timedelta(minutes=3)
-                                if router_now >= (act_dt + dur):
-                                    is_time_expired = True
-                            except Exception: pass
-
-                        is_already_disabled = (u.get('disabled') == 'true')
-                        is_quota_exhausted = (orig_lim > 0 and total_used >= orig_lim)
-                        is_already_expired = ('[EXPIRED:' in comm or '[EXHAUSTED:' in comm)
-
-                        if is_quota_exhausted or is_time_expired or is_already_expired:
-                            if not is_already_disabled:
-                                reason = "[EXHAUSTED:DATA]" if is_quota_exhausted else "[EXPIRED:TIME_OVERDUE]"
-                                new_comm = comm
-                                if reason not in new_comm: new_comm = f"{new_comm} {reason}"
-                                client.talk([
-                                    '/ip/hotspot/user/set',
-                                    f'=.id={uid}',
-                                    '=disabled=yes',
-                                    '=limit-bytes-total=1',
-                                    '=limit-uptime=1s',
-                                    f'=comment={new_comm}'
-                                ])
-                                disabled_count += 1
-                        elif unbind_macs:
-                            has_mac_bound = bool(u.get('mac-address') or '[MAC:' in comm)
-                            if has_mac_bound or is_already_disabled:
-                                new_comm = comm
-                                if '[MAC:' in new_comm:
-                                    pfx = new_comm.split('[MAC:')[0]
-                                    sfx = new_comm.split('[MAC:')[1]
-                                    if ']' in sfx: sfx = sfx.split(']', 1)[1]
-                                    new_comm = (pfx + sfx).strip()
-                                if '[ORIG-LIMIT:' not in new_comm:
-                                    new_comm = f"{new_comm} [ORIG-LIMIT:{orig_lim}]"
-                                if '[BASE:' in new_comm:
-                                    pfx = new_comm.split('[BASE:')[0]
-                                    sfx = new_comm.split('[BASE:')[1].split(']', 1)[1]
-                                    new_comm = f"{pfx}[BASE:{total_used}]{sfx}"
-                                else:
-                                    new_comm = f"{new_comm} [BASE:{total_used}]"
-                                if '[USED:' in new_comm:
-                                    pfx = new_comm.split('[USED:')[0]
-                                    sfx = new_comm.split('[USED:')[1].split(']', 1)[1]
-                                    new_comm = f"{pfx}[USED:{total_used}]{sfx}"
-                                else:
-                                    new_comm = f"{new_comm} [USED:{total_used}]"
-
-                                rem_bytes = max(1048576, orig_lim - total_used)
-                                client.talk([
-                                    '/ip/hotspot/user/set',
-                                    f'=.id={uid}',
-                                    '=disabled=no',
-                                    '=mac-address=00:00:00:00:00:00',
-                                    f'=limit-bytes-total={rem_bytes}',
-                                    f'=comment={new_comm}'
-                                ])
-                                client.talk(['/ip/hotspot/user/reset-counters', f'=.id={uid}'])
-                                unbound_count += 1
-
+                    # 5. Unbind MACs if requested (fresh login enforcement)
                     if unbind_macs:
+                        users = client.talk(['/ip/hotspot/user/print', '=.proplist=.id,name,mac-address,disabled'])
+                        for u in [parse_re(x) for x in users if x[0] == '!re']:
+                            mac = u.get('mac-address', '')
+                            if mac and u.get('disabled') != 'true':
+                                client.talk(['/ip/hotspot/user/set', f'=.id={u.get(".id")}', '=mac-address='])
                         client.talk(['/system/script/add', '=name=purge-now', '=source=/ip hotspot cookie remove [find]; /ip hotspot active remove [find]'])
                         client.talk(['/system/script/run', '=number=purge-now'])
                         client.talk(['/system/script/remove', '=numbers=purge-now'])
-                        fixes.append(f"Unbound MACs from {unbound_count} valid vouchers, purged all active sessions & cookies to enforce fresh login.")
+                        fixes.append("Unbound all MACs and purged sessions.")
 
-                    fixes.append(f"Airtight quota engine enforced. Swept users: {disabled_count} disabled/expired.")
             except Exception as fe:
                 issues.append(f"Remediation connection warning: {fe}")
             finally:
@@ -606,48 +391,29 @@ class RouterAuditor:
 
         is_healthy = (len(issues) == 0)
         status_label = "HEALTHY" if is_healthy else "NEEDS_FIX"
-        summary_text = "All airtight rules compliant." if is_healthy else f"Enforcer encountered: {', '.join(issues)}"
+        summary_text = "V3 airtight rules compliant." if is_healthy else f"Enforcer encountered: {', '.join(issues)}"
 
         if db:
             try:
                 conn = db.get_db()
                 c = conn.cursor()
-                c.execute("""
-                CREATE TABLE IF NOT EXISTS router_audits (
+                c.execute("""CREATE TABLE IF NOT EXISTS router_audits (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    router_id INTEGER NOT NULL,
-                    router_name TEXT,
-                    timestamp INTEGER NOT NULL,
-                    is_healthy INTEGER NOT NULL,
-                    issues_json TEXT NOT NULL,
-                    fixes_json TEXT NOT NULL,
-                    summary TEXT NOT NULL
-                );
-                """)
-                c.execute("""
-                INSERT INTO router_audits (router_id, router_name, timestamp, is_healthy, issues_json, fixes_json, summary)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (self.router_id, self.router_name, now, 1 if is_healthy else 0, json.dumps(issues), json.dumps(fixes), summary_text))
-                c.execute("""
-                UPDATE routers 
-                SET last_audit_time = ?, audit_status = ?, audit_summary = ?
-                WHERE id = ?
-                """, (now, status_label, summary_text, self.router_id))
+                    router_id INTEGER NOT NULL, router_name TEXT,
+                    timestamp INTEGER NOT NULL, is_healthy INTEGER NOT NULL,
+                    issues_json TEXT NOT NULL, fixes_json TEXT NOT NULL,
+                    summary TEXT NOT NULL);""")
+                c.execute("INSERT INTO router_audits (router_id, router_name, timestamp, is_healthy, issues_json, fixes_json, summary) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (self.router_id, self.router_name, now, 1 if is_healthy else 0, json.dumps(issues), json.dumps(fixes), summary_text))
+                c.execute("UPDATE routers SET last_audit_time = ?, audit_status = ?, audit_summary = ? WHERE id = ?",
+                    (now, status_label, summary_text, self.router_id))
                 conn.commit()
                 conn.close()
             except Exception as dbe:
-                print(f"Database error storing audit: {dbe}")
+                print(f"DB error: {dbe}")
 
-        return {
-            "router_id": self.router_id,
-            "router_name": self.router_name,
-            "timestamp": now,
-            "healthy": is_healthy,
-            "status": status_label,
-            "issues": issues,
-            "fixes": fixes,
-            "summary": summary_text
-        }
+        return {"router_id": self.router_id, "router_name": self.router_name, "timestamp": now,
+                "healthy": is_healthy, "status": status_label, "issues": issues, "fixes": fixes, "summary": summary_text}
 
 def audit_router_by_id(router_id, auto_fix=True, unbind_macs=False):
     if not db:
@@ -659,8 +425,7 @@ def audit_router_by_id(router_id, auto_fix=True, unbind_macs=False):
     conn.close()
     if not row:
         return {"status": "error", "message": f"Router {router_id} not found."}
-    r_dict = dict(row)
-    auditor = RouterAuditor(r_dict)
+    auditor = RouterAuditor(dict(row))
     return auditor.audit_and_fix(auto_fix=auto_fix, unbind_macs=unbind_macs)
 
 def audit_router_async(router_id, auto_fix=True, unbind_macs=False):
@@ -679,6 +444,6 @@ def audit_all_online_routers(auto_fix=True, unbind_macs=False):
     results = []
     for r in rows:
         auditor = RouterAuditor(dict(r))
-        res = auditor.audit_and_fix(auto_fix=auto_fix, unbind_macs=unbind_macs)
-        results.append(res)
+        results.append(auditor.audit_and_fix(auto_fix=auto_fix, unbind_macs=unbind_macs))
     return results
+
