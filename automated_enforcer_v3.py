@@ -36,6 +36,7 @@ last_offline_sweep = {}
 consecutive_failures = {}
 skip_until = {}
 last_reboot_attempt = {}
+last_probe_time = {}
 REBOOT_COOLDOWN = 600  # 10 min between reboot attempts
 
 
@@ -148,7 +149,11 @@ def reboot_router(host, user="admin", pwd="Khant1234@"):
         return False
 
 def run_fast_active_sweep(router_dict):
-    """Tier 1: Check active sessions only - lightweight"""
+    """Tier 1: Check active sessions only - ULTRA lightweight.
+    Reads quota/time tags from the ACTIVE SESSION comment (returned in 1 API call)
+    instead of querying each user. Only does a targeted user lookup for sessions
+    already clearly at/over their limit. Cuts ~82 API round-trips per sweep to
+    1-3, removing CPU pressure during peak hours."""
     rid = router_dict["id"]
     rname = router_dict["name"]
     host = router_dict["wg_ip"]
@@ -168,12 +173,10 @@ def run_fast_active_sweep(router_dict):
             router_now = datetime.strptime(f"{clock[0].get('date','')} {clock[0].get('time','')}", "%Y-%m-%d %H:%M:%S")
         except: router_now = datetime.now()
 
-        # Active sessions
+        # Active sessions WITH comment in ONE call (no per-user queries)
         act_res = client.talk(['/ip/hotspot/active/print', '=.proplist=.id,user,bytes-in,bytes-out,uptime,comment'])
         actives = [parse_re(x) for x in act_res if x[0] == '!re']
 
-        # CPU-SAFE: NO bulk user fetch! Query each active user individually.
-        # This avoids dumping 1847 users over the API every 60s (was the CPU killer)
         fixes = []
         for a in actives:
             u_name = a.get('user', '')
@@ -181,44 +184,64 @@ def run_fast_active_sweep(router_dict):
 
             aid = a.get('.id')
             session_bytes = int(a.get('bytes-in', 0)) + int(a.get('bytes-out', 0))
+            # Session carries the user comment with [BASE:]/[USED:]/[ORIG-LIMIT:]/[ACT:] tags
+            comm = a.get('comment', '') or ''
 
-            # Targeted per-session query (tiny, 1 row)
-            u_obj = None
-            try:
-                q = client.talk(['/ip/hotspot/user/print', f'?name={u_name}', '=.proplist=.id,name,profile,comment,disabled'])
-                m = [parse_re(x) for x in q if x[0] == '!re']
-                u_obj = m[0] if m else None
-            except Exception:
-                u_obj = None
-            if not u_obj:
-                u_obj = {'name': u_name, 'comment': a.get('comment',''), 'profile': 'default', 'disabled': 'false'}
-
-            uid = u_obj.get('.id')
-            comm = u_obj.get('comment') or a.get('comment', '')
-            prof = u_obj.get('profile', 'default')
-            is_disabled = (u_obj.get('disabled') == 'true')
-
-            # Calculate total bytes
+            # Parse quota from session comment only (NO user query yet)
             base_bytes = 0
             if '[BASE:' in comm:
                 try: base_bytes = int(comm.split('[BASE:')[1].split(']')[0])
                 except: pass
+            orig_lim = parse_orig_limit('', comm)
             total_used = base_bytes + session_bytes
-            orig_lim = parse_orig_limit(prof, comm)
-
             is_quota_exhausted = (orig_lim > 0 and total_used >= orig_lim)
+            is_tagged_expired = ('[EXPIRED:' in comm or '[EXHAUSTED:' in comm)
 
-            # Time check
+            # Time check from session comment
             is_time_expired = False
             if '[ACT:' in comm:
                 try:
                     act_str = comm.split('[ACT:')[1].split(']')[0].strip()
                     act_dt = datetime.strptime(act_str, "%Y-%m-%d %H:%M:%S") if '-' in act_str else datetime.strptime(act_str, "%b/%d/%Y %H:%M:%S")
-                    if router_now >= (act_dt + parse_duration(prof, comm)):
+                    if router_now >= (act_dt + parse_duration('', comm)):
                         is_time_expired = True
                 except: pass
 
-            if is_disabled or is_quota_exhausted or is_time_expired or '[EXPIRED:' in comm or '[EXHAUSTED:' in comm:
+            # Only if NO tags on session comment -> do one targeted user lookup (rare)
+            uid = None
+            if not (base_bytes > 0 or is_time_expired or is_tagged_expired or is_quota_exhausted):
+                try:
+                    q = client.talk(['/ip/hotspot/user/print', f'?name={u_name}', '=.proplist=.id,comment,disabled'])
+                    m = [parse_re(x) for x in q if x[0] == '!re']
+                    if m:
+                        u_obj = m[0]
+                        uid = u_obj.get('.id')
+                        u_comm = u_obj.get('comment') or ''
+                        if u_comm:
+                            comm = u_comm
+                            if '[BASE:' in u_comm:
+                                try: base_bytes = int(u_comm.split('[BASE:')[1].split(']')[0])
+                                except: pass
+                            orig_lim = parse_orig_limit('', u_comm)
+                            total_used = base_bytes + session_bytes
+                            is_quota_exhausted = (orig_lim > 0 and total_used >= orig_lim)
+                        if u_obj.get('disabled') == 'true':
+                            is_quota_exhausted = True
+                        if '[EXPIRED:' in comm or '[EXHAUSTED:' in comm:
+                            is_tagged_expired = True
+                except Exception:
+                    pass
+
+            if is_quota_exhausted or is_time_expired or is_tagged_expired:
+                # For actual violators, ensure we have uid before kicking
+                if not uid:
+                    try:
+                        q = client.talk(['/ip/hotspot/user/print', f'?name={u_name}', '=.proplist=.id'])
+                        m = [parse_re(x) for x in q if x[0] == '!re']
+                        uid = m[0].get('.id') if m else None
+                    except Exception:
+                        pass
+
                 reason = "DATA_QUOTA_EXCEEDED" if is_quota_exhausted else ("TIME_OVERDUE" if is_time_expired else "DISABLED")
                 tag = "[EXHAUSTED:DATA]" if is_quota_exhausted else f"[EXPIRED:{reason}]"
                 new_comm = comm if tag in comm else f"{comm} {tag}".strip()
@@ -350,7 +373,18 @@ def run_enforcement_cycle():
         wg_ip = r_dict.get("wg_ip", "")
         if not wg_ip: continue
 
-        reachable = is_port_open(wg_ip, port=r_dict.get("api_port", 8728), timeout=2.5)
+        # PORT PROBE THROTTLE: only open a TCP probe every 60s per router.
+        # Previously probed every 5s = 12 handshakes/min/router even when idle
+        # -> needless CPU on loaded routers (esp. KyawGyi 1847 users).
+        last_probe = last_probe_time.get(rid, 0.0)
+        probe_now = (now - last_probe) >= 60
+        if probe_now:
+            last_probe_time[rid] = now
+
+        if probe_now:
+            reachable = is_port_open(wg_ip, port=r_dict.get("api_port", 8728), timeout=2.5)
+        else:
+            reachable = online_state.get(rid, False)  # trust last known state between probes
         was_online = online_state.get(rid, False)
 
         if not reachable:
