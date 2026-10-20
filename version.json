@@ -2,6 +2,6 @@
   "versionName": "1.8.0",
   "versionCode": 40,
   "releaseTitle": "Hotspot Manager v1.8.0 - Portal Theme Gallery + Enterprise Modernization",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/releases/download/v1.8.0/HotspotManager-v1.8.0.apk",
-  "releaseNotes": "• 🎨 NEW: Portal Themes - 10 premium captive portal themes (Emerald Glass, Golden Buddha, Sunset Mandalay, Cyber Neon + 6 more) with one-tap deploy, auto price-list & SSID injection\n• 🔧 v1.7.1 fixes preserved: active-session crash fix, expired voucher lockout, CPU spike fix, Revenue Hero dashboard\n• 🏗️ Modernized: dedicated theme screen, context-safe preferences, featured + grid layout\n\nInstall this update to get the latest fixes and the Portal Theme Gallery."
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.8.0.apk",
+  "releaseNotes": "• 🎨 NEW: Portal Themes - 10 premium captive portal themes (Emerald Glass, Golden Buddha, Sunset Mandalay, Cyber Neon + 6 more) with one-tap deploy, auto price-list & SSID injection\n• 🔧 FIXED: active-session crash (app no longer exits when tapping sessions)\n• 🔧 FIXED: expired voucher reuse lockout\n• 🔧 FIXED: router CPU spike (no more API overload)\n• 💰 Revenue Hero dashboard\n• ⚠️ IMPORTANT: This release carries the SAME signature as v1.6.3 - installs OVER it without uninstalling."
 }
