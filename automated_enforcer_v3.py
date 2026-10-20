@@ -37,6 +37,7 @@ consecutive_failures = {}
 skip_until = {}
 last_reboot_attempt = {}
 last_probe_time = {}
+last_version_probe = {}
 REBOOT_COOLDOWN = 600  # 10 min between reboot attempts
 
 
@@ -124,6 +125,14 @@ def record_audit(router_id, router_name, issues, fixes, summary):
             id INTEGER PRIMARY KEY AUTOINCREMENT, router_id INTEGER NOT NULL,
             router_name TEXT, timestamp INTEGER NOT NULL, is_healthy INTEGER NOT NULL,
             issues_json TEXT NOT NULL, fixes_json TEXT NOT NULL, summary TEXT NOT NULL);""")
+        # Ensure routers table has version columns (safe ALTER in case of older DB)
+        cols = [row[1] for row in c.execute("PRAGMA table_info(routers)").fetchall()]
+        if 'routeros_version' not in cols:
+            try: c.execute("ALTER TABLE routers ADD COLUMN routeros_version TEXT DEFAULT ''")
+            except Exception: pass
+        if 'update_available' not in cols:
+            try: c.execute("ALTER TABLE routers ADD COLUMN update_available TEXT DEFAULT ''")
+            except Exception: pass
         c.execute("INSERT INTO router_audits (router_id,router_name,timestamp,is_healthy,issues_json,fixes_json,summary) VALUES (?,?,?,?,?,?,?)",
             (router_id, router_name, now, 1 if not issues else 0, json.dumps(issues), json.dumps(fixes), summary))
         c.execute("UPDATE routers SET last_audit_time=?, audit_status=?, audit_summary=? WHERE id=?",
@@ -131,6 +140,48 @@ def record_audit(router_id, router_name, issues, fixes, summary):
         conn.commit(); conn.close()
     except Exception as e:
         logger.error(f"DB Error: {e}")
+
+
+def probe_router_version(router_id, router_name, host, user, pwd):
+    """Lightweight 1-call RouterOS version + update probe (stored for admin dashboard).
+    Runs on the enforcer's existing connection cadence; never adds a new loop."""
+    if not db: return
+    try:
+        client = RouterOSClient(host, timeout=8.0)
+        client.connect()
+        if client.login(user, pwd):
+            # version from /system/resource (cheap)
+            res = client.talk(['/system/resource/print'])
+            ver = ''
+            for x in res:
+                if x[0] == '!re':
+                    d = parse_re(x)
+                    ver = d.get('version', '') or ''
+            # update availability (only if the router answers quickly)
+            upd = ''
+            try:
+                up = client.talk(['/system/package/update/print'])
+                for x in up:
+                    if x[0] == '!re':
+                        d = parse_re(x)
+                        inst = d.get('installed-version', '') or ''
+                        latest = d.get('latest-version', '') or ''
+                        if latest and latest != inst:
+                            upd = f"{inst} -> {latest}"
+            except Exception:
+                pass
+            client.close()
+            conn = db.get_db()
+            c = conn.cursor()
+            c.execute("UPDATE routers SET routeros_version=?, update_available=? WHERE id=?",
+                (ver, upd, router_id))
+            conn.commit(); conn.close()
+            if upd:
+                logger.info(f"Router {router_id} ({router_name}): update available {upd}")
+    except Exception as e:
+        try: client.close()
+        except Exception: pass
+        logger.error(f"Version probe failed for router {router_id} ({router_name}): {e}")
 
 
 def reboot_router(host, user="admin", pwd="Khant1234@"):
@@ -408,6 +459,16 @@ def run_enforcement_cycle():
 
         just_came_online = (not was_online)
         online_state[rid] = True
+
+        # Version + update probe (every 6h or on boot) for admin dashboard
+        ver_elapsed = now - last_version_probe.get(rid, 0)
+        if just_came_online or ver_elapsed >= 21600:
+            last_version_probe[rid] = now
+            try:
+                probe_router_version(rid, rname, wg_ip,
+                    r_dict.get("api_user", "admin"), r_dict.get("api_pass", "Khant1234@"))
+            except Exception as e:
+                logger.error(f"Version probe error on router {rid} ({rname}): {e}")
 
         # Tier 1: Fast Active Sweep (every 60s)
         skip_end = skip_until.get(rid, 0)

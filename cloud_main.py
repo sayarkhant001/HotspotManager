@@ -907,6 +907,99 @@ def set_router_identity(rid: int, req: RouterIdentityRequest, current_user: dict
         conn.close()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/routers/{rid}/check-updates")
+def check_router_updates(rid: int, current_user: dict = Depends(get_current_user)):
+    """Checks RouterOS package + RouterBOOT firmware for updates."""
+    conn = db.get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM routers WHERE id = ?", (rid,))
+    r = c.fetchone()
+    conn.close()
+    if not r: raise HTTPException(status_code=404, detail="Router not found")
+    if current_user["role"] != "admin" and r["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    client = mk.RouterOSClient(r["wg_ip"], r["api_port"], timeout=15.0)
+    try:
+        client.connect()
+        if not client.login(r["api_user"], r["api_pass"]):
+            client.close()
+            raise HTTPException(status_code=400, detail="API Login failed")
+        try:
+            client.talk(['/system/package/update/check-for-updates'])
+        except Exception:
+            pass  # some versions need this; ignore if unsupported
+        up = client.talk(['/system/package/update/print'])
+        up_data = {}
+        for row in up:
+            if row and row[0] == '!re':
+                for item in row[1:]:
+                    if item.startswith('=') and '=' in item[1:]:
+                        k, v = item[1:].split('=', 1)
+                        up_data[k] = v
+        rb = client.talk(['/system/routerboard/print'])
+        rb_data = {}
+        for row in rb:
+            if row and row[0] == '!re':
+                for item in row[1:]:
+                    if item.startswith('=') and '=' in item[1:]:
+                        k, v = item[1:].split('=', 1)
+                        rb_data[k] = v
+        client.close()
+
+        installed = up_data.get('installed-version', '')
+        latest = up_data.get('latest-version', '')
+        current_fw = rb_data.get('current-firmware', '')
+        upgrade_fw = rb_data.get('upgrade-firmware', '')
+        has_update = bool(latest) and latest != installed
+        has_fw_update = bool(upgrade_fw) and upgrade_fw != current_fw
+
+        return {
+            "status": "ok",
+            "installed_version": installed,
+            "latest_version": latest,
+            "channel": up_data.get('channel', ''),
+            "has_update": has_update,
+            "has_firmware_update": has_fw_update,
+            "current_firmware": current_fw,
+            "upgrade_firmware": upgrade_fw,
+            "update_available_text": f"{installed} -> {latest}" if has_update else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        try: client.close()
+        except Exception: pass
+        raise HTTPException(status_code=500, detail=f"Could not check updates: {str(e)}")
+
+
+@app.post("/api/routers/{rid}/install-update")
+def install_router_update(rid: int, current_user: dict = Depends(get_current_user)):
+    """Triggers RouterOS package download + upgrade (router reboots automatically)."""
+    conn = db.get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM routers WHERE id = ?", (rid,))
+    r = c.fetchone()
+    conn.close()
+    if not r: raise HTTPException(status_code=404, detail="Router not found")
+    if current_user["role"] != "admin" and r["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    client = mk.RouterOSClient(r["wg_ip"], r["api_port"], timeout=10.0)
+    try:
+        client.connect()
+        if not client.login(r["api_user"], r["api_pass"]):
+            client.close()
+            raise HTTPException(status_code=400, detail="API Login failed")
+        client.talk(['/system/package/update/install'])
+        client.close()
+        return {"status": "ok", "message": "Update install dispatched. Router is downloading and will reboot automatically."}
+    except Exception as e:
+        try: client.close()
+        except Exception: pass
+        return {"status": "ok", "message": f"Install dispatched (connection may drop as router updates): {str(e)}"}
+
+
 @app.get("/api/routers/{rid}/logs")
 def get_router_logs(rid: int, limit: int = 100, current_user: dict = Depends(get_current_user)):
     conn = db.get_db()
