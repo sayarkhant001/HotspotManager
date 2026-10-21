@@ -1,7 +1,7 @@
 {
-  "versionName": "1.10.1",
-  "versionCode": 45,
-  "releaseTitle": "Hotspot Manager v1.10.1 - Exact Voucher Tabs + Readable Metrics",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.10.1.apk",
-  "releaseNotes": "• 📊 VOUCHER TABS NOW EXACT: Using / Expired / Unused always add up to the total. Expired contains ONLY quota-finished or time-due vouchers — a live session is never in Expired (live + 10-min recently-online sticky protection). Partially-consumed vouchers with remaining data/time stay in Unused (sellable again).\n• 🗑️ SAFE CLEANUP: 'Delete used' now removes ONLY provably finished vouchers and protects every live + recently-online customer (no accidental kicks).\n• 🎨 READABILITY FIX: usage metrics & badge text no longer use dark-green-on-pale colors — theme-aware bright emerald/cyan in dark mode, deep green on light.\n• 🧪 8 new unit tests proving quota-full/time-due/using-protection/exhaustiveness math.\n• 🖥️ FEATURES.md + SETUP_GUIDE.md + portal_templates/README.md docs shipped.\n• 🔒 v1.10.0 features preserved: Flow Control (32 services/8 groups), Live Topology, MikroPilot theme, 10 portal templates, exact V3 quota/time enforcement (CPU-safe).\n\nInstall over v1.10.0/v1.9.2 — same signature, no uninstall."
+  "versionName": "1.10.2",
+  "versionCode": 46,
+  "releaseTitle": "Hotspot Manager v1.10.2 - Voucher Card Layout Fix (No More Overlap)",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.10.2.apk",
+  "releaseNotes": "• 📱 VOUCHER CARD OVERLAP FIX: the 'using quota' (used/limit MB) number and the 'time' (uptime / time-left) numbers no longer print over each other on the vouchers list. The time cluster is now a single bounded, ellipsized text and the quota number automatically shrinks (…) on narrow screens.\n• 🎨 Time-left text now uses the readable theme-aware green.\n• 🔧 v1.10.1 preserved: exact Using/Expired/Unused tab math, safe cleanup, readable usage metrics.\n\nInstall over v1.10.1/v1.10.0/v1.9.2 — same signature, no uninstall."
 }

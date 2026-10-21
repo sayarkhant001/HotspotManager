@@ -913,7 +913,7 @@ fun VoucherItemCard(
                         Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
@@ -922,31 +922,25 @@ fun VoucherItemCard(
                                     fontWeight = FontWeight.Bold,
                                     color = containerColor,
                                     maxLines = 1,
-                                    softWrap = false,
-                                    modifier = Modifier.weight(1f, fill = false)
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
                                 )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (effectiveUptime.isNotBlank()) {
-                                        Text(
-                                            text = "⏱ $effectiveUptime",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                    }
-                                    if (effectiveTimeLeft.isNotBlank()) {
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "⌛ $effectiveTimeLeft",
-                                            fontSize = 9.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFF10B981),
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                    }
+                                // Time cluster as ONE bounded, ellipsized Text so it can
+                                // never run over the quota numbers.
+                                val timeParts = buildList {
+                                    if (effectiveUptime.isNotBlank()) add("⏱ $effectiveUptime")
+                                    if (effectiveTimeLeft.isNotBlank()) add("⌛ $effectiveTimeLeft")
+                                }
+                                if (timeParts.isNotEmpty()) {
+                                    Text(
+                                        text = timeParts.joinToString("   "),
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (effectiveTimeLeft.isNotBlank()) successText() else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.widthIn(max = 150.dp)
+                                    )
                                 }
                             }
                             if (limitMb > 0) {
