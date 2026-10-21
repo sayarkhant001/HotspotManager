@@ -669,6 +669,38 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         }
     }
 
+
+    fun deployServiceBlocks(blockedServiceIds: Set<String>) {
+        if (blockedServiceIds.isEmpty() && activeUsers.value.isEmpty()) {
+            userMessage.value = "✓ No services blocked — all traffic allowed."
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val sb = StringBuilder()
+                // Remove old AppBlock rules first
+                sb.append("/ip firewall filter remove [find comment~AppBlock];\n")
+                if (blockedServiceIds.isNotEmpty()) {
+                    val services = com.example.domain.models.APP_SERVICE_CATEGORIES
+                    blockedServiceIds.forEach { id ->
+                        val svc = services.firstOrNull { it.id == id } ?: return@forEach
+                        svc.domains.forEach { domain ->
+                            sb.append("/ip firewall filter add chain=forward action=drop dst-address-list=$domain comment=AppBlock:$id disabled=no;\n")
+                        }
+                        svc.cidrs.forEach { cidr ->
+                            sb.append("/ip firewall filter add chain=forward action=drop dst-address=$cidr comment=AppBlock:$id disabled=no;\n")
+                        }
+                    }
+                }
+                repository.mikrotikClient.executeScript(sb.toString())
+                    userMessage.value = "✓ ${blockedServiceIds.size} service(s) blocked."
+            } catch (e: Exception) {
+                userMessage.value = "✗ Error deploying blocks: ${e.localizedMessage}"
+            }
+        }
+    }
+
+
     fun onPortalFileSelected(context: Context, uri: android.net.Uri) {
         selectedPortalFileUri.value = uri
         viewModelScope.launch(Dispatchers.IO) {

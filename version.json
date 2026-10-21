@@ -1,7 +1,7 @@
 {
-  "versionName": "1.9.1",
-  "versionCode": 42,
-  "releaseTitle": "Hotspot Manager v1.9.1 - Active Sessions Crash Fix (2-layer) + Crash Logger",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.9.1.apk",
-  "releaseNotes": "• 🛡️ ACTIVE SESSIONS CRASH FIXED (2-layer):\n   - Layer 1 (source): duplicate router session rows are now de-duplicated by user+MAC+IP before reaching the UI — the real cause of 'Key was already used' crashes.\n   - Layer 2 (UI): session list key is now a unique content composite (never just .id) so identical rows can never collide.\n• 🛡️ NEW: Global Crash Logger — if an unexpected exit EVER happens again, the app records the full stack trace (Settings > Diagnostics > Last Crash) so we can fix it instantly without guessing.\n• 📶 Seamless install over v1.6.3 / v1.8.0 / v1.9.0 (same signature) — no uninstall needed.\n\nIf you still see a crash after updating, open Settings > Last Crash and tell me the stack trace — it will be preserved forever."
+  "versionName": "1.9.2",
+  "versionCode": 43,
+  "releaseTitle": "Hotspot Manager v1.9.2 - App Flow Control (Block Facebook/YouTube/TikTok)",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.9.2.apk",
+  "releaseNotes": "• 🛡️ NEW: App Flow Control — block Facebook, YouTube, TikTok, Telegram, WhatsApp, Netflix, PUBG, Free Fire and more per plan from the app dashboard (Dashboard > App Flow Control)\n• 🛡️ Toggle services ON/OFF with a single tap — applies MikroTik firewall Layer7 rules instantly to the router\n• 🔧 v1.9.1 fixes preserved: Active Sessions crash fix, delete-safety, readable theme, crash logger\n\nInstall over v1.9.1/v1.8.0/v1.6.3 — same signature, no uninstall."
 }

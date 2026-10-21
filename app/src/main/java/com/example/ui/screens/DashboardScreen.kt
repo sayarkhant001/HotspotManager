@@ -881,6 +881,12 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 icon = Icons.Default.FormatPaint,
                 onClick = { navController.navigate("portal_themes") }
             )
+            DashboardMenuCard(
+                title = "App Flow Control",
+                subtitle = "Block Facebook, YouTube, TikTok, Gaming per plan",
+                icon = Icons.Default.Shield,
+                onClick = { navController.navigate("flow_control") }
+            )
         }
 
         // GitHub App Update Dialog

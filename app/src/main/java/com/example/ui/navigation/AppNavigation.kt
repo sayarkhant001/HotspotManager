@@ -1,4 +1,4 @@
-package com.example.ui.navigation
+﻿package com.example.ui.navigation
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -177,6 +177,9 @@ fun AppNavigation(repository: AppRepository, startRoute: String? = null) {
                 composable("portal_themes") {
                     PortalThemeScreen(viewModel = viewModel, navController = navController)
                 }
+                composable("flow_control") {
+                    AppFlowControlScreen(viewModel = viewModel, navController = navController)
+                }
             }
         }
     }
@@ -191,3 +194,4 @@ fun AppNavigation(repository: AppRepository, startRoute: String? = null) {
         }
     }
 }
+
