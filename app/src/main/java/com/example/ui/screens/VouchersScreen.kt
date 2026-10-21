@@ -910,10 +910,13 @@ fun VoucherItemCard(
                 val liveOut = activeUser?.bytesOut?.toLongOrNull() ?: 0L
                 val liveBytes = liveIn + liveOut
 
-                // Parse tags from comment: [USED:12345] [USED-UP:4h12m] [ORIG-LIMIT:2147483648]
+                // Parse tags from comment: [USED:12345] [USED-UP:4h12m] [ORIG-LIMIT:2147483648] [ORIG-UP:2d]
                 val commentUsedBytes = Regex("\\[USED:(\\d+)\\]").find(voucher.comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
                 val commentUptime = Regex("\\[USED-UP:([^\\]]+)\\]").find(voucher.comment)?.groupValues?.get(1)?.trim() ?: ""
                 val commentOrigLimit = Regex("\\[ORIG-LIMIT:(\\d+)\\]").find(voucher.comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+                val commentOrigUpSec = parseRouterOsUptimeSeconds(
+                    Regex("\\[ORIG-UP:([^\\]]+)\\]").find(voucher.comment)?.groupValues?.get(1)?.trim() ?: ""
+                )
 
                 val limitMb: Int = when {
                     activeUser != null && activeUser.quotaTotalMb > 0 -> activeUser.quotaTotalMb
@@ -921,30 +924,33 @@ fun VoucherItemCard(
                     commentOrigLimit > 0L -> (commentOrigLimit / (1024L * 1024L)).toInt()
                     else -> 0
                 }
-
                 val limitBytes = if (limitMb > 0) limitMb.toLong() * 1024L * 1024L else 0L
 
                 val isExhaustedOrCutoff = voucher.comment.contains("EXHAUSTED", ignoreCase = true) ||
                     voucher.comment.contains("[CUTOFF]", ignoreCase = true) ||
                     voucher.comment.contains("[EXPIRED:", ignoreCase = true)
 
-                val rawConsumedBytes = maxOf(
+                // REAL cumulative consumed bytes — live session + router counters + the
+                // enforcer's [USED:] tag (which survives counter resets). We show the truth,
+                // NOT a fabricated full quota.
+                val knownConsumedBytes = maxOf(
                     liveBytes,
                     voucher.bytesIn + voucher.bytesOut,
                     commentUsedBytes
                 )
 
-                val totalConsumedBytes = if (isExhaustedOrCutoff && limitBytes > 0L) {
-                    maxOf(rawConsumedBytes, limitBytes)
-                } else rawConsumedBytes
-
                 val usedMb: Int = when {
                     activeUser != null && activeUser.quotaUsedMb > 0 -> activeUser.quotaUsedMb.toInt()
-                    // If voucher is used, has quota limit, and was exhausted or reached >=95%: show full quota (e.g. 50 / 50 MB)
-                    limitMb > 0 && (isExhaustedOrCutoff || (limitBytes > 0L && totalConsumedBytes >= (limitBytes * 95L / 100L))) -> limitMb
-                    // If voucher is marked used and session ended, but raw bytes were 0: show full quota
-                    limitMb > 0 && voucher.isUsed && !isOnline && (totalConsumedBytes == 0L || voucher.uptime.isNotBlank()) -> limitMb
-                    totalConsumedBytes > 0L -> (totalConsumedBytes / (1024L * 1024L)).toInt()
+                    // Genuinely exhausted (or >=95%): the whole quota WAS consumed.
+                    limitMb > 0 && (isExhaustedOrCutoff || (limitBytes > 0L && knownConsumedBytes >= (limitBytes * 95L / 100L))) -> limitMb
+                    // REAL usage is known → show exactly what was used (a partially used voucher
+                    // must NOT display the full quota).
+                    knownConsumedBytes > 0L -> {
+                        val mb = (knownConsumedBytes / (1024L * 1024L)).toInt()
+                        if (limitMb > 0) mb.coerceIn(0, limitMb) else mb
+                    }
+                    // Used but with NO captured byte data (legacy) → show the plan quota so the
+                    // card still communicates the package; real data replaces it on next sync.
                     voucher.isUsed && limitMb > 0 && !isOnline -> limitMb
                     else -> 0
                 }
@@ -956,12 +962,33 @@ fun VoucherItemCard(
                     else -> ""
                 }
 
+                // REAL remaining TIME — the router enforces a continuous countdown
+                // (deadline = activation + original validity), so we can compute the true
+                // time left even for vouchers that are currently offline.
+                val validitySec = when {
+                    commentOrigUpSec > 0L -> commentOrigUpSec
+                    voucher.durationMinutes > 0 -> voucher.durationMinutes * 60L
+                    voucher.validityDays > 0 -> voucher.validityDays * 86400L
+                    else -> 0L
+                }
+                val activatedAtMs = voucher.activatedAt ?: 0L
+                val remainingTimeSec = if (
+                    validitySec > 0L &&
+                    activatedAtMs > 0L &&
+                    activatedAtMs <= System.currentTimeMillis()
+                ) {
+                    ((activatedAtMs + validitySec * 1000L - System.currentTimeMillis()) / 1000L).coerceAtLeast(0L)
+                } else 0L
+
                 val effectiveTimeLeft: String = when {
                     activeUser != null && activeUser.sessionTimeLeft.isNotBlank() && activeUser.sessionTimeLeft != "0s" -> activeUser.sessionTimeLeft
+                    remainingTimeSec > 0L -> formatCompactDuration(remainingTimeSec)
                     else -> ""
                 }
 
-                val shouldShowConsumption = isOnline || activeUser != null || voucher.isUsed || usedMb > 0 || effectiveUptime.isNotBlank()
+                val remainingQuotaMb = if (limitMb > 0 && usedMb in 1 until limitMb) limitMb - usedMb else 0
+
+                val shouldShowConsumption = isOnline || activeUser != null || voucher.isUsed || usedMb > 0 || effectiveUptime.isNotBlank() || effectiveTimeLeft.isNotBlank() || remainingQuotaMb > 0
 
                 if (shouldShowConsumption) {
                     val progress = if (limitMb > 0) (usedMb.toFloat() / limitMb.toFloat()).coerceIn(0f, 1f) else 1f
@@ -981,7 +1008,12 @@ fun VoucherItemCard(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = if (limitMb > 0) "$usedMb / $limitMb MB" else "$usedMb MB",
+                                    text = when {
+                                        limitMb > 0 && remainingQuotaMb > 0 -> "$usedMb / $limitMb MB • ${remainingQuotaMb} MB left"
+                                        limitMb > 0 -> "$usedMb / $limitMb MB"
+                                        usedMb > 0 -> "$usedMb MB"
+                                        else -> ""
+                                    },
                                     fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = containerColor,
@@ -1064,6 +1096,48 @@ fun parseRouterOsUptimeMinutes(uptime: String): Int {
     val m = Regex("(\\d+)\\s*m").find(uptime)?.groupValues?.get(1)?.toIntOrNull() ?: 0
     val s = Regex("(\\d+)\\s*s").find(uptime)?.groupValues?.get(1)?.toIntOrNull() ?: 0
     return (w * 7 * 24 * 60) + (d * 24 * 60) + (h * 60) + m + (if (s > 30) 1 else 0)
+}
+
+/** Parse a RouterOS duration ("1d2h3m", "23:59:59", "4h12m") into total seconds. */
+fun parseRouterOsUptimeSeconds(uptime: String): Long {
+    if (uptime.isBlank() || uptime == "0s") return 0L
+    val clean = uptime.trim().lowercase()
+    if (clean.contains(":")) {
+        val parts = clean.split(":")
+        return when (parts.size) {
+            3 -> (parts[0].toLongOrNull() ?: 0L) * 3600 + (parts[1].toLongOrNull() ?: 0L) * 60 + (parts[2].toLongOrNull() ?: 0L)
+            2 -> (parts[0].toLongOrNull() ?: 0L) * 60 + (parts[1].toLongOrNull() ?: 0L)
+            else -> 0L
+        }
+    }
+    var total = 0L
+    Regex("(\\d+)([wdhms])").findAll(clean).forEach { m ->
+        val v = m.groupValues[1].toLongOrNull() ?: 0L
+        when (m.groupValues[2]) {
+            "w" -> total += v * 7 * 86400
+            "d" -> total += v * 86400
+            "h" -> total += v * 3600
+            "m" -> total += v * 60
+            "s" -> total += v
+        }
+    }
+    return total
+}
+
+/** Compact "3d 4h", "5h 20m", "1m 30s", "45s" formatting for remaining time. */
+fun formatCompactDuration(seconds: Long): String {
+    if (seconds <= 0L) return "0s"
+    val d = seconds / 86400
+    val h = (seconds % 86400) / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return buildString {
+        if (d > 0) append("${d}d")
+        if (h > 0) { if (isNotEmpty()) append(" "); append("${h}h") }
+        if (m > 0) { if (isNotEmpty()) append(" "); append("${m}m") }
+        if (s > 0) { if (isNotEmpty()) append(" "); append("${s}s") }
+        if (isEmpty()) append("0s")
+    }
 }
 
 fun Voucher.isExpired(activeCodes: Set<String> = emptySet()): Boolean =

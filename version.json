@@ -1,7 +1,7 @@
 {
-  "versionName": "1.10.5",
-  "versionCode": 49,
-  "releaseTitle": "Hotspot Manager v1.10.5 - Readable Dashboard Sales Card",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.10.5.apk",
-  "releaseNotes": "• 🎨 DASHBOARD SALES CARD FIX: the Activated Voucher Sales (top) card no longer uses invisible bright-green-on-pale text. Light mode now shows a soft mint card with dark green figures; dark mode a deep emerald panel with bright mint text — the Ks amount, title, Top profile and Sell More are now clearly readable in both themes.\n• 🔒 v1.10.4 preserved: Total Vouchers summary card, Myanmar/English localization, long-term voucher protection."
+  "versionName": "1.10.6",
+  "versionCode": 50,
+  "releaseTitle": "Hotspot Manager v1.10.6 - Real Remaining Quota & Time on Used Vouchers",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.10.6.apk",
+  "releaseNotes": "• 📊 REAL USAGE ON USED VOUCHERS: when a customer activates a voucher, uses part of their data/time and leaves the network, the Vouchers card now shows the TRUE numbers instead of the full package — e.g. \"120 / 768 MB • 648 MB left\" and \"⌛ 23h 30m left\" (continuous-countdown remaining time works offline too).\n• 🔍 Customer Quota lookup now also shows the real Time Remaining.\n• ♦️ Truly exhausted vouchers still show 100% consumed.\n• 🔒 v1.10.5 preserved: readable sales hero card, total vouchers card, long-term voucher protection."
 }

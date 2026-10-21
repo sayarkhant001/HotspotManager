@@ -1387,6 +1387,29 @@ fun CustomerQuotaLookupDialog(
                                 Text("Uptime: ${v.uptime}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
 
+                            // Real remaining TIME (continuous countdown): deadline = activation + original validity
+                            val lookupOrigUpSec = parseRouterOsUptimeSeconds(
+                                Regex("\\[ORIG-UP:([^\\]]+)\\]").find(v.comment)?.groupValues?.get(1)?.trim() ?: ""
+                            )
+                            val lookupValiditySec = when {
+                                lookupOrigUpSec > 0L -> lookupOrigUpSec
+                                v.durationMinutes > 0 -> v.durationMinutes * 60L
+                                v.validityDays > 0 -> v.validityDays * 86400L
+                                else -> 0L
+                            }
+                            val lookupAct = v.activatedAt ?: 0L
+                            val lookupTimeLeft = if (lookupValiditySec > 0L && lookupAct > 0L && lookupAct <= System.currentTimeMillis()) {
+                                ((lookupAct + lookupValiditySec * 1000L - System.currentTimeMillis()) / 1000L).coerceAtLeast(0L)
+                            } else 0L
+                            if (lookupTimeLeft > 0L) {
+                                Text(
+                                    "Time Remaining: ${formatCompactDuration(lookupTimeLeft)}",
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = successText(),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+
                             activeSession?.let { s ->
                                 Spacer(Modifier.height(4.dp))
                                 Text("Connected IP: ${s.address}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp))

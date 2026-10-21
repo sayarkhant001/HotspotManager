@@ -580,13 +580,15 @@ class AppRepository(
                 u.comment.contains("[EXPIRED:", ignoreCase = true) ||
                 (u.disabled && u.limitBytesTotal == 1L)
 
+            // NEVER fabricate "full quota consumed" for a partially used voucher: real
+            // consumption comes from the router counters, the [USED:]/[BASE:] enforcer tags
+            // (they survive counter resets) and the limit-bytes-total balance. The old fallback
+            // inflated any used-with-uptime voucher to 100% even when it had only used a slice.
             val totalCumulative = when {
                 isExhaustedOrCutoff && originalLimitBytes > 0L -> maxOf(originalLimitBytes, hardwareUsed, routerRecordedUsed)
                 hardwareUsed > 0L -> maxOf(hardwareUsed, routerRecordedUsed)
                 routerRecordedUsed > 0L -> routerRecordedUsed
                 existingTotal > 0L -> existingTotal
-                // Fallback for used vouchers with quota that completed session
-                isUsed && originalLimitBytes > 0L && (isExhaustedOrCutoff || u.uptime.isNotBlank()) -> originalLimitBytes
                 else -> 0L
             }
 
