@@ -49,7 +49,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.domain.models.UserProfile
 import com.example.domain.models.Voucher
+import com.example.domain.models.VoucherStatus
+import com.example.domain.models.VoucherStatusResolver
 import com.example.ui.components.GlassCard
+import com.example.ui.theme.successText
 import com.example.utils.BluetoothPrinterDevice
 import com.example.utils.BluetoothThermalPrinter
 import com.example.utils.LanguageManager
@@ -63,7 +66,10 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
     val profiles by viewModel.profiles.collectAsStateWithLifecycle()
     val isSyncing by viewModel.isSyncingVouchers.collectAsStateWithLifecycle()
     val activeUsers by viewModel.activeUsers.collectAsStateWithLifecycle()
-    val activeCodes = remember(activeUsers) { activeUsers.map { it.user }.toSet() }
+    val stickyActiveCodes by viewModel.stickyActiveCodes.collectAsStateWithLifecycle()
+    val activeCodes = remember(activeUsers, stickyActiveCodes) {
+        activeUsers.map { it.user }.toSet() + stickyActiveCodes
+    }
     val activeUsersMap = remember(activeUsers) { activeUsers.associateBy { it.user } }
     val userMsg by viewModel.userMessage.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -98,11 +104,18 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
     var showDeleteAllUsedDialog by remember { mutableStateOf(false) }
     var showDeleteSelectedDialog by remember { mutableStateOf(false) }
 
-    val usingCount = vouchers.count { it.isCurrentlyUsing(activeCodes) }
-    val expiredCount = vouchers.count { it.isExpired(activeCodes) }
-    val usedCount = vouchers.count { (it.isUsed || it.isExpired(activeCodes)) && !it.isCurrentlyUsing(activeCodes) }
-    val unprintedCount = vouchers.count { !it.isPrinted && !it.isUsed && !it.isExpired(activeCodes) && !it.isCurrentlyUsing(activeCodes) }
-    val printedCount = vouchers.count { it.isPrinted && !it.isUsed && !it.isExpired(activeCodes) && !it.isCurrentlyUsing(activeCodes) }
+    // ── EXACT VOUCHER STATUS COUNTS ─────────────────────────────────────
+    // USING / EXPIRED / UNUSED are mutually exclusive and always add up to
+    // the grand total. EXPIRED contains ONLY quota-fulled / time-dued
+    // vouchers (never a live session). UNUSED = sellable stock incl.
+    // partially-consumed vouchers that still hold remaining quota/time.
+    val usingCount = vouchers.count { it.statusOf(activeCodes) == VoucherStatus.USING }
+    val expiredCount = vouchers.count { it.statusOf(activeCodes) == VoucherStatus.EXPIRED }
+    val unusedCount = vouchers.count { it.statusOf(activeCodes) == VoucherStatus.UNUSED }
+    // isUsed history = any voucher that ever connected (independent axis).
+    val usedCount = vouchers.count { it.isUsed }
+    val unprintedCount = vouchers.count { !it.isPrinted }
+    val printedCount = vouchers.count { it.isPrinted }
 
     val filteredVouchers = remember(vouchers, searchQuery, selectedProfileFilter, printFilterMode, activeCodes) {
         vouchers.filter { v ->
@@ -110,12 +123,14 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                 v.code.contains(searchQuery, ignoreCase = true) ||
                 v.profileName.contains(searchQuery, ignoreCase = true)
             val matchesProfile = selectedProfileFilter == null || v.profileName == selectedProfileFilter
+            val status = v.statusOf(activeCodes)
             val matchesPrint = when (printFilterMode) {
-                "USING" -> v.isCurrentlyUsing(activeCodes)
-                "EXPIRED" -> v.isExpired(activeCodes)
-                "USED" -> (v.isUsed || v.isExpired(activeCodes)) && !v.isCurrentlyUsing(activeCodes)
-                "UNPRINTED" -> !v.isPrinted && !v.isUsed && !v.isExpired(activeCodes) && !v.isCurrentlyUsing(activeCodes)
-                "PRINTED" -> v.isPrinted && !v.isUsed && !v.isExpired(activeCodes) && !v.isCurrentlyUsing(activeCodes)
+                "USING" -> status == VoucherStatus.USING
+                "EXPIRED" -> status == VoucherStatus.EXPIRED
+                "UNUSED" -> status == VoucherStatus.UNUSED
+                "USED" -> v.isUsed && status != VoucherStatus.USING
+                "UNPRINTED" -> !v.isPrinted
+                "PRINTED" -> v.isPrinted
                 else -> true
             }
             matchesSearch && matchesProfile && matchesPrint
@@ -234,6 +249,19 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Color(0xFF0284C7).copy(alpha = 0.2f),
                             selectedLabelColor = Color(0xFF0284C7)
+                        )
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = printFilterMode == "UNUSED",
+                        onClick = {
+                            printFilterMode = if (printFilterMode == "UNUSED") "ALL" else "UNUSED"
+                        },
+                        label = { Text("${strings.filterUnused} ($unusedCount)") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFF00D4FF).copy(alpha = 0.16f),
+                            selectedLabelColor = Color(0xFF00D4FF)
                         )
                     )
                 }
@@ -980,56 +1008,23 @@ fun parseRouterOsUptimeMinutes(uptime: String): Int {
     return (w * 7 * 24 * 60) + (d * 24 * 60) + (h * 60) + m + (if (s > 30) 1 else 0)
 }
 
-fun Voucher.isExpired(activeCodes: Set<String> = emptySet()): Boolean {
-    // A voucher currently being used is ACTIVE, never expired!
-    if (activeCodes.contains(code) || activeCodes.contains(username)) return false
-    // Also protect against hyphen/case mismatches in live session codes
-    val normActive = activeCodes.map { it.replace("-", "").trim().lowercase() }.toSet()
-    if (normActive.contains(code.replace("-", "").trim().lowercase()) ||
-        normActive.contains(username.replace("-", "").trim().lowercase())) return false
+fun Voucher.isExpired(activeCodes: Set<String> = emptySet()): Boolean =
+    VoucherStatusResolver.isExpired(
+        code = code, username = username, comment = comment,
+        activatedAt = activatedAt, validityDays = validityDays,
+        isUsed = isUsed, dataLimitMb = dataLimitMb, activeCodes = activeCodes
+    )
 
-    // 1. Explicit router truth tags (set by the V3 enforcement engine on the
-    //    router). THESE are the ONLY reliable "expired" markers — our own local
-    //    dataLimitMb / durationMinutes can be stale and wrongly mark live
-    //    vouchers as expired, which has caused active users to be kicked.
-    if (comment.contains("[EXPIRED:", ignoreCase = true)) return true
-    if (comment.contains("[EXHAUSTED:", ignoreCase = true)) return true
-    // Legacy friendly marker (older portals wrote "expired" plain text) —
-    // still only trust the explicit status keywords, never bare profile text.
-    val lowered = comment.lowercase()
-    if (lowered.contains("[expired]") || lowered.contains("expired=true")) return true
+fun Voucher.isCurrentlyUsing(activeCodes: Set<String> = emptySet()): Boolean =
+    VoucherStatusResolver.isCurrentlyUsing(code, username, activeCodes)
 
-    // 2. Expired by continuous calendar validity ONLY when the voucher truly
-    //    carries fresh activation data AND flag is explicit in router comment.
-    //    (Local activatedAt alone is not authoritative for imported vouchers.)
-    val actTime = activatedAt
-    if (actTime != null && validityDays > 0 && comment.isNotBlank()) {
-        // Only treat as expired if we also see a corresponding RUNABLE marker
-        // [ACT: ...] in the comment (i.e. the router KNOWS the activation time).
-        if (comment.contains("[ACT:", ignoreCase = true)) {
-            val validityMs = validityDays * 24L * 60L * 60L * 1000L
-            if (System.currentTimeMillis() - actTime >= validityMs) return true
-        }
-    }
-
-    // 3. Local quota/time — use ONLY as a soft hint when the router already
-    //    shows exhaustion via [USED:] >= [ORIG-LIMIT:], never from our own
-    //    configured dataLimitMb (which can disagree with the router).
-    val commentOrig = Regex("\\[ORIG-LIMIT:(\\d+)\\]").find(comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
-    val commentUsedBytes = Regex("\\[USED:(\\d+)\\]").find(comment)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
-    if (commentOrig > 0L && commentUsedBytes >= commentOrig) return true
-
-    return false
-}
-
-fun Voucher.isCurrentlyUsing(activeCodes: Set<String> = emptySet()): Boolean {
-    if (activeCodes.contains(code)) return true
-    if (activeCodes.contains(username)) return true
-    val codeNorm = code.replace("-", "").trim().lowercase()
-    val userNorm = username.replace("-", "").trim().lowercase()
-    val normActive = activeCodes.map { it.replace("-", "").trim().lowercase() }.toSet()
-    return normActive.contains(codeNorm) || normActive.contains(userNorm)
-}
+/** Exact lifecycle status — mutually exclusive + exhaustive (USING / EXPIRED / UNUSED). */
+fun Voucher.statusOf(activeCodes: Set<String> = emptySet()): VoucherStatus =
+    VoucherStatusResolver.statusOf(
+        code = code, username = username, comment = comment,
+        activatedAt = activatedAt, validityDays = validityDays,
+        isUsed = isUsed, dataLimitMb = dataLimitMb, activeCodes = activeCodes
+    )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1838,7 +1833,7 @@ fun BulkGenerateVouchersDialog(
                                                 text = "⭐ 8-Box Standard",
                                                 fontSize = 9.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF1B5E20),
+                                                color = successText(),
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                             )
                                         }
@@ -1930,7 +1925,7 @@ fun BulkGenerateVouchersDialog(
                                             text = "ကုဒ်နံပါတ် ${rawCodeLen} လုံးသည် ပရင်တာ စက္ကူလိပ်နှင့် Captive Portal တွင် အလိုအလျောက် အံဝင်ခွင်ကျဖြစ်ပြီး အဆင်ပြေစွာ ရိုက်ထည့်အသုံးပြုနိုင်ပါသည်။ (4 to 12 digits auto-fit on printer & captive portal)",
                                             style = MaterialTheme.typography.bodySmall,
                                             fontSize = 11.sp,
-                                            color = Color(0xFF1B5E20)
+                                            color = successText()
                                         )
                                     } else {
                                         Text(

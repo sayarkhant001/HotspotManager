@@ -93,6 +93,16 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     val cpuLoadHistory = MutableStateFlow<List<Float>>(listOf(5f, 10f, 7f, 12f, 8f, 15f))
     val activeUsers = MutableStateFlow<List<ActiveUser>>(emptyList())
 
+    // Last-known online voucher codes. When the app briefly loses the router
+    // (poll gap / reconnect), these keep live customers classified as USING so
+    // they never drop into the EXPIRED tab or get deleted by cleanup.
+    private val lastSeenActiveMap = MutableStateFlow<Map<String, Long>>(emptyMap())
+    private val stickyWindowMs = 10L * 60L * 1000L // 10 minutes
+    val stickyActiveCodes: StateFlow<Set<String>> = lastSeenActiveMap.map { seen ->
+        val cutoff = System.currentTimeMillis() - stickyWindowMs
+        seen.filterValues { it >= cutoff }.keys
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
     // Cloud User & Multi-Router Management
     val cloudUser = MutableStateFlow<com.example.data.remote.CloudUser?>(null)
     val assignedRouters = MutableStateFlow<List<com.example.data.remote.CloudRouter>>(emptyList())
@@ -665,6 +675,11 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
             try {
                 val users = repository.getActiveHotspotUsers()
                 activeUsers.value = users
+                val sNow = System.currentTimeMillis()
+                lastSeenActiveMap.value =
+                    (lastSeenActiveMap.value + users.mapNotNull { it.user }
+                        .filter { it.isNotBlank() }
+                        .associateWith { sNow }).filterValues { it >= sNow - stickyWindowMs }
             } catch (_: Exception) {}
         }
     }
@@ -1067,6 +1082,16 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 val users = repository.getActiveHotspotUsers()
                 activeUsers.value = users
 
+                // Keep a short-lived "recently online" memory so poll gaps do
+                // not drop live customers into the EXPIRED bucket or allow
+                // cleanup to delete them.
+                val nowMs = System.currentTimeMillis()
+                val seenNow = users.mapNotNull { it.user }
+                    .filter { it.isNotBlank() }
+                    .associateWith { nowMs }
+                lastSeenActiveMap.value =
+                    (lastSeenActiveMap.value + seenNow).filterValues { it >= nowMs - stickyWindowMs }
+
                 // Monitor interface throughput & hardware traffic in a single optimized query
                 val metrics = repository.getInterfaceMetrics()
                 val rx = (metrics.rxSpeedBps / 1_000_000.0)
@@ -1195,15 +1220,15 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
         if (codes.isEmpty()) return
         // SAFETY: never delete vouchers that are currently ACTIVE on the router.
         // Deleting an active hotspot user kicks them offline instantly.
-        val activeSet = activeUsers.value.map { it.user }.map { it.replace("-", "").trim().lowercase() }.toSet()
-        val protectedCodes = codes.filter { c ->
-            activeSet.contains(c.replace("-", "").trim().lowercase())
-        }
+        // Sticky set also covers customers that just disconnected (poll gap).
+        val protectedRaw = activeUsers.value.map { it.user } + stickyActiveCodes.value
+        val protectedSet = protectedRaw.map { it.replace("-", "").trim().lowercase() }.toSet()
         val safeCodes = codes.filterNot { c ->
-            activeSet.contains(c.replace("-", "").trim().lowercase())
+            protectedSet.contains(c.replace("-", "").trim().lowercase())
         }
-        if (protectedCodes.isNotEmpty()) {
-            userMessage.value = "⛔ Skipped ${protectedCodes.size} ACTIVE voucher(s) (would kick users offline). Deleting ${safeCodes.size}..."
+        val protectedCount = codes.size - safeCodes.size
+        if (protectedCount > 0) {
+            userMessage.value = "⛔ Skipped $protectedCount ACTIVE voucher(s) (would kick users offline). Deleting ${safeCodes.size}..."
         } else {
             userMessage.value = "Deleting ${safeCodes.size} vouchers..."
         }
@@ -1240,13 +1265,15 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     fun deleteUsedVouchers() {
         viewModelScope.launch(exceptionHandler) {
             try {
-                // SAFETY: never delete vouchers currently ACTIVE on the router.
-                // Delete "used but not currently online" only.
-                val activeSet = activeUsers.value.map { it.user }.map { it.replace("-", "").trim().lowercase() }.toSet()
-                userMessage.value = "Deleting used vouchers (protecting active users)..."
-                val res = repository.deleteUsedVouchers(protectedActiveCodes = activeSet)
+                // SAFETY: never delete vouchers currently ACTIVE on the router
+                // (live + recently-online sticky); only truly finished codes
+                // (quota-full / time-due) are candidates.
+                val protectedRaw = activeUsers.value.map { it.user } + stickyActiveCodes.value
+                val protectedSet = protectedRaw.map { it.replace("-", "").trim().lowercase() }.toSet()
+                userMessage.value = "Cleaning finished vouchers (protecting active users)..."
+                val res = repository.deleteUsedVouchers(protectedActiveCodes = protectedSet)
                 if (res.isSuccess) {
-                    userMessage.value = "✓ Cleaned used vouchers from router!"
+                    userMessage.value = "✓ Cleaned finished vouchers from router!"
                 } else {
                     userMessage.value = "✗ Router Error: ${res.exceptionOrNull()?.message ?: "Failed to delete used vouchers"}"
                 }

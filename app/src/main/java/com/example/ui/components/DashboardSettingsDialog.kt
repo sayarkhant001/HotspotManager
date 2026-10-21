@@ -39,6 +39,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.BuildConfig
 import com.example.ui.screens.MainViewModel
+import com.example.ui.theme.successText
 import com.example.utils.AppStrings
 import com.example.utils.BluetoothPrinterDevice
 import com.example.utils.BluetoothThermalPrinter
@@ -849,7 +850,7 @@ fun DashboardSettingsDialog(
                                 Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32))
                                     Spacer(Modifier.width(8.dp))
-                                    Text(passSuccessMsg!!, color = Color(0xFF1B5E20), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    Text(passSuccessMsg!!, color = successText(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -1093,7 +1094,7 @@ fun DashboardSettingsDialog(
                                                 Text(
                                                     "New Update: v${info.versionName}",
                                                     fontWeight = FontWeight.Bold,
-                                                    color = Color(0xFF1B5E20),
+                                                    color = successText(),
                                                     style = MaterialTheme.typography.titleMedium
                                                 )
                                             }
@@ -1144,13 +1145,13 @@ fun DashboardSettingsDialog(
                                                     Text(
                                                         "Downloading update APK...",
                                                         style = MaterialTheme.typography.labelSmall,
-                                                        color = Color(0xFF1B5E20)
+                                                        color = successText()
                                                     )
                                                     Text(
                                                         "${(downloadProgress * 100).toInt()}%",
                                                         fontWeight = FontWeight.Bold,
                                                         style = MaterialTheme.typography.labelSmall,
-                                                        color = Color(0xFF1B5E20)
+                                                        color = successText()
                                                     )
                                                 }
                                                 LinearProgressIndicator(

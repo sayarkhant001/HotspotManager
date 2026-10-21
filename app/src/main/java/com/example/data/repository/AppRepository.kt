@@ -6,6 +6,7 @@ import com.example.data.remote.MikrotikClient
 import com.example.domain.models.RouterSessionLog
 import com.example.domain.models.UserProfile
 import com.example.domain.models.Voucher
+import com.example.domain.models.VoucherStatusResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
@@ -1198,24 +1199,37 @@ class AppRepository(
         try {
             val used = dao.getAllUsedVouchersSync()
             if (used.isEmpty()) return@withContext Result.success(Unit)
-            // SAFETY: exclude any voucher currently active on the router so we
-            // never kick a live customer offline.
+            // SAFETY #1: exclude any voucher currently active on the router so we
+            // never kick a live customer offline (also covers recently-online).
             val activeNorm = protectedActiveCodes.map { it.replace("-", "").trim().lowercase() }.toSet()
-            val safeUsed = used.filter { v ->
+            // SAFETY #2: ONLY delete vouchers that are genuinely FINISHED
+            // (quota-full or time-due). A voucher that once connected but still
+            // holds remaining quota/time is sellable stock — never delete it.
+            val safeFinished = used.filter { v ->
                 val norm = v.code.replace("-", "").trim().lowercase()
-                !activeNorm.contains(norm)
+                !activeNorm.contains(norm) && VoucherStatusResolver.isExpired(
+                    code = v.code,
+                    username = v.username,
+                    comment = v.comment,
+                    activatedAt = v.activatedAt,
+                    validityDays = v.validityDays,
+                    isUsed = v.isUsed,
+                    dataLimitMb = v.dataLimitMb,
+                    activeCodes = protectedActiveCodes
+                )
             }
+            if (safeFinished.isEmpty()) return@withContext Result.success(Unit)
             // 1. Optimistic Room DB deletion: instant UI update in < 5ms!
-            dao.deleteVouchersByCodes(safeUsed.map { it.code })
+            dao.deleteVouchersByCodes(safeFinished.map { it.code })
 
             // 2. Synchronize deletion with router
             if (!mikrotikClient.isConnected()) {
                 mikrotikClient.ensureConnected()
             }
             if (mikrotikClient.isConnected()) {
-                val ok = mikrotikClient.deleteHotspotUsersBatch(safeUsed.map { it.code })
+                val ok = mikrotikClient.deleteHotspotUsersBatch(safeFinished.map { it.code })
                 if (!ok) {
-                    return@withContext Result.failure(Exception("Router rejected deleting used vouchers."))
+                    return@withContext Result.failure(Exception("Router rejected deleting finished vouchers."))
                 }
             }
             Result.success(Unit)

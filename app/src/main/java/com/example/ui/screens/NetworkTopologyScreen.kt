@@ -60,6 +60,7 @@ import com.example.domain.models.IpBinding
 import com.example.domain.models.RouterSessionLog
 import com.example.domain.models.NetworkTopologyData
 import com.example.ui.components.GlassCard
+import com.example.ui.theme.successText
 import com.example.utils.LanguageManager
 
 private fun formatSpeed(bps: Long): String {
@@ -2561,7 +2562,7 @@ fun ApDetailsBottomSheet(
                             text = formatSpeed(speedDown),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF047857)
+                            color = successText()
                         )
                         Text("Live passing speed", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -2711,7 +2712,7 @@ fun ApDetailsBottomSheet(
                                     if (isWhitelisted) {
                                         AssistChip(
                                             onClick = { userToUndoWhitelist = client },
-                                            label = { Text("Whitelisted", fontSize = 10.sp, color = Color(0xFF059669)) },
+                                            label = { Text("Whitelisted", fontSize = 10.sp, color = successText()) },
                                             leadingIcon = { Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(14.dp)) }
                                         )
                                     } else if (isBanned) {
@@ -2980,7 +2981,7 @@ fun AirMetroPairCard(
                             fontWeight = FontWeight.Bold,
                             color = when {
                                 pair.cpeDevice == null -> Color(0xFFD97706)
-                                pair.isLinked -> Color(0xFF059669)
+                                pair.isLinked -> successText()
                                 else -> Color(0xFFDC2626)
                             },
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -3144,7 +3145,7 @@ fun AirMetroPairCard(
                     Text(
                         text = "${pair.linkHealthPercent}% Health • <2ms",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.5.sp),
-                        color = Color(0xFF059669),
+                        color = successText(),
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(top = 1.dp)
                     )
@@ -3213,7 +3214,7 @@ fun AirMetroPairCard(
                                 text = "🎯 CPE Station (Slave)",
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF059669)
+                                color = successText()
                             )
                             Text(
                                 text = cModel.modelName,
@@ -3433,7 +3434,7 @@ fun EditAirMetroPairDialog(
                         text = "🎯 CPE Station (Slave)",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF059669)
+                        color = successText()
                     )
                     Spacer(Modifier.height(4.dp))
                     allBridgeDevices.filter { it.macAddress.uppercase() != selectedBaseMac }.forEach { dev ->

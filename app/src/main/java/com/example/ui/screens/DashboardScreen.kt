@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.ui.components.GlassCard
+import com.example.ui.theme.successText
 import com.example.utils.AppLanguage
 import com.example.utils.LanguageManager
 
@@ -634,7 +635,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                                                     text = "${stat.activeNow} ${strings.activeNowLabel}",
                                                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                                                     fontWeight = FontWeight.Bold,
-                                                                    color = Color(0xFF047857)
+                                                                    color = successText()
                                                                 )
                                                             }
                                                         }
@@ -1246,7 +1247,7 @@ fun ProfileActivatedVouchersDialog(
                                                     text = "Online",
                                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                                     fontWeight = FontWeight.Bold,
-                                                    color = Color(0xFF047857)
+                                                    color = successText()
                                                 )
                                             }
                                         }

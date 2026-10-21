@@ -28,6 +28,7 @@ import androidx.navigation.NavController
 import com.example.domain.models.ActiveUser
 import com.example.domain.models.IpBinding
 import com.example.ui.components.GlassCard
+import com.example.ui.theme.successText
 import com.example.utils.DeviceModelDetector
 import com.example.utils.LanguageManager
 import kotlinx.coroutines.delay
@@ -185,7 +186,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                                                 text = "${unwhitelistedAps.size} AP/Bridge Detected",
                                                 fontWeight = FontWeight.Bold,
                                                 style = MaterialTheme.typography.titleSmall,
-                                                color = Color(0xFF059669)
+                                                color = successText()
                                             )
                                             Text(
                                                 text = "Connected Ruijie/TP-Link hardware detected. Tap Whitelist on the card below to bypass captive portal.",
@@ -330,7 +331,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                                         text = "Model: ${modelInfo.modelName} (${modelInfo.deviceType})",
                                         fontWeight = FontWeight.Bold,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFF059669)
+                                        color = successText()
                                     )
                                 }
                                 Text(
@@ -713,7 +714,7 @@ fun ActiveUserCard(
                                             text = "${modelInfo.modelName} • ${modelInfo.deviceType}",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF059669)
+                                            color = successText()
                                         )
                                     }
                                 }
@@ -1000,7 +1001,7 @@ fun WhitelistedUserCard(
                             text = "📡 ${modelInfo.modelName} • ${modelInfo.deviceType}",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF059669)
+                            color = successText()
                         )
                     } else if (modelInfo.displayName.isNotBlank() && modelInfo.displayName != item.comment) {
                         Text(
