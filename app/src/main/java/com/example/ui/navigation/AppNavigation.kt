@@ -34,6 +34,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.data.repository.AppRepository
 import com.example.ui.screens.*
+import com.example.utils.LanguageManager
 
 // ── Bottom Nav Destinations ─────────────────────────────────────────────────
 sealed class BottomNavDest(val route: String, val label: String, val icon: ImageVector) {
@@ -42,6 +43,16 @@ sealed class BottomNavDest(val route: String, val label: String, val icon: Image
     object Sessions  : BottomNavDest("sessions",  "Sessions",    Icons.Default.People)
     object PPPoE     : BottomNavDest("pppoe",     "PPPoE",       Icons.Default.Router)
     object Settings  : BottomNavDest("settings",  "Settings",    Icons.Default.Settings)
+}
+
+/** Localized tab label (Myanmar when the app language is switched). */
+private fun localizedNavLabel(route: String, strings: com.example.utils.AppStrings): String = when (route) {
+    "dashboard" -> strings.navDashboard
+    "vouchers"  -> strings.navVouchers
+    "sessions"  -> strings.navSessions
+    "settings"  -> strings.navSettings
+    "pppoe"     -> strings.navPppoe
+    else        -> route
 }
 
 /** Always-visible tabs (no PPPoE — it's added conditionally) */
@@ -64,6 +75,8 @@ fun AppNavigation(repository: AppRepository, startRoute: String? = null) {
     // PPPoE tab: only shown when active router has PPPoE server configured.
     // ViewModel checks /ppp/secret count on router switch — 0 = hidden, ≥1 or server present = shown.
     val pppoeEnabled by viewModel.pppoeEnabled.collectAsStateWithLifecycle()
+    val activeUsers by viewModel.activeUsers.collectAsStateWithLifecycle()
+    val strings = LanguageManager.strings
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -102,6 +115,7 @@ fun AppNavigation(repository: AppRepository, startRoute: String? = null) {
                     val currentDestination = navBackStackEntry?.destination
                     navItems.forEach { dest ->
                         val selected = currentDestination?.hierarchy?.any { it.route == dest.route } == true
+                        val destLabel = localizedNavLabel(dest.route, strings)
                         NavigationBarItem(
                             selected  = selected,
                             onClick   = {
@@ -114,8 +128,26 @@ fun AppNavigation(repository: AppRepository, startRoute: String? = null) {
                                     restoreState    = true
                                 }
                             },
-                            icon  = { Icon(dest.icon, contentDescription = dest.label) },
-                            label = { Text(dest.label, style = MaterialTheme.typography.labelSmall) },
+                            icon  = {
+                                if (dest.route == BottomNavDest.Sessions.route && activeUsers.isNotEmpty()) {
+                                    BadgedBox(
+                                        badge = {
+                                            Badge {
+                                                Text(
+                                                    text = "${activeUsers.size}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                                )
+                                            }
+                                        }
+                                    ) {
+                                        Icon(dest.icon, contentDescription = destLabel)
+                                    }
+                                } else {
+                                    Icon(dest.icon, contentDescription = destLabel)
+                                }
+                            },
+                            label = { Text(destLabel, style = MaterialTheme.typography.labelSmall) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,

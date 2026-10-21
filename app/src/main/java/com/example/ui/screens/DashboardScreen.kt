@@ -456,7 +456,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f))
                             TextButton(onClick = { navController.navigate("vouchers") },
                                 contentPadding = PaddingValues(horizontal = 8.dp)) {
-                                Text("Sell More →", fontWeight = FontWeight.Bold, color = Color(0xFF00E676))
+                                Text(strings.sellMore, fontWeight = FontWeight.Bold, color = Color(0xFF00E676))
                             }
                         }
                     }
@@ -850,13 +850,6 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             )
 
             DashboardMenuCard(
-                title = strings.activeSessionsTitle,
-                subtitle = "${activeUsers.size} ${strings.activeSessionsSubtitle}",
-                icon = Icons.Default.NetworkWifi,
-                badgeCount = activeUsers.size,
-                onClick = { navController.navigate("active_sessions") }
-            )
-            DashboardMenuCard(
                 title = strings.vouchersAccountsTitle,
                 subtitle = strings.vouchersAccountsSubtitle,
                 icon = Icons.Default.ConfirmationNumber,
@@ -871,20 +864,20 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
             )
             DashboardMenuCard(
                 title = strings.networkTopology,
-                subtitle = "${topology.accessPoints.size} APs Connected (Ruijie / Reyee)",
+                subtitle = "${topology.accessPoints.size} ${strings.networkTopologySubtitle}",
                 icon = Icons.Default.Hub,
                 badgeCount = topology.accessPoints.size,
                 onClick = { navController.navigate("network_topology") }
             )
             DashboardMenuCard(
-                title = "Portal Themes",
-                subtitle = "10 themes with price injection for captive portal",
+                title = strings.portalThemesTitle,
+                subtitle = strings.portalThemesSubtitle,
                 icon = Icons.Default.FormatPaint,
                 onClick = { navController.navigate("portal_themes") }
             )
             DashboardMenuCard(
-                title = "App Flow Control",
-                subtitle = "Block Facebook, YouTube, TikTok, Gaming per plan",
+                title = strings.flowControlTitle,
+                subtitle = strings.flowControlSubtitle,
                 icon = Icons.Default.Shield,
                 onClick = { navController.navigate("flow_control") }
             )
@@ -1244,7 +1237,7 @@ fun ProfileActivatedVouchersDialog(
                                             if (isOnline) {
                                                 Spacer(Modifier.width(4.dp))
                                                 Text(
-                                                    text = "Online",
+                                                    text = strings.statusOnline,
                                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                                     fontWeight = FontWeight.Bold,
                                                     color = successText()

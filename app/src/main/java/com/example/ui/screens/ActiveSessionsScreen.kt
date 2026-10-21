@@ -183,13 +183,13 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                                         Spacer(modifier = Modifier.width(10.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "${unwhitelistedAps.size} AP/Bridge Detected",
+                                                text = "${unwhitelistedAps.size} ${strings.apBridgeDetected}",
                                                 fontWeight = FontWeight.Bold,
                                                 style = MaterialTheme.typography.titleSmall,
                                                 color = successText()
                                             )
                                             Text(
-                                                text = "Connected Ruijie/TP-Link hardware detected. Tap Whitelist on the card below to bypass captive portal.",
+                                                text = strings.apBridgeDetectedInfo,
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -218,7 +218,7 @@ fun ActiveSessionsScreen(viewModel: MainViewModel, navController: NavController)
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = if (searchQuery.isEmpty()) strings.noActiveSessions else "\"$searchQuery\" နှင့် ကိုက်ညီသော စက်မရှိပါ။",
+                                        text = if (searchQuery.isEmpty()) strings.noActiveSessions else strings.noSessionsMatch,
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )

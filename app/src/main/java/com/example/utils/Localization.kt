@@ -84,6 +84,20 @@ data class AppStrings(
     val vouchersSoldLabel: String,
     val exactDataConsumedLabel: String,
     val noSalesInPeriod: String,
+    val networkTopologySubtitle: String,
+    val portalThemesTitle: String,
+    val portalThemesSubtitle: String,
+    val flowControlTitle: String,
+    val flowControlSubtitle: String,
+    val sellMore: String,
+    val statusOnline: String,
+
+    // Bottom Navigation Tabs
+    val navDashboard: String,
+    val navVouchers: String,
+    val navSessions: String,
+    val navSettings: String,
+    val navPppoe: String,
 
     // Update Dialog
     val updateAvailable: String,
@@ -182,6 +196,9 @@ data class AppStrings(
     val kickAction: String,
     val banAction: String,
     val noActiveSessions: String,
+    val apBridgeDetected: String,
+    val apBridgeDetectedInfo: String,
+    val noSessionsMatch: String,
 
     // Language Toggle
     val switchLanguage: String,
@@ -325,6 +342,20 @@ val MyanmarStrings = AppStrings(
     vouchersSoldLabel = "ဖွင့်သုံးပြီး ဘောင်ချာ",
     exactDataConsumedLabel = "ဒေတာ သုံးစွဲမှု",
     noSalesInPeriod = "ရွေးချယ်ထားသော ကာလအတွင်း ရောင်းရငွေ မရှိသေးပါ",
+    networkTopologySubtitle = "AP ချိတ်ဆက်ထား (Ruijie / Reyee)",
+    portalThemesTitle = "ပို့တယ် ပုံစံများ",
+    portalThemesSubtitle = "Captive Portal အတွက် ပုံစံ ၁၀ မျိုး",
+    flowControlTitle = "အက်ပ် ထိန်းချုပ်မှု",
+    flowControlSubtitle = "Facebook, YouTube, TikTok, Gaming ပိတ်နိုင်",
+    sellMore = "ထပ်ရောင်းမည် →",
+    statusOnline = "အွန်လိုင်း",
+
+    // Bottom Navigation Tabs
+    navDashboard = "ပင်မ",
+    navVouchers = "ဘောင်ချာ",
+    navSessions = "အသုံးပြုသူ",
+    navSettings = "ဆက်တင်",
+    navPppoe = "PPPoE",
 
     // Update Dialog
     updateAvailable = "ဗားရှင်းအသစ် ရရှိနေပါပြီ!",
@@ -423,6 +454,9 @@ val MyanmarStrings = AppStrings(
     kickAction = "ဖြုတ်ချမည်",
     banAction = "ပိတ်ပင်မည်",
     noActiveSessions = "လက်ရှိ အသုံးပြုနေသူ မရှိပါ။",
+    apBridgeDetected = "AP/Bridge တွေ့ရှိသည်",
+    apBridgeDetectedInfo = "Captive Portal မလိုဘဲ အင်တာနက် သုံးနိုင်ရန် အောက်ကကတ်ပေါ်က Whitelist ကို နှိပ်ပါ။",
+    noSessionsMatch = "ရှာမတွေ့ပါ",
 
     // Language Toggle
     switchLanguage = "မြန်မာ",
@@ -566,6 +600,20 @@ val EnglishStrings = AppStrings(
     vouchersSoldLabel = "Activated Vouchers",
     exactDataConsumedLabel = "Data Used",
     noSalesInPeriod = "No voucher sales in selected period",
+    networkTopologySubtitle = "APs Connected (Ruijie / Reyee)",
+    portalThemesTitle = "Portal Themes",
+    portalThemesSubtitle = "10 ready themes for captive portal",
+    flowControlTitle = "App Flow Control",
+    flowControlSubtitle = "Block Facebook, YouTube, TikTok, Gaming",
+    sellMore = "Sell More →",
+    statusOnline = "Online",
+
+    // Bottom Navigation Tabs
+    navDashboard = "Home",
+    navVouchers = "Vouchers",
+    navSessions = "Sessions",
+    navSettings = "Settings",
+    navPppoe = "PPPoE",
 
     // Update Dialog
     updateAvailable = "Update Available!",
@@ -664,6 +712,9 @@ val EnglishStrings = AppStrings(
     kickAction = "Kick",
     banAction = "Ban",
     noActiveSessions = "No active sessions found.",
+    apBridgeDetected = "AP/Bridge Detected",
+    apBridgeDetectedInfo = "Connected Ruijie/TP-Link hardware detected. Tap Whitelist on the card below to bypass captive portal.",
+    noSessionsMatch = "No devices match your search.",
 
     // Language Toggle
     switchLanguage = "English",
