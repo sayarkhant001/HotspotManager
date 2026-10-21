@@ -7,7 +7,7 @@ V3 Automated Enforcer Daemon - Exact Quota/Time Cutoff + Auto-Reboot
 - Tier 2: Config audit every 6 hours or on boot
 - Auto-Reboot: If router fails 6 consecutive times, SSH reboot it
 """
-import sys, os, time, socket, logging, json
+import sys, os, time, socket, logging, json, re
 from datetime import datetime, timedelta
 sys.path.append('/opt/hotspot-cloud')
 try:
@@ -78,28 +78,84 @@ def is_port_open(host, port=8728, timeout=2.5):
     except Exception:
         return False
 
+def parse_ros_duration(value):
+    """Convert a RouterOS duration string ('4w','1w2d','30d','24h','1h30m','3m',
+    '2d4h','1mo') into a timedelta, or None when unknown / zero.
+
+    This is the authoritative parser for the [ORIG-UP:] tag written by the
+    router at activation time (the TRUE plan validity)."""
+    v = (value or '').strip().lower()
+    if not v or v in ('0s', 'none', '00:00:00', '0'): return None
+    v = v.replace('month', 'mo').replace('months', 'mo')
+    total = timedelta(0)
+    for grp in re.findall(r'(\d+(?:\.\d+)?)\s*([a-z]+)', v):
+        try: n = float(grp[0])
+        except: continue
+        u = grp[1]
+        if u == 'y': total += timedelta(days=365)
+        elif u == 'w': total += timedelta(weeks=int(n))
+        elif u in ('mo', 'months'): total += timedelta(days=30)
+        elif u == 'd': total += timedelta(days=int(n))
+        elif u == 'h': total += timedelta(hours=int(n))
+        elif u == 'm': total += timedelta(minutes=int(n))
+        elif u == 's': total += timedelta(seconds=int(n))
+    return total if total > timedelta(0) else None
+
+
+def format_ros_duration(td):
+    """Convert a timedelta back to a RouterOS limit-uptime string (e.g. '29d23h')."""
+    if td is None or td <= timedelta(0): return '1s'
+    total_s = int(td.total_seconds())
+    if total_s <= 0: return '1s'
+    days = total_s // 86400
+    hours = (total_s % 86400) // 3600
+    mins = (total_s % 3600) // 60
+    if days:
+        return f"{days}d{hours}h"
+    if hours:
+        return f"{hours}h{mins}m"
+    if mins:
+        return f"{mins}m"
+    return "1m"
+
+
 def parse_duration(prof_name, comment=""):
-    p = (prof_name or "").lower()
-    c = (comment or "").lower()
-    if '[orig-up:' in c:
+    """Resolve a voucher's continuous validity from the router's AUTHORITATIVE
+    [ORIG-UP:] tag, falling back ONLY to clearly duration-encoded plan names.
+
+    Returns a timedelta, or None when the validity is unknown.
+    IMPORTANT: None means "do NOT treat as time-expired". A short default here
+    previously cut long-term vouchers (7d/30d/50GB) after just 1 day."""
+    c = comment or ""
+    if '[ORIG-UP:' in c:
         try:
-            up_str = comment.split('[ORIG-UP:')[1].split(']')[0].strip().lower()
-            if any(w in up_str for w in ['4w', '30d', 'month']): return timedelta(days=30)
-            elif '7d' in up_str or '1w' in up_str: return timedelta(days=7)
-            elif '3d' in up_str: return timedelta(days=3)
-            elif '1d' in up_str or '24h' in up_str: return timedelta(days=1)
-            elif '12h' in up_str: return timedelta(hours=12)
-            elif '6h' in up_str: return timedelta(hours=6)
-            elif '2h' in up_str: return timedelta(hours=2)
-            elif '1h' in up_str: return timedelta(hours=1)
-            elif 'test' in up_str or '3m' in up_str: return timedelta(minutes=3)
-        except: pass
-    if any(k in p or k in c for k in ["50gb", "30d", "30day", "40g", "4w"]): return timedelta(days=30)
-    elif any(k in p or k in c for k in ["7d", "1w"]): return timedelta(days=7)
-    elif "3d" in p or "3d" in c: return timedelta(days=3)
-    elif any(k in p or k in c for k in ["1h", "1hour"]): return timedelta(hours=1)
-    elif "test" in p: return timedelta(minutes=3)
-    return timedelta(days=1)
+            up_tag = c.split('[ORIG-UP:')[1].split(']')[0].strip()
+        except:
+            up_tag = ''
+        if up_tag:
+            d = parse_ros_duration(up_tag)
+            if d:
+                return d
+    p = (prof_name or "").lower()
+    bl = p + ' ' + c
+    known = [
+        ("30day", timedelta(days=30)), ("30d", timedelta(days=30)),
+        ("4w", timedelta(days=30)), ("50gb", timedelta(days=30)),
+        ("40g", timedelta(days=30)), ("1month", timedelta(days=30)),
+        ("7d", timedelta(days=7)), ("1w", timedelta(days=7)),
+        ("3d", timedelta(days=3)),
+        ("24h", timedelta(days=1)), ("1d", timedelta(days=1)),
+        ("12h", timedelta(hours=12)), ("6h", timedelta(hours=6)),
+        ("2h", timedelta(hours=2)), ("1h", timedelta(hours=1)),
+        ("1hour", timedelta(hours=1)),
+    ]
+    for key, dur in known:
+        if key in bl:
+            return dur
+    if 'test' in p or 'test' in c:
+        return timedelta(minutes=3)
+    # Unknown validity -> fail-safe: never expire by time.
+    return None
 
 def parse_orig_limit(prof_name, comment=""):
     c = (comment or "").lower()
@@ -116,7 +172,9 @@ def parse_orig_limit(prof_name, comment=""):
     elif '1gb' in p or '1gb' in c: return 1073741824
     elif '500ks' in p or '500ks' in c: return 786432000
     elif 'test' in p: return 52428800
-    return 1782579200
+    # Unknown quota -> 0 (fail-safe: do not cut by guessed quota; the router
+    # kernel + [USED:]/[ORIG-LIMIT:] tags are the authoritative cutoff).
+    return 0
 
 def record_audit(router_id, router_name, issues, fixes, summary):
     if not db: return
@@ -251,19 +309,24 @@ def run_fast_active_sweep(router_dict):
             is_quota_exhausted = (orig_lim > 0 and total_used >= orig_lim)
             is_tagged_expired = ('[EXPIRED:' in comm or '[EXHAUSTED:' in comm)
 
-            # Time check from session comment
+            # Time check from session comment (validity is NEVER guessed short —
+            # unknown duration = NOT treated as time-expired; protects long-term plans).
             is_time_expired = False
             if '[ACT:' in comm:
                 try:
                     act_str = comm.split('[ACT:')[1].split(']')[0].strip()
                     act_dt = datetime.strptime(act_str, "%Y-%m-%d %H:%M:%S") if '-' in act_str else datetime.strptime(act_str, "%b/%d/%Y %H:%M:%S")
-                    if router_now >= (act_dt + parse_duration('', comm)):
+                    dur = parse_duration('', comm)
+                    if dur is not None and router_now >= (act_dt + dur):
                         is_time_expired = True
                 except: pass
 
-            # Only if NO tags on session comment -> do one targeted user lookup (rare)
+            # Only if NO quota/time proof yet, verify via one targeted user lookup.
+            # A tag alone is NOT enough to kill an active long-term customer —
+            # the user must also be truly disabled on the router (a re-activated
+            # voucher that still holds remaining time/quota must NOT be killed).
             uid = None
-            if not (base_bytes > 0 or is_time_expired or is_tagged_expired or is_quota_exhausted):
+            if not (is_time_expired or is_quota_exhausted):
                 try:
                     q = client.talk(['/ip/hotspot/user/print', f'?name={u_name}', '=.proplist=.id,comment,disabled'])
                     m = [parse_re(x) for x in q if x[0] == '!re']
@@ -280,9 +343,10 @@ def run_fast_active_sweep(router_dict):
                             total_used = base_bytes + session_bytes
                             is_quota_exhausted = (orig_lim > 0 and total_used >= orig_lim)
                         if u_obj.get('disabled') == 'true':
-                            is_quota_exhausted = True
-                        if '[EXPIRED:' in comm or '[EXHAUSTED:' in comm:
                             is_tagged_expired = True
+                        else:
+                            # Enabled on router => REMAINING time/quota: never kill.
+                            is_tagged_expired = False
                 except Exception:
                     pass
 
@@ -363,7 +427,47 @@ def run_offline_quota_sweep(router_dict):
                 fixes.append(f"Disabled leaked user {uname}")
                 continue
 
-            if is_dis: continue
+            # Case C: REPAIR long-term vouchers that a bug (1-day default
+            # validity) previously disabled in error. Only touched when we can
+            # POSITIVELY prove the plan is not finished:
+            #   - [ACT:]+known validity OR duration-encoded name => time NOT elapsed,
+            #   - [ORIG-LIMIT:]/[USED:] show quota NOT exhausted.
+            if is_dis:
+                try:
+                    act_dt = None
+                    if '[ACT:' in comm:
+                        act_str = comm.split('[ACT:')[1].split(']')[0].strip()
+                        act_dt = datetime.strptime(act_str, "%Y-%m-%d %H:%M:%S") if '-' in act_str else datetime.strptime(act_str, "%b/%d/%Y %H:%M:%S")
+                    dur = parse_duration(prof, comm)
+                    if act_dt is not None and dur is not None:
+                        used_b = 0
+                        if '[USED:' in comm:
+                            try: used_b = int(comm.split('[USED:')[1].split(']')[0])
+                            except: pass
+                        orig_b = parse_orig_limit(prof, comm)
+                        time_not_elapsed = router_now < (act_dt + dur)
+                        quota_remaining = (orig_b > 0 and used_b < orig_b)
+                        if time_not_elapsed and quota_remaining:
+                            remaining = (act_dt + dur) - router_now
+                            rem_bytes = max(1048576, orig_b - used_b)
+                            clean_comm = comm
+                            for tg in ['[EXPIRED:TIME_OVERDUE]', '[EXPIRED:DISABLED]', '[EXHAUSTED:DATA]', '[CUTOFF]', '[EXPIRED:1]', '[EXPIRED:TIME_OVERDUE]:', '[ERROR]']:
+                                clean_comm = clean_comm.replace(tg, '').replace(tg + ' ', '')
+                            clean_comm = re.sub(r'\[EXPIRED:[^\]]*\]', '', clean_comm)
+                            clean_comm = ' '.join(clean_comm.split())
+                            args = ['/ip/hotspot/user/set', f'=.id={uid}', '=disabled=no',
+                                    f'=limit-uptime={format_ros_duration(remaining)}',
+                                    f'=limit-bytes-total={rem_bytes}',
+                                    f'=comment={clean_comm}']
+                            client.talk(args)
+                            logger.info(f"Router {rid} ({rname}): REPAIRED long-term voucher {uname} "
+                                        f"(remaining {format_ros_duration(remaining)} / {rem_bytes} bytes) — was wrongly disabled")
+                            fixes.append(f"Repaired long-term voucher {uname} (wrongly disabled)")
+                            continue
+                except Exception as e:
+                    logger.warning(f"Router {rid} ({rname}): repair check failed for {uname}: {e}")
+                # Not provably wrong => it is genuinely finished or unknown: leave it.
+                continue
 
             # Case B: check quota and time
             hw_used = int(u.get('bytes-in', 0)) + int(u.get('bytes-out', 0))
@@ -383,7 +487,8 @@ def run_offline_quota_sweep(router_dict):
                 try:
                     act_str = comm.split('[ACT:')[1].split(']')[0].strip()
                     act_dt = datetime.strptime(act_str, "%Y-%m-%d %H:%M:%S") if '-' in act_str else datetime.strptime(act_str, "%b/%d/%Y %H:%M:%S")
-                    if router_now >= (act_dt + parse_duration(prof, comm)):
+                    dur = parse_duration(prof, comm)
+                    if dur is not None and router_now >= (act_dt + dur):
                         is_time_exp = True
                 except: pass
 
