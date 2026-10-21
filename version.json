@@ -1,7 +1,7 @@
 {
-  "versionName": "1.10.3",
-  "versionCode": 47,
-  "releaseTitle": "Hotspot Manager v1.10.3 - Myanmar Language + Active Session Navy Badge",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.10.3.apk",
-  "releaseNotes": "• 🇲🇲 BURMESE LANGUAGE FILL: bottom-navigation tabs (Home/Vouchers/Sessions/Settings), Dashboard menu cards and subtitles (Portal Themes, App Flow Control, AP counts, Sell More, Online), and Active Sessions texts (AP/Bridge banner + empty search) are now fully translated when the app is in Myanmar.\n• 🔢 LIVE ACTIVE-SESSION BADGE: the 'Sessions' tab in the bottom bar now shows the current number of active customers on a badge, visible immediately when you open the app.\n• 🧭 CRASH FIX: removed the duplicate 'Active Sessions' shortcut from the Dashboard menu — it pointed to a route that no longer existed and crashed the app when tapped (Sessions is already your bottom tab).\n• 🔒 v1.10.2 layout fix + v1.10.1 exact voucher tabs + safe cleanup preserved.\n\nInstall over v1.10.2/v1.10.1/v1.9.2 — same signature, no uninstall."
+  "versionName": "1.10.4",
+  "versionCode": 48,
+  "releaseTitle": "Hotspot Manager v1.10.4 - Total Vouchers Summary Card",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.10.4.apk",
+  "releaseNotes": "• 🎫 TOTAL VOUCHERS CARD: the Vouchers page now shows a clear summary card at the top with the grand total voucher count (large number) plus Unused / Using / Expired mini-counts — everything at a glance.\n• 🇲🇲 Localized in Myanmar and English (စုစုပေါင်း ဘောင်ချာ).\n• 🔒 v1.10.3 preserved: Myanmar tab/menu translation, live Sessions-tab badge, crash-free dashboard.\n\nInstall over v1.10.3/v1.10.2/v1.9.2 — same signature, no uninstall."
 }

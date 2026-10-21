@@ -135,6 +135,7 @@ data class AppStrings(
 
     // Vouchers Screen
     val vouchersHeader: String,
+    val totalVouchers: String,
     val searchVouchersHint: String,
     val filterAll: String,
     val filterUsed: String,
@@ -393,6 +394,7 @@ val MyanmarStrings = AppStrings(
 
     // Vouchers Screen
     vouchersHeader = "ဘောင်ချာများ",
+    totalVouchers = "စုစုပေါင်း ဘောင်ချာ",
     searchVouchersHint = "ကုဒ် သို့မဟုတ် ပရိုဖိုင်ဖြင့် ရှာပါ...",
     filterAll = "အားလုံး",
     filterUsed = "သုံးပြီး",
@@ -651,6 +653,7 @@ val EnglishStrings = AppStrings(
 
     // Vouchers Screen
     vouchersHeader = "Vouchers",
+    totalVouchers = "Total Vouchers",
     searchVouchersHint = "Search vouchers by code or profile...",
     filterAll = "All",
     filterUsed = "Used",

@@ -52,6 +52,7 @@ import com.example.domain.models.Voucher
 import com.example.domain.models.VoucherStatus
 import com.example.domain.models.VoucherStatusResolver
 import com.example.ui.components.GlassCard
+import com.example.ui.theme.dangerText
 import com.example.ui.theme.successText
 import com.example.utils.BluetoothPrinterDevice
 import com.example.utils.BluetoothThermalPrinter
@@ -221,6 +222,69 @@ fun VouchersScreen(viewModel: MainViewModel, navController: NavController) {
                 shape = RoundedCornerShape(12.dp),
                 singleLine = true
             )
+
+            // ── Total Vouchers Summary Card ──
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.30f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.ConfirmationNumber,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = strings.totalVouchers,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = "%1$,d".format(java.util.Locale.US, vouchers.size),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF00D4FF)))
+                            Spacer(Modifier.width(5.dp))
+                            Text("${strings.filterUnused} $unusedCount", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp), fontWeight = FontWeight.Bold, color = Color(0xFF00D4FF), maxLines = 1)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF0284C7)))
+                            Spacer(Modifier.width(5.dp))
+                            Text("${strings.filterUsing} $usingCount", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp), fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8), maxLines = 1)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFFEF4444)))
+                            Spacer(Modifier.width(5.dp))
+                            Text("${strings.filterExpired} $expiredCount", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp), fontWeight = FontWeight.Bold, color = dangerText(), maxLines = 1)
+                        }
+                    }
+                }
+            }
 
             // Print status filter chips + Profile filter chips
             LazyRow(
