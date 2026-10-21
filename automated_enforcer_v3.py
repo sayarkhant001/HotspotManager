@@ -41,6 +41,8 @@ last_probe_time = {}
 last_version_probe = {}
 last_theme_sync = {}
 last_deployed_theme = {}
+_REPAIR_MS = 10 * 60 * 1000
+_PROFILE_UP_CACHE = {}
 REBOOT_COOLDOWN = 600  # 10 min between reboot attempts
 
 
@@ -410,6 +412,27 @@ def run_offline_quota_sweep(router_dict):
         all_user_res = client.talk(['/ip/hotspot/user/print', '=.proplist=.id,name,comment,profile,disabled,bytes-in,bytes-out'])
         all_users = [parse_re(x) for x in all_user_res if x[0] == '!re']
 
+        def resolve_dur(prof, comm):
+            """Validity from [ORIG-UP:] tag or duration-encoded name; fall back to
+            the router PROFILE's own limit-uptime (authoritative for long-term
+            plans whose names carry no time keyword like '4GB'). Cache per router+profile."""
+            d = parse_duration(prof, comm)
+            if d is None and prof:
+                key = (rid, prof)
+                val = _PROFILE_UP_CACHE.get(key, 'MISS')
+                if val == 'MISS':
+                    val = None
+                    try:
+                        pr_res = client.talk(['/ip/hotspot/user/profile/print', f'?name={prof}', '=.proplist=limit-uptime'])
+                        for row in [parse_re(x) for x in pr_res if x[0] == '!re']:
+                            val = parse_ros_duration(row.get('limit-uptime'))
+                            break
+                    except Exception:
+                        val = None
+                    _PROFILE_UP_CACHE[key] = val
+                d = val or None
+            return d
+
         fixes = []
         for u in all_users:
             uname = u.get('name', '')
@@ -438,7 +461,7 @@ def run_offline_quota_sweep(router_dict):
                     if '[ACT:' in comm:
                         act_str = comm.split('[ACT:')[1].split(']')[0].strip()
                         act_dt = datetime.strptime(act_str, "%Y-%m-%d %H:%M:%S") if '-' in act_str else datetime.strptime(act_str, "%b/%d/%Y %H:%M:%S")
-                    dur = parse_duration(prof, comm)
+                    dur = resolve_dur(prof, comm)
                     if act_dt is not None and dur is not None:
                         used_b = 0
                         if '[USED:' in comm:
@@ -487,7 +510,7 @@ def run_offline_quota_sweep(router_dict):
                 try:
                     act_str = comm.split('[ACT:')[1].split(']')[0].strip()
                     act_dt = datetime.strptime(act_str, "%Y-%m-%d %H:%M:%S") if '-' in act_str else datetime.strptime(act_str, "%b/%d/%Y %H:%M:%S")
-                    dur = parse_duration(prof, comm)
+                    dur = resolve_dur(prof, comm)
                     if dur is not None and router_now >= (act_dt + dur):
                         is_time_exp = True
                 except: pass
