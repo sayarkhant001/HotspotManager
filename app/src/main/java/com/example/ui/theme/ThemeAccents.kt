@@ -37,3 +37,22 @@ fun activeText(): Color =
 @Composable
 fun dangerText(): Color =
     if (isSystemInDarkTheme()) Color(0xFFFCA5A5) else Color(0xFFB91C1C)
+
+/**
+ * Activated-voucher sales hero card surfaces — theme-aware so the emerald
+ * revenue palette stays READABLE in both themes. The old hard-coded bright
+ * green (#00E676) text on a 10% green wash became invisible in light mode.
+ * Light mode now uses a soft mint panel with deep green text; dark mode a
+ * deep emerald panel with bright mint text — both high-contrast.
+ */
+@Composable
+fun saleHeroCardBg(): Color =
+    if (isSystemInDarkTheme()) Color(0xFF0C2B1E) else Color(0xFFE3F6EC)
+
+@Composable
+fun saleHeroCardBorder(): Color =
+    if (isSystemInDarkTheme()) Color(0xFF34D399).copy(alpha = 0.5f) else Color(0xFF10B981).copy(alpha = 0.6f)
+
+@Composable
+fun saleHeroBadgeBg(): Color =
+    if (isSystemInDarkTheme()) Color(0xFF14532D).copy(alpha = 0.65f) else Color(0xFFA7F3D0).copy(alpha = 0.6f)

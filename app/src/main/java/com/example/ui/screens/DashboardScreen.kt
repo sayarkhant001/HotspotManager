@@ -26,6 +26,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.successText
+import com.example.ui.theme.successTextStrong
+import com.example.ui.theme.saleHeroCardBg
+import com.example.ui.theme.saleHeroCardBorder
+import com.example.ui.theme.saleHeroBadgeBg
 import com.example.utils.AppLanguage
 import com.example.utils.LanguageManager
 
@@ -400,23 +404,23 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                 val topProf = profileUsageBreakdown.sortedByDescending { it.totalRevenue }.firstOrNull()
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Color(0xFF00E676).copy(alpha = 0.10f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF00E676).copy(alpha = 0.45f)),
+                    color = saleHeroCardBg(),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, saleHeroCardBorder()),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(text = strings.activatedVoucherSales, style = MaterialTheme.typography.labelSmall,
-                                    color = Color(0xFF00E676).copy(alpha = 0.9f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    color = successText(), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(text = String.format(java.util.Locale.US, "%,d", totalActivatedRevenue.toLong()) + " Ks",
                                     style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF00E676))
+                                    color = successTextStrong())
                             }
-                            Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF00E676).copy(alpha = 0.15f),
+                            Surface(shape = RoundedCornerShape(14.dp), color = saleHeroBadgeBg(),
                                 modifier = Modifier.size(60.dp)) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color(0xFF00E676),
+                                    Icon(Icons.Default.TrendingUp, contentDescription = null, tint = successTextStrong(),
                                         modifier = Modifier.size(30.dp))
                                 }
                             }
@@ -436,15 +440,15 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                 }
                             }
                             if (topProf != null) {
-                                Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF00E676).copy(alpha = 0.15f)) {
+                                Surface(shape = RoundedCornerShape(8.dp), color = saleHeroBadgeBg()) {
                                     Row(verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)) {
-                                        Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFF00E676),
+                                        Icon(Icons.Default.Star, contentDescription = null, tint = successTextStrong(),
                                             modifier = Modifier.size(14.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text("Top: ${topProf.profileName} • ${String.format(java.util.Locale.US, "%,d", topProf.totalRevenue.toLong())} Ks",
                                             style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF00E676))
+                                            color = successTextStrong())
                                     }
                                 }
                             }
@@ -456,7 +460,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f))
                             TextButton(onClick = { navController.navigate("vouchers") },
                                 contentPadding = PaddingValues(horizontal = 8.dp)) {
-                                Text(strings.sellMore, fontWeight = FontWeight.Bold, color = Color(0xFF00E676))
+                                Text(strings.sellMore, fontWeight = FontWeight.Bold, color = successText())
                             }
                         }
                     }

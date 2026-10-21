@@ -18,8 +18,8 @@ android {
     applicationId = "com.aistudio.hotspotmanager.wexz"
     minSdk = 24
     targetSdk = 36
-    versionCode = 48
-    versionName = "1.10.4"
+    versionCode = 49
+    versionName = "1.10.5"
 
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
