@@ -423,9 +423,11 @@ def run_offline_quota_sweep(router_dict):
                 if val == 'MISS':
                     val = None
                     try:
-                        pr_res = client.talk(['/ip/hotspot/user/profile/print', f'?name={prof}', '=.proplist=limit-uptime'])
+                        # NOTE: profiles expose time via session-timeout (limit-uptime is
+                        # a per-USER property and returns !trap on profile reads).
+                        pr_res = client.talk(['/ip/hotspot/user/profile/print', f'?name={prof}', '=.proplist=session-timeout'])
                         for row in [parse_re(x) for x in pr_res if x[0] == '!re']:
-                            val = parse_ros_duration(row.get('limit-uptime'))
+                            val = parse_ros_duration(row.get('session-timeout'))
                             break
                     except Exception:
                         val = None

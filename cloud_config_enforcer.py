@@ -130,10 +130,10 @@ VOUCHER_ACTIVATE_SOURCE = """# V3 Airtight Voucher Activation - REMAINING as har
   :if ($p ~ "2h") do={ :set origUp 2h };
   :if ($p ~ "1h") do={ :set origUp 1h };
   :if ($p ~ "test") do={ :set origUp 3m };
-  # Authoritative fallback: use the profile's own limit-uptime (true plan
+  # Authoritative fallback: use the profile's own session-timeout (true plan
   # validity) for plans whose names don't encode a duration (long-term plans!).
   :if ($origUp = [:totime "0s"]) do={
-    :local upProf [/ip hotspot user/profile get [find name=$profName] limit-uptime];
+    :local upProf [/ip hotspot user/profile get [find name=$profName] session-timeout];
     :if ([:len $upProf] > 0 and $upProf > [:totime "0s"]) do={ :set origUp $upProf };
   };
   :if ($origUp > [:totime "0s"]) do={

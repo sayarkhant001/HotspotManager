@@ -13,6 +13,26 @@ except ImportError:
 USER = 'admin'
 PASS = 'Khant1234@'
 
+# Authoritative per-plan validity (profile session-timeout). The router's
+# voucher-activate reads this to write [ORIG-UP:] + per-user limit-uptime
+# (kernel cutoff), and the VPS enforcer's resolve_dur falls back to it — so
+# every plan is time-cut EXACTLY at its real deadline. Approved shop mapping:
+#   1-day plans: 2GB, 4GB (AYeikSitt1/YadanarTun), 500Ks, 1000Ks (KyawGyi)
+#   long-term:   30Day, 40G_30D, 50GB-30000  (30 days)
+#   test:        3 minutes
+# NOTE: profiles expose the time limit as session-timeout; limit-uptime is a
+# per-user property and is REJECTED on profiles (!trap unknown parameter).
+PROFILE_SESSION_TIMEOUT = {
+    '2gb': '1d',
+    '4gb': '1d',
+    '500ks': '1d',
+    '1000ks': '1d',
+    '30day': '30d',
+    '40g_30d': '30d',
+    '50gb-30000': '30d',
+    'test': '3m',
+}
+
 # Startup self-heal: runs once at boot, no VPS needed
 STARTUP_HEAL = r"""# V3 Startup Self-Heal
 :log info "V3: Startup self-heal running..."
@@ -141,12 +161,19 @@ def deploy_to_router(ip, port=8728):
     # 4. Fix profile hooks
     on_login = ':global hsUser $user; :do { /system script run voucher-activate } on-error={}'
     on_logout = ':do { /system script run hs-on-logout } on-error={}'
-    for p in [parse_re(x) for x in c.talk(['/ip/hotspot/user/profile/print', '=.proplist=.id']) if x[0]=='!re']:
+    for p in [parse_re(x) for x in c.talk(['/ip/hotspot/user/profile/print', '=.proplist=.id,name']) if x[0]=='!re']:
         if p.get('.id'):
-            c.talk(['/ip/hotspot/user/profile/set', f'=.id={p[".id"]}',
+            prof_name = p.get('name', '')
+            lim_up = PROFILE_SESSION_TIMEOUT.get(prof_name.strip().lower(), '')
+            args = ['/ip/hotspot/user/profile/set', f'=.id={p[".id"]}',
                 '=shared-users=1', '=add-mac-cookie=yes', '=mac-cookie-timeout=30d',
                 '=keepalive-timeout=2m', '=idle-timeout=3m',
-                f'=on-login={on_login}', f'=on-logout={on_logout}'])
+                f'=on-login={on_login}', f'=on-logout={on_logout}']
+            if lim_up:
+                args.append(f'=session-timeout={lim_up}')
+            c.talk(args)
+            if lim_up:
+                print(f"  Profile {prof_name}: session-timeout={lim_up}")
     print(f"  Profiles fixed. DONE: {ip}")
     c.close()
     return True
