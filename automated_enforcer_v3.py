@@ -463,16 +463,35 @@ def run_offline_quota_sweep(router_dict):
                         act_dt = datetime.strptime(act_str, "%Y-%m-%d %H:%M:%S") if '-' in act_str else datetime.strptime(act_str, "%b/%d/%Y %H:%M:%S")
                     dur = resolve_dur(prof, comm)
                     if act_dt is not None and dur is not None:
+                        # What was already consumed — the [USED:]/[BASE:] tags are the
+                        # authoritative proof (the old buggy disable path reset the
+                        # hardware counters, so bytes-in/out alone can be 0 even after use).
                         used_b = 0
                         if '[USED:' in comm:
                             try: used_b = int(comm.split('[USED:')[1].split(']')[0])
                             except: pass
+                        base_b = 0
+                        if '[BASE:' in comm:
+                            try: base_b = int(comm.split('[BASE:')[1].split(']')[0])
+                            except: pass
+                        consumed = max(used_b, base_b,
+                                       int(u.get('bytes-in', 0) or 0) + int(u.get('bytes-out', 0) or 0))
                         orig_b = parse_orig_limit(prof, comm)
                         time_not_elapsed = router_now < (act_dt + dur)
-                        quota_remaining = (orig_b > 0 and used_b < orig_b)
-                        if time_not_elapsed and quota_remaining:
+                        # "Let them feel the REST": restore ONLY when we KNOW exactly how
+                        # much was consumed AND the true original limit. Without usage proof
+                        # we could accidentally grant the FULL entitlement — never do that.
+                        has_usage_proof = consumed > 0
+                        rest_known = (orig_b > 0 and has_usage_proof and consumed < orig_b)
+                        if time_not_elapsed and rest_known:
                             remaining = (act_dt + dur) - router_now
-                            rem_bytes = max(1048576, orig_b - used_b)
+                            # cap at the original validity — never more than bought
+                            if remaining > dur:
+                                remaining = dur
+                            # exact REST of quota, floored to a usable minimum, never > original
+                            rem_bytes = max(1048576, orig_b - consumed)
+                            if rem_bytes > orig_b:
+                                rem_bytes = orig_b
                             clean_comm = comm
                             for tg in ['[EXPIRED:TIME_OVERDUE]', '[EXPIRED:DISABLED]', '[EXHAUSTED:DATA]', '[CUTOFF]', '[EXPIRED:1]', '[EXPIRED:TIME_OVERDUE]:', '[ERROR]']:
                                 clean_comm = clean_comm.replace(tg, '').replace(tg + ' ', '')
@@ -484,9 +503,14 @@ def run_offline_quota_sweep(router_dict):
                                     f'=comment={clean_comm}']
                             client.talk(args)
                             logger.info(f"Router {rid} ({rname}): REPAIRED long-term voucher {uname} "
-                                        f"(remaining {format_ros_duration(remaining)} / {rem_bytes} bytes) — was wrongly disabled")
-                            fixes.append(f"Repaired long-term voucher {uname} (wrongly disabled)")
+                                        f"(restored REMAINING {format_ros_duration(remaining)} / {rem_bytes} bytes, "
+                                        f"consumed {consumed}/{orig_b}) — was wrongly disabled")
+                            fixes.append(f"Restored remaining quota/time for {uname} (wrongly disabled)")
                             continue
+                        # No positive proof of the remainder -> do NOT auto-restore full
+                        # entitlement; leave for the shop to Renew manually.
+                        logger.info(f"Router {rid} ({rname}): skipped restore of {uname} — "
+                                    f"remainder not provable (time_left={time_not_elapsed}, consumed={consumed}, orig={orig_b})")
                 except Exception as e:
                     logger.warning(f"Router {rid} ({rname}): repair check failed for {uname}: {e}")
                 # Not provably wrong => it is genuinely finished or unknown: leave it.
