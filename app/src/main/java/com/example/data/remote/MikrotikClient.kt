@@ -2700,6 +2700,34 @@ class MikrotikClient {
         }
     }
 
+    /**
+     * Writes the selected portal theme marker to the router.
+     * The VPS enforcer reads `hotspot/.portal_theme` on its next audit and
+     * uploads the matching theme template folder if its ID is present.
+     * @return true when the marker was written successfully
+     */
+    suspend fun writePortalThemeMarker(themeId: String): Boolean = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                if (themeId.isBlank()) return@withLock false
+                val cleanId = themeId.trim().lowercase().replace(Regex("[^a-z0-9-]"), "")
+                // Use an idempotent RSC script: remove any existing marker then (re)create it.
+                val rsc = buildString {
+                    appendLine(":local marker \"$cleanId\"")
+                    appendLine(":do { /file remove [ /file find name=\"hotspot/.portal_theme\" ] } on-error={}")
+                    appendLine(":do { /file remove [ /file find name=\"flash/hotspot/.portal_theme\" ] } on-error={}")
+                    appendLine("/file add name=\"hotspot/.portal_theme\" contents=\$marker")
+                    appendLine("/file add name=\"flash/hotspot/.portal_theme\" contents=\$marker")
+                }
+                val res = executeRscScript(rsc)
+                res.success
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+        }
+    }
+
     companion object {
         /**
          * Formats uptime / session-timeout string for MikroTik RouterOS.

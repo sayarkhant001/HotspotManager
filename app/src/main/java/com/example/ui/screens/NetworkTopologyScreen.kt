@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandVertically
@@ -701,7 +702,11 @@ fun NetworkTopologyScreen(
                         }
                     } else if (viewMode == 0) {
                         // VIEW 2: VISUAL TREE VIEW (Freely Scrollable & Adaptable)
-                        BranchingLines(apCount = filteredAps.size, isCompact = isCompactMode)
+                        BranchingLines(
+                            apCount = filteredAps.size,
+                            onlineCount = filteredAps.count { it.isOnline },
+                            isCompact = isCompactMode
+                        )
 
                         val chunkedAps = remember(filteredAps, columnCount) {
                             filteredAps.chunked(columnCount.coerceIn(1, 4))
@@ -1315,13 +1320,7 @@ fun ApDeviceNode(
                             }
                         }
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(if (ap.isOnline) Color(0xFF10B981) else Color(0xFFEF4444))
-                            .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
-                    )
+                    HealthDot(isOnline = ap.isOnline, size = 10)
                 }
 
                 Spacer(modifier = Modifier.width(6.dp))
@@ -1660,13 +1659,7 @@ fun ApListCard(
                             }
                         }
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(if (ap.isOnline) Color(0xFF10B981) else Color(0xFFEF4444))
-                            .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
-                    )
+                    HealthDot(isOnline = ap.isOnline, size = 10)
                 }
 
                 Spacer(Modifier.width(10.dp))
@@ -1919,63 +1912,113 @@ fun ConnectingVerticalLine(dots: Int = 3, color: Color) {
 }
 
 @Composable
-fun BranchingLines(apCount: Int, isCompact: Boolean = false) {
+fun BranchingLines(apCount: Int, onlineCount: Int = apCount, isCompact: Boolean = false) {
+    val transition = rememberInfiniteTransition(label = "beamFlow")
+    val flow by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 16f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "beamPhase"
+    )
+    val glowPulse by transition.animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "beamGlow"
+    )
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(if (isCompact) 14.dp else 32.dp)
-            .padding(horizontal = 30.dp)
+            .height(if (isCompact) 18.dp else 40.dp)
+            .padding(horizontal = 26.dp)
     ) {
-        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(
-            width = 1.5.dp.toPx(),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
-        )
-        val color = Color(0xFF94A3B8)
-        val centerX = size.width / 2f
-
-        // Draw vertical center stem
-        drawLine(
-            color = color,
-            start = Offset(centerX, 0f),
-            end = Offset(centerX, size.height * 0.45f),
-            strokeWidth = 1.5.dp.toPx(),
-            pathEffect = stroke.pathEffect
-        )
-
-        if (apCount > 1) {
-            // Draw horizontal crossbar
-            drawLine(
-                color = color,
-                start = Offset(size.width * 0.2f, size.height * 0.45f),
-                end = Offset(size.width * 0.8f, size.height * 0.45f),
-                strokeWidth = 1.5.dp.toPx(),
-                pathEffect = stroke.pathEffect
-            )
-            // Left branch
-            drawLine(
-                color = color,
-                start = Offset(size.width * 0.2f, size.height * 0.45f),
-                end = Offset(size.width * 0.2f, size.height),
-                strokeWidth = 1.5.dp.toPx(),
-                pathEffect = stroke.pathEffect
-            )
-            // Right branch
-            drawLine(
-                color = color,
-                start = Offset(size.width * 0.8f, size.height * 0.45f),
-                end = Offset(size.width * 0.8f, size.height),
-                strokeWidth = 1.5.dp.toPx(),
-                pathEffect = stroke.pathEffect
-            )
-        } else {
-            drawLine(
-                color = color,
-                start = Offset(centerX, size.height * 0.45f),
-                end = Offset(centerX, size.height),
-                strokeWidth = 1.5.dp.toPx(),
-                pathEffect = stroke.pathEffect
-            )
+        val onlineRatio = if (apCount > 0) onlineCount.toFloat() / apCount else 0f
+        val beamColor = when {
+            onlineCount == apCount && apCount > 0 -> Color(0xFF10B981)
+            onlineRatio >= 0.5f -> Color(0xFFF59E0B)
+            else -> Color(0xFFEF4444)
         }
+        val baseColor = beamColor.copy(alpha = 0.35f)
+        val glowColor = beamColor.copy(alpha = 0.28f * glowPulse)
+        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(
+            width = 1.6.dp.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 10f), flow)
+        )
+        val centerX = size.width / 2f
+        val hubY = size.height * 0.42f
+        val branchL = size.width * 0.22f
+        val branchR = size.width * 0.78f
+
+        // Glow halo under the beams (animated "live" effect)
+        drawLine(start = Offset(centerX, 0f), end = Offset(centerX, hubY), strokeWidth = 4.dp.toPx(), color = glowColor)
+        drawLine(start = Offset(branchL, hubY), end = Offset(branchR, hubY), strokeWidth = 4.dp.toPx(), color = glowColor)
+
+        // Solid core lines
+        drawLine(color = baseColor, start = Offset(centerX, 0f), end = Offset(centerX, hubY), strokeWidth = 1.4.dp.toPx())
+        if (apCount > 1) {
+            drawLine(color = baseColor, start = Offset(branchL, hubY), end = Offset(branchR, hubY), strokeWidth = 1.4.dp.toPx())
+            drawLine(color = baseColor, start = Offset(branchL, hubY), end = Offset(branchL, size.height), strokeWidth = 1.2.dp.toPx())
+            drawLine(color = baseColor, start = Offset(branchR, hubY), end = Offset(branchR, size.height), strokeWidth = 1.2.dp.toPx())
+        } else {
+            drawLine(color = baseColor, start = Offset(centerX, hubY), end = Offset(centerX, size.height), strokeWidth = 1.2.dp.toPx())
+        }
+
+        // Flowing data pulse particles riding the dashed phase
+        drawLine(color = beamColor, start = Offset(centerX, 0f), end = Offset(centerX, hubY), strokeWidth = 2.dp.toPx(), pathEffect = stroke.pathEffect)
+        if (apCount > 1) {
+            drawLine(color = beamColor, start = Offset(branchL, hubY), end = Offset(branchR, hubY), strokeWidth = 2.dp.toPx(), pathEffect = stroke.pathEffect)
+            drawLine(color = beamColor, start = Offset(branchL, hubY), end = Offset(branchL, size.height), strokeWidth = 2.dp.toPx(), pathEffect = stroke.pathEffect)
+            drawLine(color = beamColor, start = Offset(branchR, hubY), end = Offset(branchR, size.height), strokeWidth = 2.dp.toPx(), pathEffect = stroke.pathEffect)
+        } else {
+            drawLine(color = beamColor, start = Offset(centerX, hubY), end = Offset(centerX, size.height), strokeWidth = 2.dp.toPx(), pathEffect = stroke.pathEffect)
+        }
+    }
+}
+
+/** Pulsing LED health dot with animated glow ring (green=online, red=down, amber=partial) */
+@Composable
+fun HealthDot(isOnline: Boolean, size: Int = 10, isPartial: Boolean = false) {
+    val transition = rememberInfiniteTransition(label = "healthDot")
+    val pulse by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = if (isOnline) 700 else 1300, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "healthPulse"
+    )
+    val color = when {
+        !isOnline -> Color(0xFFEF4444)
+        isPartial -> Color(0xFFF59E0B)
+        else -> Color(0xFF10B981)
+    }
+    Box(contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .size((size + 8).dp)
+                .clip(CircleShape)
+                .background(color.copy(alpha = 0.35f * pulse))
+        )
+        Box(
+            modifier = Modifier
+                .size((size + 4).dp)
+                .clip(CircleShape)
+                .background(color.copy(alpha = 0.55f * pulse))
+        )
+        Box(
+            modifier = Modifier
+                .size(size.dp)
+                .clip(CircleShape)
+                .background(color)
+                .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
+        )
     }
 }
 
@@ -2381,6 +2424,82 @@ fun ApDetailsBottomSheet(
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // ── Live Health Meter Strip ──
+            val signalStrength = remember(ap.currentRxBps, apClients) {
+                val totalBps = ap.currentRxBps + ap.currentTxBps
+                when {
+                    !ap.isOnline -> 0
+                    totalBps > 2_000_000L -> 5
+                    totalBps > 500_000L -> 4
+                    totalBps > 100_000L -> 3
+                    totalBps > 10_000L -> 2
+                    totalBps > 0L -> 1
+                    else -> 5 // idle but online = healthy link
+                }
+            }
+            val healthColor = when {
+                !ap.isOnline -> Color(0xFFEF4444)
+                signalStrength >= 3 -> Color(0xFF10B981)
+                signalStrength >= 1 -> Color(0xFFF59E0B)
+                else -> Color(0xFF10B981)
+            }
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = healthColor.copy(alpha = 0.09f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, healthColor.copy(alpha = 0.35f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HealthDot(isOnline = ap.isOnline, size = 12, isPartial = ap.isOnline && signalStrength in 1..2)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (ap.isOnline) {
+                                if (signalStrength >= 4) "Excellent link quality" else if (signalStrength >= 2) "Good link quality" else "Weak link quality"
+                            } else "AP is OFFLINE",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (ap.isOnline) MaterialTheme.colorScheme.onSurface else Color(0xFFEF4444)
+                        )
+                        Text(
+                            text = if (ap.isOnline) "${apClients.size} client(s) associated · ${formatSpeed(ap.currentRxBps + ap.currentTxBps)} aggregate"
+                            else "Device not responding — check power / backhaul",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    // Animated signal bars
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        val pulse by rememberInfiniteTransition(label = "sig").animateFloat(
+                            initialValue = 0.6f, targetValue = 1f,
+                            animationSpec = infiniteRepeatable(tween(650, easing = LinearEasing), RepeatMode.Reverse),
+                            label = "sigPulse"
+                        )
+                        repeat(5) { idx ->
+                            val lit = idx < signalStrength
+                            Box(
+                                modifier = Modifier
+                                    .width(5.dp)
+                                    .height((4 + idx * 3).dp)
+                                    .clip(RoundedCornerShape(1.dp))
+                                    .background(
+                                        if (lit) healthColor.copy(alpha = if (ap.isOnline) 0.45f + 0.55f * pulse else 0.35f)
+                                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                                    )
+                            )
+                        }
+                    }
                 }
             }
 

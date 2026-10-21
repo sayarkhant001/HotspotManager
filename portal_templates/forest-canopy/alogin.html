@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>Free WiFi – Connecting…</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="refresh" content="2; url=$(link-status)" />
+  <style>
+:root{--bg:#14532D;--card:rgba(20, 83, 45, 0.78);--border:rgba(34, 197, 94, 0.35);--acc:#22C55E;--acc2:#15803D;--grad:linear-gradient(135deg, #22C55E 0%, #15803D 100%);--txt:#FFFFFF;--muted:#BBF7D0;--font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans Myanmar",sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100vh;font-family:var(--font);background:var(--bg);color:var(--txt);display:flex;align-items:center;justify-content:center}
+.glass{width:100%;max-width:430px;padding:18px 16px;margin:auto}
+.card{background:var(--card);backdrop-filter:blur(24px);border:1px solid var(--border);border-radius:20px;padding:28px 22px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.45)}
+.badge{width:74px;height:74px;border-radius:50%;background:rgba(52,211,153,.14);border:1.5px solid rgba(52,211,153,.5);display:inline-flex;align-items:center;justify-content:center;margin:0 auto 14px;color:#34D399}
+.badge svg{width:36px;height:36px}
+h1{font-size:19px;margin-bottom:6px}
+p{color:var(--muted);font-size:13px;margin-bottom:18px;line-height:1.6}
+.bar{background:rgba(255,255,255,.08);border-radius:100px;height:6px;overflow:hidden;margin:0 0 18px}
+.bar div{height:100%;width:100%;border-radius:100px;background:var(--grad);animation:fill 1.4s ease-in-out infinite alternate}
+@keyframes fill{from{transform:scaleX(.4);transform-origin:left}to{transform:scaleX(1);transform-origin:left}}
+.btn{display:inline-block;padding:13px 28px;border-radius:13px;font-size:14px;font-weight:700;color:#fff;background:var(--grad);text-decoration:none}
+.footer{text-align:center;color:var(--muted);font-size:11px;margin-top:16px}
+</style>
+<script>
+(function(){var u="$(username)";if(u&&u.indexOf('$(')===-1&&u!==''){try{localStorage.setItem('wifi_voucher',u.trim());}catch(e){}}})();
+</script>
+</head>
+<body>
+  <div class="glass">
+    <div class="card">
+      <div class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <h1>ချိတ်ဆက်မှု အောင်မြင်ပါသည် (Success!)</h1>
+      <p>အသုံးပြုမှု အခြေအနေစာမျက်နှာသို့ ရောက်ရှိနေပါပြီ…</p>
+      <div class="bar"><div></div></div>
+      <a class="btn" href="$(link-status)">ချက်ချင်း သွားမည် (Continue)</a>
+      <div class="footer">Free WiFi · HotspotManager Theme</div>
+    </div>
+  </div>
+</body>
+</html>

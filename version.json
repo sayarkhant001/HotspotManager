@@ -1,7 +1,7 @@
 {
-  "versionName": "1.9.2",
-  "versionCode": 43,
-  "releaseTitle": "Hotspot Manager v1.9.2 - App Flow Control (Block Facebook/YouTube/TikTok)",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.9.2.apk",
-  "releaseNotes": "• 🛡️ NEW: App Flow Control — block Facebook, YouTube, TikTok, Telegram, WhatsApp, Netflix, PUBG, Free Fire and more per plan from the app dashboard (Dashboard > App Flow Control)\n• 🛡️ Toggle services ON/OFF with a single tap — applies MikroTik firewall Layer7 rules instantly to the router\n• 🔧 v1.9.1 fixes preserved: Active Sessions crash fix, delete-safety, readable theme, crash logger\n\nInstall over v1.9.1/v1.8.0/v1.6.3 — same signature, no uninstall."
+  "versionName": "1.10.0",
+  "versionCode": 44,
+  "releaseTitle": "Hotspot Manager v1.10.0 - Enterprise Flow Control + Live Topology + MikroPilot Theme",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.10.0.apk",
+  "releaseNotes": "• 🛡️ FLOW CONTROL v2 (Ruijie-style categories): 32 services across 8 groups — Social Media, Communications (Telegram/WhatsApp/Viber/Skype/Discord/WeChat/Zoom), Video Streaming, VPN & Proxies (VPN/Tor/Psiphon/Shadowsocks), Gambling (betting + lottery), Adult Content, Banking & Finance, Gaming (PUBG/Free Fire/MLBB/Clash/Valorant/Roblox/Garena)\n• 📡 NETWORK TOPOLOGY modern look: animated flowing data beams, pulsing health dots, signal-strength meters + drill-down health strip in AP details\n• 🎨 Full MikroPilot-style dark enterprise dashboard theme (deep-space navy + electric cyan + emerald revenue accents)\n• 🖥️ 10 self-contained Portal Theme HTML template sets (login/status/logout/alogin/errors) generated into portal_templates/, deployable from the app and VPS\n• 🔗 Theme deploy writes hotspot/.portal_theme marker — VPS enforcer syncs the matching template automatically\n• 🔧 v1.9.x fixes preserved: V3 quota/time enforcement, crash fixes, CPU-safe enforcer\n\nInstall over v1.9.2 — same signature, no uninstall."
 }

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>Free WiFi – WiFi Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <style>
+/* HotspotManager themed captive portal – generated template */
+:root {
+  --bg-primary: #111827;
+  --bg-card: rgba(17, 24, 39, 0.78);
+  --border-glass: rgba(6, 182, 212, 0.35);
+  --accent: #06B6D4;
+  --accent-2: #D946EF;
+  --accent-soft: #F72585;
+  --text-main: #E0E7FF;
+  --text-muted: #94A3B8;
+  --input-bg: rgba(7, 14, 28, 0.85);
+  --input-border: rgba(6, 182, 212, 0.35);
+  --btn-gradient: linear-gradient(135deg, #06B6D4 0%, #D946EF 100%);
+  --radius: 18px;
+  --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Myanmar", sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body {
+  min-height: 100vh; width: 100%;
+  font-family: var(--font-stack);
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  overflow-x: hidden;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.bg-ambient { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.orb { position: absolute; border-radius: 50%; filter: blur(85px); opacity: 0.4; will-change: transform; }
+.orb-1 { width: 320px; height: 320px; background: radial-gradient(circle, #06B6D4, #D946EF); top: -80px; left: -90px; animation: floatOrb 12s ease-in-out infinite alternate; }
+.orb-2 { width: 360px; height: 360px; background: radial-gradient(circle, #F72585, #06B6D4); bottom: -90px; right: -90px; animation: floatOrb 14s ease-in-out infinite alternate-reverse; }
+@keyframes floatOrb { 0% { transform: translate(0,0) scale(1); } 50% { transform: translate(40px,30px) scale(1.1); } 100% { transform: translate(-30px,50px) scale(0.96); } }
+.portal-container { position: relative; z-index: 10; width: 100%; max-width: 430px; padding: 18px 16px; margin: auto; }
+.glass-card {
+  background: var(--bg-card); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  border-radius: var(--radius); border: 1px solid var(--border-glass);
+  padding: 26px 22px; box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+}
+.brand-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 6px; }
+.brand-logo {
+  width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+  background: var(--btn-gradient); font-size: 24px; color: #fff; box-shadow: 0 8px 22px rgba(6, 182, 212, 0.35);
+}
+.brand-name { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; }
+.brand-sub { text-align: center; color: var(--text-muted); font-size: 12.5px; margin-bottom: 20px; }
+.wifi-status { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 18px; font-size: 12px; color: var(--text-muted); }
+.wifi-dot { width: 9px; height: 9px; border-radius: 50%; background: #10B981; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+.login-tabs { display: flex; gap: 6px; margin-bottom: 18px; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 12px; }
+.login-tab {
+  flex: 1; text-align: center; padding: 9px 4px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  color: var(--text-muted); cursor: pointer; transition: all .2s ease; border: none; background: transparent; font-family: inherit;
+}
+.login-tab.active { background: var(--btn-gradient); color: #fff; box-shadow: 0 6px 18px rgba(6, 182, 212, 0.35); }
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+.field input {
+  width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--input-border);
+  background: var(--input-bg); color: var(--text-main); font-size: 15px; outline: none; transition: border-color .2s, box-shadow .2s;
+}
+.field input::placeholder { color: var(--text-muted); opacity: 0.8; }
+.field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.35); }
+.login-btn {
+  width: 100%; padding: 15px; border: none; border-radius: 13px; font-size: 15.5px; font-weight: 700;
+  font-family: inherit; color: #fff; background: var(--btn-gradient); cursor: pointer; margin-top: 4px;
+  box-shadow: 0 10px 26px rgba(6, 182, 212, 0.35);
+}
+.login-btn:active { transform: scale(0.985); }
+.login-btn:disabled { opacity: 0.6; }
+.err-box {
+  display: flex; align-items: flex-start; gap: 8px; margin-bottom: 14px; padding: 12px 14px;
+  border-radius: 10px; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); font-size: 12.5px; line-height: 1.5;
+}
+.err-box.hide { display: none; }
+.footer { text-align: center; color: var(--text-muted); font-size: 11px; margin-top: 16px; opacity: 0.85; }
+.hide { display: none !important; }
+</style>
+</head>
+<body>
+  <div class="bg-ambient"><div class="orb orb-1"></div><div class="orb orb-2"></div></div>
+
+  <div class="portal-container">
+    <div class="glass-card">
+      <div class="brand-row">
+        <div class="brand-logo">📶</div>
+        <div class="brand-name">Free WiFi</div>
+      </div>
+      <div class="brand-sub">အင်တာနက် ချိတ်ဆက်ရန် – Please sign in to continue</div>
+      <div class="wifi-status"><span class="wifi-dot"></span> Wi-Fi Connection Ready</div>
+
+      <div class="err-box hide" id="msgBox"><span>⚠️</span><span id="msgText"></span></div>
+
+      <div class="login-tabs" role="tablist">
+        <button type="button" class="login-tab active" id="tabVoucher">🎟️ ဘောင်ချာ (Voucher)</button>
+        <button type="button" class="login-tab" id="tabMember">👤 အဖွဲ့ဝင် (Member)</button>
+      </div>
+
+      <form method="post" action="$(link-login-only)" name="login" id="loginForm">
+        <input type="hidden" name="dst" value="$(link-orig)" />
+        <input type="hidden" name="popup" value="true" />
+
+        <div id="voucherPane">
+          <div class="field">
+            <label for="voucherCode">ဘောင်ချာကုဒ် (Voucher Code)</label>
+            <input type="text" id="voucherCode" name="username" autocomplete="off"
+                   autocapitalize="none" spellcheck="false" placeholder="11111111" maxlength="32" />
+            <input type="hidden" id="voucherPass" name="password" value="" />
+          </div>
+        </div>
+
+        <div id="memberPane" class="hide">
+          <div class="field">
+            <label for="memberUser">Username</label>
+            <input type="text" id="memberUser" name="username2" autocomplete="username"
+                   autocapitalize="none" spellcheck="false" placeholder="user@example.com" />
+          </div>
+          <div class="field">
+            <label for="memberPass">Password</label>
+            <input type="password" id="memberPass" name="password2" autocomplete="current-password" placeholder="••••••••" />
+          </div>
+        </div>
+
+        <button type="submit" class="login-btn" id="loginBtn"><span id="btnText">🔗 ချိတ်ဆက်မည် (Connect)</span></button>
+      </form>
+
+      <div class="footer">Free WiFi · HotspotManager Theme · <span id="clock"></span></div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  var form = document.getElementById('loginForm');
+  var vInput = document.getElementById('voucherCode');
+  var vPass = document.getElementById('voucherPass');
+  var mUser = document.getElementById('memberUser');
+  var mPass = document.getElementById('memberPass');
+  var tabV = document.getElementById('tabVoucher');
+  var tabM = document.getElementById('tabMember');
+  var paneV = document.getElementById('voucherPane');
+  var paneM = document.getElementById('memberPane');
+  var msgBox = document.getElementById('msgBox');
+  var msgText = document.getElementById('msgText');
+  var isVm = true; // voucher mode default
+
+  function showError(m) {
+    if (!msgBox || !msgText) return;
+    var t = (m || '').trim();
+    if (!t) { msgBox.classList.add('hide'); return; }
+    msgText.innerText = t;
+    msgBox.classList.remove('hide');
+  }
+  function setMode(vm) {
+    isVm = vm;
+    if (vm) {
+      tabV.classList.add('active'); tabM.classList.remove('active');
+      paneV.classList.remove('hide'); paneM.classList.add('hide');
+    } else {
+      tabM.classList.add('active'); tabV.classList.remove('active');
+      paneM.classList.remove('hide'); paneV.classList.add('hide');
+    }
+    showError('');
+  }
+  if (tabV) tabV.addEventListener('click', function () { setMode(true); });
+  if (tabM) tabM.addEventListener('click', function () { setMode(false); });
+
+  function syncPassword() {
+    if (vInput && vPass) vPass.value = vInput.value;
+    if (vInput) vInput.value = '';
+  }
+
+  // Friendly server-side error mapping
+  var rawError = msgText ? msgText.innerText.trim() : '';
+  if (rawError && rawError.indexOf('$(') === -1 && rawError.length > 0) {
+    var low = rawError.toLowerCase();
+    var friendly = rawError;
+    if (low.indexOf('traffic limit') !== -1 || low.indexOf('transfer limit') !== -1) {
+      friendly = 'ဒေတာ ကုန်သွားပါပြီ (Data quota finished) – ဘောင်ချာအသစ် ဝယ်ယူပါ';
+      try { localStorage.clear(); } catch(e) {}
+    } else if (low.indexOf('uptime limit') !== -1 || low.indexOf('session limit') !== -1) {
+      friendly = 'သက်တမ်းကုန်သွားပါပြီ (Validity expired) – ဘောင်ချာအသစ် ဝယ်ယူပါ';
+      try { localStorage.clear(); } catch(e) {}
+    } else if (low.indexOf('invalid username') !== -1 || low.indexOf('invalid password') !== -1) {
+      friendly = 'ဘောင်ချာကုဒ် မှားနေပါသည် (Invalid code – check and retry)';
+    } else if (low.indexOf('already logged in') !== -1) {
+      friendly = 'ဤအကောင့်ကို အခြားစက်တွင် သုံးနေပါသည်';
+    }
+    showError(friendly);
+  } else { if (msgBox) msgBox.classList.add('hide'); }
+
+  if (form) form.addEventListener('submit', function (e) {
+    if (isVm) {
+      var code = (vInput ? vInput.value : '').trim();
+      if (!code) { e.preventDefault(); showError('ဘောင်ချာကုဒ် ရိုက်ထည့်ပါ'); if (vInput) vInput.focus(); return false; }
+      syncPassword();
+      try { localStorage.setItem('wifi_voucher', code); } catch (ex) {}
+    } else {
+      var u = (mUser ? mUser.value : '').trim();
+      var p = (mPass ? mPass.value : '').trim();
+      if (!u || !p) { e.preventDefault(); showError('Username နှင့် Password ဖြည့်ပါ'); return false; }
+    }
+    var b = document.getElementById('btnText');
+    if (b) b.innerText = 'ချိတ်ဆက်နေသည်... (Connecting)';
+    return true;
+  });
+
+  // Autofill last used voucher (do not resubmit dead codes)
+  try {
+    var saved = localStorage.getItem('wifi_voucher');
+    if (saved && vInput && !vInput.value) { vInput.value = saved.trim(); }
+  } catch (e) {}
+
+  // Live clock footer
+  (function tick() { var c = document.getElementById('clock'); if (c) { var d = new Date(); c.innerText = d.getHours() + ':' + ('0'+d.getMinutes()).slice(-2); } setTimeout(tick, 30000); })();
+})();
+</script>
+</body>
+</html>

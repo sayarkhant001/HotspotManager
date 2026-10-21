@@ -17,6 +17,7 @@ except ImportError:
 
 import cloud_config_enforcer as cce
 from cloud_mikrotik import RouterOSClient
+import deploy_theme as dt
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,6 +39,8 @@ skip_until = {}
 last_reboot_attempt = {}
 last_probe_time = {}
 last_version_probe = {}
+last_theme_sync = {}
+last_deployed_theme = {}
 REBOOT_COOLDOWN = 600  # 10 min between reboot attempts
 
 
@@ -524,6 +527,29 @@ def run_enforcement_cycle():
                 logger.info(f"Router {rid} ({rname}) audit: {res.get('status')} - Fixes: {len(res.get('fixes', []))}")
             except Exception as e:
                 logger.error(f"Error auditing router {rid} ({rname}): {e}")
+
+        # Tier 2b: Portal Theme Sync (on boot or every 24h via marker file)
+        # The Android app writes hotspot/.portal_theme; here we read it and
+        # upload the matching generated template folder when it changes.
+        if just_came_online or (now - last_theme_sync.get(rid, 0)) >= 86400:
+            try:
+                last_theme_sync[rid] = now
+                fu = r_dict.get("api_user", "admin")
+                fp = r_dict.get("api_pass", "Khant1234@")
+                fpt = r_dict.get("ftp_port", 21) or 21
+                marker = dt.read_theme_marker(wg_ip, fu, fp, fpt)
+                if marker:
+                    if dt.theme_folder_exists(marker):
+                        if last_deployed_theme.get(rid) != marker:
+                            res_t = dt.deploy_theme(wg_ip, fu, fp, marker, fpt)
+                            last_deployed_theme[rid] = marker
+                            logger.info(f"Router {rid} ({rname}): theme sync '{marker}' -> {res_t.get('status')} ({res_t.get('message', '')})")
+                        else:
+                            logger.info(f"Router {rid} ({rname}): theme '{marker}' already applied.")
+                    else:
+                        logger.warning(f"Router {rid} ({rname}): marker theme '{marker}' not on VPS store.")
+            except Exception as e:
+                logger.error(f"Theme sync error on router {rid} ({rname}): {e}")
 
 def main():
     logger.info("Starting V3 Automated Enforcer Daemon (exact cutoff + auto-reboot)...")

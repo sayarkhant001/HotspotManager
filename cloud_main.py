@@ -8,6 +8,7 @@ import secrets
 import hashlib
 import sqlite3
 from typing import Optional, List
+import deploy_theme
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -1864,6 +1865,55 @@ def upload_custom_portal(rid: int, req: CustomPortalUpload, current_user: dict =
     except Exception as e:
         conn.close()
         raise HTTPException(status_code=500, detail=f"FTP Upload to router failed: {str(e)}")
+
+class ThemeDeployRequest(BaseModel):
+    theme_id: str
+
+@app.post("/api/routers/{rid}/theme")
+def deploy_router_theme(rid: int, req: ThemeDeployRequest, current_user: dict = Depends(get_current_user)):
+    """Deploy a generated portal theme (portal_templates/<id>/) to a router.
+
+    The Android app writes hotspot/.portal_theme on the router; this endpoint
+    lets the admin portal trigger the same deployment immediately.
+    """
+    conn = db.get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM routers WHERE id = ?", (rid,))
+    r = c.fetchone()
+    if not r:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Router not found")
+    if current_user["role"] != "admin" and r["user_id"] != current_user["id"]:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    theme_id = (req.theme_id or "").strip().lower()
+    if not theme_id:
+        conn.close()
+        raise HTTPException(status_code=400, detail="theme_id is required")
+
+    host = r["wg_ip"]
+    fu = r.get("api_user") or "admin"
+    fp = r.get("api_pass") or "Khant1234@"
+    fpt = r.get("ftp_port") or 21
+
+    res = deploy_theme.deploy_theme(host, fu, fp, theme_id, fpt)
+    if res.get("status") != "ok":
+        conn.close()
+        raise HTTPException(status_code=500, detail=res.get("message", "Theme deploy failed"))
+
+    # Persist chosen theme for the admin portal / future audits
+    try:
+        c.execute("ALTER TABLE routers ADD COLUMN theme_id TEXT DEFAULT ''")
+    except Exception:
+        pass
+    try:
+        c.execute("UPDATE routers SET theme_id = ? WHERE id = ?", (theme_id, rid))
+    except Exception:
+        pass
+    conn.commit()
+    conn.close()
+    return {"status": "ok", "message": res.get("message"), "theme_id": theme_id, "file_count": res.get("file_count", 0)}
 
 @app.post("/api/routers/{rid}/deploy-portal")
 def deploy_portal(rid: int, portal_id: Optional[int] = None, current_user: dict = Depends(get_current_user)):

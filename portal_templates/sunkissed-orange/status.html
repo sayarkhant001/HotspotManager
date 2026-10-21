@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>Free WiFi – Connected Status</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <style>
+:root{--bg:#7C2D12;--card:rgba(124, 45, 18, 0.78);--border:rgba(249, 115, 22, 0.35);--acc:#F97316;--acc2:#EA580C;--txt:#FFFFFF;--muted:#FDBA74;--grad:linear-gradient(135deg, #F97316 0%, #EA580C 100%);--r:20px;--font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans Myanmar",sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{min-height:100vh;width:100%;font-family:var(--font);background:var(--bg);color:var(--txt);display:flex;align-items:center;justify-content:center;overflow-x:hidden;position:relative}
+.glass{position:relative;z-index:10;width:100%;max-width:430px;padding:18px 16px;margin:auto}
+.card{background:var(--card);backdrop-filter:blur(24px);border:1px solid var(--border);border-radius:var(--r);padding:26px 22px;box-shadow:0 24px 60px rgba(0,0,0,.45)}
+.center{text-align:center}
+.badge{width:74px;height:74px;border-radius:50%;background:rgba(16,185,129,.14);border:1.5px solid rgba(16,185,129,.5);display:inline-flex;align-items:center;justify-content:center;margin-bottom:14px;color:#34D399}
+.badge svg{width:36px;height:36px}
+h1{font-size:19px;margin-bottom:4px}
+.sub{color:var(--muted);font-size:12.5px;margin-bottom:18px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.row:last-child{border-bottom:none}
+.row label{color:var(--muted);font-size:12.5px}
+.row strong{font-size:14.5px}
+.mono{font-family:monospace;color:var(--acc)}
+.good{color:#34D399;font-weight:700}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+.tile{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:13px}
+.tile .t{font-size:11px;color:var(--muted);margin-bottom:5px}
+.tile .v{font-size:16px;font-weight:800;color:var(--acc)}
+.tile .s{font-size:10px;color:var(--muted);margin-top:3px}
+.actions{display:flex;gap:10px;margin-top:18px}
+.btn{flex:1;text-align:center;padding:13px;border:none;border-radius:13px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;color:#fff;background:var(--grad);text-decoration:none;display:inline-block}
+.btn.ghost{background:rgba(255,255,255,.07);color:var(--txt);border:1px solid rgba(255,255,255,.12)}
+.footer{text-align:center;color:var(--muted);font-size:11px;margin-top:16px}
+.orb{position:fixed;border-radius:50%;filter:blur(85px);opacity:.4;z-index:0;pointer-events:none}
+.o1{width:320px;height:320px;background:radial-gradient(circle,var(--acc),var(--acc2));top:-80px;left:-90px}
+.o2{width:360px;height:360px;background:radial-gradient(circle,var(--acc2),var(--acc));bottom:-90px;right:-90px;opacity:.28}
+</style>
+</head>
+<body>
+  <div class="orb o1"></div><div class="orb o2"></div>
+  $(if logged-in == 'no')
+  <meta http-equiv="refresh" content="0; url=$(link-login)" />
+  <script>try{localStorage.clear();}catch(e){} window.location.replace("$(link-login)");</script>
+  $(else)
+  <div class="glass">
+    <div class="card center">
+      <div class="badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1.2" fill="currentColor" stroke="none"/>
+        </svg>
+      </div>
+      <h1>Free WiFi</h1>
+      <div class="sub"><span class="good">● အင်တာနက် ချိတ်ဆက်ထားသည် (Connected)</span></div>
+
+      <div class="row"><label>ဘောင်ချာကုဒ် (User)</label><strong class="mono">$(username)</strong></div>
+      <div class="row"><label>IP Address</label><strong>$(ip)</strong></div>
+      <div class="row"><label>MAC Address</label><strong class="mono">$(mac)</strong></div>
+      <div class="row"><label>ကွန်ရက် (Gateway)</label><strong>$(gateway)</strong></div>
+
+      <div class="tiles">
+        <div class="tile"><div class="t">လက်ကျန်ဒေတာ (Remaining)</div><div class="v">$(bytes-in-nice)</div><div class="s">အသုံးပြုပြီး (Used): $(bytes-out-nice)</div></div>
+        <div class="tile"><div class="t">ချိတ်ဆက်ချိန် (Uptime)</div><div class="v">$(uptime)</div><div class="s">သက်တမ်း (Remaining): $(session-time-left)</div></div>
+      </div>
+
+      <div class="actions">
+        <a class="btn ghost" href="$(link-logout)">🚪 ထွက်မည် (Log Out)</a>
+        <a class="btn" href="$(link-status)">🔄 Refresh</a>
+      </div>
+      <div class="footer">Free WiFi · HotspotManager Theme</div>
+    </div>
+  </div>
+  $(endif)
+</body>
+</html>

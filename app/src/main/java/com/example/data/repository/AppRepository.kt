@@ -1405,6 +1405,10 @@ class AppRepository(
     suspend fun uploadPortalZip(zipBytes: ByteArray, onProgress: (String, Int, Int) -> Unit) =
         mikrotikClient.uploadPortalZip(zipBytes, onProgress)
 
+    /** Writes the portal theme marker file to the router so the VPS enforcer deploys it. */
+    suspend fun writePortalThemeMarker(themeId: String): Boolean =
+        mikrotikClient.writePortalThemeMarker(themeId)
+
     suspend fun getIpBindings(): List<com.example.domain.models.IpBinding> = mikrotikClient.getIpBindings()
     suspend fun whitelistDevice(mac: String, ip: String = "", comment: String = "Whitelisted Device"): Boolean = mikrotikClient.whitelistDevice(mac, ip, comment)
     suspend fun removeIpBinding(id: String, mac: String = ""): Boolean = mikrotikClient.removeIpBinding(id, mac)

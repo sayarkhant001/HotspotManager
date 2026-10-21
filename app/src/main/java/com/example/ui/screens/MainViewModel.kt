@@ -783,8 +783,15 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                     val prefs = context.getSharedPreferences("hotspot_theme_prefs", android.content.Context.MODE_PRIVATE)
                     prefs.edit().putString("portal_theme", theme.id).apply()
                 }
-                // The VPS enforcer picks up the theme preference on its next audit.
-                userMessage.value = "✓ Theme '${theme.name}' will be deployed on next sync"
+                // Write the theme marker directly onto the router —
+                // the VPS enforcer picks it up on its next audit and uploads the
+                // matching template folder (portal_templates/<id>/) to /flash/hotspot.
+                val written = repository.writePortalThemeMarker(theme.id)
+                userMessage.value = if (written) {
+                    "✓ Theme '${theme.name}' selected — will be deployed on next sync"
+                } else {
+                    "✓ Theme '${theme.name}' selected — router offline, will sync when connected"
+                }
             } catch (e: Exception) {
                 userMessage.value = "✗ Theme selection failed: ${e.localizedMessage}"
             }
