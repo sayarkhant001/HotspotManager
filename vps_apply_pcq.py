@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Apply the PCQ CPU fix to one router with FULL response checking:
+"""[DEPRECATED since auto-hybrid speed enforcement] Do NOT run this on live
+routers - it permanently clears ALL profile rate-limits and forces the old
+all-PCQ mode. The auto-hybrid PROFILE<->PCQ mode switch now lives in
+deploy_v3_to_router.py (pcq-mode-switch router monitor).
+
+Original: Apply the PCQ CPU fix to one router with FULL response checking:
 1. Clear rate-limit on all hotspot user profiles (kills per-user dynamic queues)
 2. Ensure pcq-hotspot-down / pcq-hotspot-up exist and are configured
 3. Remove stale dynamic <hotspot-*> simple queues

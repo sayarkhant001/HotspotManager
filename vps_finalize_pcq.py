@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# [DEPRECATED since auto-hybrid speed enforcement] Do NOT run this on live
+# routers - it clears ALL profile rate-limits and forces the old all-PCQ mode.
+# The auto-hybrid PROFILE<->PCQ mode switch now lives in deploy_v3_to_router.py
+# (pcq-mode-switch router monitor).
 """Finalize PCQ on a router: remove dynamic queues, briefly kick active hotspot
 sessions (they auto-reconnect via mac-cookie and, with rate-limit now empty, will
 NOT recreate per-user dynamic queues), then add the static hotspot-pcq queue.

@@ -1757,10 +1757,19 @@ class MikrotikClient {
                 val conn = ensureConnectedInternal() ?: return@withContext emptyList()
                 val res = conn.execute("/ip/hotspot/user/profile/print")
                 res.map {
+                    // In PCQ (peak) mode the router clears profile rate-limits; the
+                    // configured speed is persisted in a [RATE:x] comment tag, so
+                    // fall back to it to keep showing the configured speed.
+                    val rl = it["rate-limit"] ?: ""
+                    val cm = it["comment"] ?: ""
+                    val effRate = if (rl.isBlank()) {
+                        val ti = cm.indexOf("[RATE:")
+                        if (ti >= 0) cm.substring(ti + 6).substringBefore("]").trim() else ""
+                    } else rl
                     RouterProfileInfo(
                         id = it[".id"] ?: "",
                         name = it["name"] ?: "",
-                        rateLimit = it["rate-limit"] ?: "",
+                        rateLimit = effRate,
                         sharedUsers = it["shared-users"] ?: "1",
                         sessionTimeout = it["session-timeout"] ?: "",
                         idleTimeout = it["idle-timeout"] ?: "",
