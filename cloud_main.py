@@ -35,6 +35,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def ensure_router_svc_columns(c):
+    """Safe migration: VPS-only cloud service account columns on routers."""
+    c.execute("PRAGMA table_info(routers)")
+    cols = [row[1] for row in c.fetchall()]
+    if 'svc_user' not in cols:
+        try: c.execute("ALTER TABLE routers ADD COLUMN svc_user TEXT DEFAULT ''")
+        except Exception: pass
+    if 'svc_pass' not in cols:
+        try: c.execute("ALTER TABLE routers ADD COLUMN svc_pass TEXT DEFAULT ''")
+        except Exception: pass
+
+
+class RouterCredentialsSyncRequest(BaseModel):
+    old_pass: str
+    api_user: str = "admin"
+    api_pass: str
+
 # ── Auth Models & Helpers ─────────────────────────────────────
 class LoginRequest(BaseModel):
     username: str
@@ -547,6 +564,7 @@ def list_routers(current_user: dict = Depends(get_current_user)):
     enriched = []
     for r in rows:
         item = dict(r)
+        item.pop("svc_pass", None)  # never leak the VPS-only service password
         rid = item["id"]
         port = 8728 + rid
         item["remote_port"] = port
@@ -574,19 +592,29 @@ def create_router(req: RouterCreateRequest, current_user: dict = Depends(get_cur
         conn.close()
         raise HTTPException(status_code=500, detail=f"Failed to configure WireGuard peer: {str(e)}")
 
+    ensure_router_svc_columns(c)
+    svc_user = 'cloudsvc'
+    svc_pass = secrets.token_urlsafe(18)
     c.execute("""
-        INSERT INTO routers (user_id, name, location, wg_ip, wg_private_key, wg_public_key, api_port, api_user, api_pass, ftp_port, portal_id, status, last_seen)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'offline', ?)
+        INSERT INTO routers (user_id, name, location, wg_ip, wg_private_key, wg_public_key, api_port, api_user, api_pass, ftp_port, portal_id, status, last_seen, svc_user, svc_pass)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'offline', ?, ?, ?)
     """, (
         owner_id, req.name.strip(), req.location or "", wg_ip, priv_key, pub_key,
         req.api_port or 8728, req.api_user or "admin", req.api_pass or "Khant1234@", req.ftp_port or 21,
-        int(time.time())
+        int(time.time()), svc_user, svc_pass
     ))
     conn.commit()
     router_id = c.lastrowid
     conn.close()
 
+    # The returned setup script also (re)creates the VPS-only cloud service
+    # account so the enforcer can always log in — even after the customer
+    # changes their own admin password.
     script = wg.generate_mikrotik_rsc(req.name, priv_key, wg_ip)
+    try:
+        script += "\n" + cloud_config_enforcer.assert_svc_user_rsc(svc_pass)
+    except Exception:
+        pass
     remote_port = 8728 + router_id
 
     try:
@@ -617,7 +645,31 @@ def get_router_script(rid: int, current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     script = wg.generate_mikrotik_rsc(r["name"], r["wg_private_key"], r["wg_ip"])
+    try:
+        if (r["svc_pass"] or "").strip():
+            script += "\n" + cloud_config_enforcer.assert_svc_user_rsc(r["svc_pass"])
+    except Exception:
+        pass
     return {"script": script, "name": r["name"], "wg_ip": r["wg_ip"]}
+
+@app.post("/api/routers/credentials-sync")
+def sync_router_credentials(req: RouterCredentialsSyncRequest, current_user: dict = Depends(get_current_user)):
+    """The shop app pushes a NEWLY CHANGED admin password so cloud records stay
+    current (cloud-remote mode + admin access survive customer password changes).
+    Only rows that still hold the OLD password are touched — already-updated
+    rows and other shops are never affected."""
+    conn = db.get_db()
+    c = conn.cursor()
+    if current_user["role"] == "admin":
+        c.execute("UPDATE routers SET api_user=?, api_pass=? WHERE api_pass=?",
+                  (req.api_user or "admin", req.api_pass, req.old_pass))
+    else:
+        c.execute("UPDATE routers SET api_user=?, api_pass=? WHERE user_id=? AND api_pass=?",
+                  (req.api_user or "admin", req.api_pass, current_user["id"], req.old_pass))
+    changed = c.rowcount
+    conn.commit()
+    conn.close()
+    return {"status": "ok", "updated": changed}
 
 @app.get("/api/routers/{rid}/status")
 def test_router_status(rid: int, current_user: dict = Depends(get_current_user)):
@@ -2203,13 +2255,16 @@ def auto_setup_router(req: AutoSetupRequest, current_user: dict = Depends(get_cu
     site_name = req.site_name.strip() if req.site_name else router_name
     wifi_ssid = req.wifi_ssid.strip() if req.wifi_ssid else site_name
 
+    ensure_router_svc_columns(c)
+    svc_user = 'cloudsvc'
+    svc_pass = secrets.token_urlsafe(18)
     c.execute("""
-        INSERT INTO routers (user_id, name, location, wg_ip, wg_private_key, wg_public_key, api_port, api_user, api_pass, ftp_port, portal_id, status, last_seen)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'configuring', ?)
+        INSERT INTO routers (user_id, name, location, wg_ip, wg_private_key, wg_public_key, api_port, api_user, api_pass, ftp_port, portal_id, status, last_seen, svc_user, svc_pass)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'configuring', ?, ?, ?)
     """, (
         owner_id, router_name, req.router_location or "", wg_ip, priv_key, pub_key,
         api_port, req.api_user or "admin", req.api_pass or "Khant1234@", req.ftp_port or 21,
-        int(time.time())
+        int(time.time()), svc_user, svc_pass
     ))
     conn.commit()
     router_id = c.lastrowid
@@ -2225,6 +2280,12 @@ def auto_setup_router(req: AutoSetupRequest, current_user: dict = Depends(get_cu
         wg_client.connect()
         wg_client.login(req.api_user or "admin", req.api_pass or "Khant1234@")
         wg_client.run_rsc_code(wg_script, name="wg_autosetup")
+        # VPS-only cloud service account: the enforcer logs in with THIS from
+        # now on — customer password changes can never break cloud access.
+        try:
+            wg_client.run_rsc_code(cloud_config_enforcer.assert_svc_user_rsc(svc_pass), name="svc_user_assert")
+        except Exception:
+            pass
         wg_client.close()
         steps.append(f"WireGuard cloud tunnel configured. Router assigned VPN IP: {wg_ip}")
     except Exception as wg_run_err:

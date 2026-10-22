@@ -885,10 +885,21 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     fun getConnectedUser(): String = repository.mikrotikClient.getCurrentUser()
     fun getConnectedPass(): String = repository.mikrotikClient.getCurrentPass()
 
-    fun changeLoginPassword(oldPass: String, newPass: String, onResult: (Boolean, String) -> Unit) {
+    fun changeLoginPassword(oldPass: String, newPass: String, onResult: (Boolean, String) -> Unit, context: Context? = null) {
         viewModelScope.launch {
+            // lastPass still holds the OLD password here — capture it so the cloud
+            // record can be synced after the change succeeds (cloud remote mode
+            // and the VPS enforcer keep working after customer password changes).
+            val oldUsed = repository.mikrotikClient.getCurrentPass()
             val res = repository.changeRouterPassword(oldPass, newPass)
             if (res.isSuccess) {
+                if (context != null && oldUsed.isNotBlank()) {
+                    try {
+                        com.example.data.remote.CloudApiClient.syncRouterCredentials(
+                            context, oldUsed, repository.mikrotikClient.getCurrentUser(), newPass
+                        )
+                    } catch (_: Exception) {}
+                }
                 userMessage.value = "Password updated successfully!"
                 onResult(true, "Password updated successfully!")
             } else {

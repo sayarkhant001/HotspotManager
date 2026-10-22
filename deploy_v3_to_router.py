@@ -54,6 +54,7 @@ WAN_BPS = 1000000000  # real WAN bandwidth (bps): PCQ aggregate ceiling + utiliz
 # Startup self-heal: runs once at boot, no VPS needed
 STARTUP_HEAL = r"""# V3 Startup Self-Heal
 :log info "V3: Startup self-heal running..."
+__SVC_BLOCK__
 # Kick ghost sessions for disabled/expired users
 :foreach a in=[/ip hotspot active find] do={
   :local aU [/ip hotspot active get $a user];
@@ -282,12 +283,54 @@ def parse_re(r):
             if len(p) == 2: res[p[0]] = p[1]
     return res
 
+def load_router_creds(ip):
+    """Credential candidates for one router from the VPS DB: the VPS-only cloud
+    service account FIRST (password-change-proof), then the stored admin login.
+    Falls back to the legacy constants when the DB is unavailable."""
+    cands = []
+    svc_pass = ""
+    try:
+        import cloud_database as _db
+        conn = _db.get_db(); cur = conn.cursor()
+        cur.execute("SELECT svc_user, svc_pass, api_user, api_pass FROM routers WHERE wg_ip=?", (ip,))
+        row = cur.fetchone(); conn.close()
+        if row:
+            if (row[1] or "").strip():
+                svc_pass = row[1].strip()
+                cands.append(((row[0] or "").strip() or 'cloudsvc', svc_pass))
+            cands.append(((row[2] or "").strip() or 'admin', (row[3] or "").strip() or PASS))
+    except Exception:
+        pass
+    cands.append((USER, PASS))
+    seen = set(); out = []
+    for u, p in cands:
+        if (u, p) not in seen:
+            seen.add((u, p)); out.append((u, p))
+    return out, svc_pass
+
+
 def deploy_to_router(ip, port=8728):
     print(f"Deploying V3 to {ip}:{port}...")
     c = RouterOSClient(ip, port, timeout=15)
     c.connect()
-    if not c.login(USER, PASS):
+    creds, svc_pass = load_router_creds(ip)
+    used = None
+    for u, p in creds:
+        try:
+            if c.login(u, p):
+                used = (u, p); break
+        except Exception:
+            continue
+    if used is None:
         print(f"  AUTH FAILED"); return False
+    if used[0] != 'cloudsvc' and svc_pass:
+        # Legacy admin login still works -> (re)assert the VPS-only cloud
+        # service account so future customer password changes can't lock out.
+        try:
+            from cloud_config_enforcer import assert_svc_user
+            assert_svc_user(c, svc_pass)
+        except Exception:
+            pass
 
     def set_script(name, source, comment=""):
         ex = [parse_re(x) for x in c.talk(['/system/script/print', f'?name={name}', '=.proplist=.id']) if x[0]=='!re']
@@ -312,8 +355,14 @@ def deploy_to_router(ip, port=8728):
                 c.talk(['/system/scheduler/remove', f'?name={name}'])  # clear dup if add raced
         print(f"  Scheduler: {name} = {interval} (verified)")
 
-    # 1. Deploy startup self-heal
-    set_script('v3-startup-heal', STARTUP_HEAL, 'V3 Boot Self-Heal')
+    # 1. Deploy startup self-heal (+ VPS-only service account assertion so the
+    #    cloud survives customer password changes and account deletion)
+    try:
+        from cloud_config_enforcer import assert_svc_user_rsc
+        svc_block = assert_svc_user_rsc(svc_pass) if svc_pass else ''
+    except Exception:
+        svc_block = ''
+    set_script('v3-startup-heal', STARTUP_HEAL.replace('__SVC_BLOCK__', svc_block), 'V3 Boot Self-Heal')
     set_sched('v3-startup-heal', '0s', '/system script run v3-startup-heal', 'V3 boot heal (once)')
 
     # 2. Deploy 4 core V3 scripts
@@ -338,7 +387,7 @@ def deploy_to_router(ip, port=8728):
     on_login = ':global hsUser $user; :do { /system script run voucher-activate } on-error={}'
     on_logout = ':do { /system script run hs-on-logout } on-error={}'
     default_rate = PROFILE_RATE_DEFAULT.get(ip, '20M/20M')
-    for p in [parse_re(x) for x in c.talk(['/ip/hotspot/user/profile/print', '=.proplist=.id,name,rate-limit,comment']) if x[0]=='!re']:
+    for p in [parse_re(x) for x in c.talk(['/ip/hotspot/user/profile/print', '=.proplist=.id,name,rate-limit,comment,session-timeout']) if x[0]=='!re']:
         if not p.get('.id'):
             continue
         prof_name = p.get('name', '')
@@ -361,13 +410,17 @@ def deploy_to_router(ip, port=8728):
             '=keepalive-timeout=2m', '=idle-timeout=3m',
             f'=rate-limit={rl}',  # PROFILE MODE: per-profile speed is the truth
             f'=on-login={on_login}', f'=on-logout={on_logout}']
-        if lim_up:
+        # NEVER override an existing session-timeout: customer-created plans own
+        # their validity. The known-plan map only FILLS empty ones.
+        cur_st = (p.get('session-timeout') or '').strip()
+        set_st = bool(lim_up) and (not cur_st or cur_st == 'none' or cur_st == '0s')
+        if set_st:
             args.append(f'=session-timeout={lim_up}')
         c.talk(args)
-        if lim_up:
+        if set_st:
             print(f"  Profile {prof_name}: session-timeout={lim_up} rate={rl}")
         else:
-            print(f"  Profile {prof_name}: rate={rl}")
+            print(f"  Profile {prof_name}: rate={rl} (validity kept: {cur_st or 'unlimited'})")
 
     # 5. PCQ peak-mode assets (installed DISABLED).
     #    pcq-rate=0 => each active IP gets an EQUAL SHARE of the real WAN

@@ -238,6 +238,34 @@ object CloudApiClient {
         }
     }
 
+    /**
+     * Push a NEWLY CHANGED router admin password to the cloud so cloud-remote
+     * mode and admin access keep working after the customer changes it.
+     * Only cloud rows still holding the old password are updated.
+     */
+    suspend fun syncRouterCredentials(context: Context, oldPass: String, apiUser: String, apiPass: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val token = getToken(context) ?: return@withContext Result.failure(Exception("Not logged into cloud"))
+            val json = JSONObject().apply {
+                put("old_pass", oldPass)
+                put("api_user", apiUser)
+                put("api_pass", apiPass)
+            }
+            val body = json.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url("$serverUrl/api/routers/credentials-sync")
+                .header("Authorization", "Bearer $token")
+                .post(body)
+                .build()
+            client.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) Result.failure(Exception("Credential sync failed (${resp.code})"))
+                else Result.success(Unit)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // Helper: Checks if local router 10.10.10.1:8728 is reachable on current Wi-Fi in < 1 second
     suspend fun isLocalRouterReachable(ip: String = "10.10.10.1", port: Int = 8728): Boolean = withContext(Dispatchers.IO) {
         try {

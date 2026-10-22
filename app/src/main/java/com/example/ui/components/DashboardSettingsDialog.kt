@@ -943,21 +943,25 @@ fun DashboardSettingsDialog(
                                 passErrorMsg = null
                                 passSuccessMsg = null
 
-                                viewModel.changeLoginPassword(currentPassInput.trim(), newPassInput.trim()) { success, msg ->
-                                    isChangingPass = false
-                                    if (success) {
-                                        // Save to login preferences so future app launches work seamlessly
-                                        loginPrefs.edit()
-                                            .putString("router_pass", newPassInput.trim())
-                                            .apply()
-                                        passSuccessMsg = strings.passwordChangedSuccess
-                                        currentPassInput = newPassInput.trim()
-                                        newPassInput = ""
-                                        confirmPassInput = ""
-                                    } else {
-                                        passErrorMsg = msg
-                                    }
-                                }
+                                viewModel.changeLoginPassword(
+                                    currentPassInput.trim(), newPassInput.trim(),
+                                    onResult = { success, msg ->
+                                        isChangingPass = false
+                                        if (success) {
+                                            // Save to login preferences so future app launches work seamlessly
+                                            loginPrefs.edit()
+                                                .putString("router_pass", newPassInput.trim())
+                                                .apply()
+                                            passSuccessMsg = strings.passwordChangedSuccess
+                                            currentPassInput = newPassInput.trim()
+                                            newPassInput = ""
+                                            confirmPassInput = ""
+                                        } else {
+                                            passErrorMsg = msg
+                                        }
+                                    },
+                                    context = context
+                                )
                             },
                             enabled = !isChangingPass && newPassInput.isNotBlank() && confirmPassInput.isNotBlank(),
                             shape = RoundedCornerShape(12.dp),

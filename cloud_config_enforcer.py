@@ -10,6 +10,64 @@ from cloud_mikrotik import RouterOSClient
 # V3: AIRTIGHT QUOTA & TIME ENFORCER
 # RouterOS kernel does the cutting; VPS is backup-only sweeper.
 
+# ── VPS-only cloud service account ─────────────────────────────
+# A dedicated RouterOS user the cloud logs in with. Its `address` lock means
+# RouterOS ONLY accepts this login from the VPS WireGuard IP — the customer
+# can change their own admin password freely and cloud access NEVER breaks.
+SVC_USER = 'cloudsvc'
+VPS_WG_IP = '10.200.0.1'
+SVC_COMMENT = 'Cloud enforcer service account (VPS-only)'
+
+
+def assert_svc_user_rsc(svc_pass):
+    """RSC that creates or re-asserts the VPS-only service account.
+    The password is reset to the VPS-known value on every assertion, so even
+    a changed/deleted account heals on the next deploy/audit/boot."""
+    return (
+        '# -- Cloud service account (VPS-only via WireGuard) --\n'
+        ':do {\n'
+        f'  :if ([:len [/user find name="{SVC_USER}"]] = 0) do={{\n'
+        f'    /user add name="{SVC_USER}" group=full password="{svc_pass}" '
+        f'address="{VPS_WG_IP}/32" comment="{SVC_COMMENT}"\n'
+        '  } else={\n'
+        f'    /user set [find name="{SVC_USER}"] group=full password="{svc_pass}" '
+        f'address="{VPS_WG_IP}/32" comment="{SVC_COMMENT}"\n'
+        '  }\n'
+        '} on-error={}\n'
+    )
+
+
+def login_candidates(svc_user, svc_pass, api_user='admin', api_pass='Khant1234@'):
+    """Credential candidates in priority order: VPS-only service account
+    first (survives customer password changes), stored admin login second
+    (legacy routers / before their first re-deploy)."""
+    logins = []
+    if (svc_pass or '').strip():
+        logins.append(((svc_user or '').strip() or SVC_USER, svc_pass.strip()))
+    if (api_pass or '').strip():
+        logins.append(((api_user or '').strip() or 'admin', api_pass.strip()))
+    return logins
+
+
+def login_with_candidates(client, logins):
+    """Try each credential pair in order. Returns (ok, used_pair_or_None)."""
+    for u, p in (logins or []):
+        try:
+            if client.login(u, p):
+                return True, (u, p)
+        except Exception:
+            continue
+    return False, None
+
+
+def assert_svc_user(client, svc_pass):
+    """Best-effort (re)assertion of the service account on a logged-in client."""
+    try:
+        client.run_rsc_code(assert_svc_user_rsc(svc_pass), name='svc_user_assert')
+        return True
+    except Exception:
+        return False
+
 VOUCHER_ACTIVATE_SOURCE = """# V3 Airtight Voucher Activation - REMAINING as hard limit
 :global hsUser;
 :local u $hsUser;
@@ -49,10 +107,19 @@ VOUCHER_ACTIVATE_SOURCE = """# V3 Airtight Voucher Activation - REMAINING as har
   /ip hotspot user set $uObj disabled=yes limit-bytes-total=1 limit-uptime=1s;
   :return "";
 };
-# RESOLVE ORIG LIMIT
+# RESOLVE ORIG LIMIT — customer-plan truth FIRST:
+# 1. [ORIG-LIMIT:] tag (per-voucher continuity), 2. the user's own
+# limit-bytes-total (what the app wrote at voucher creation = the TRUE quota),
+# 3. legacy name patterns ONLY for hand-made users with no real value.
 :local origLim 0;
 :local lStr [$parseTag comm=$curComm tag="[ORIG-LIMIT:"];
 :if ([:len $lStr] > 0) do={ :set origLim [:tonum $lStr] };
+:if ($origLim = 0) do={
+  :do {
+    :local curLim [/ip hotspot user get $uObj limit-bytes-total];
+    :if ($curLim > 0) do={ :set origLim $curLim };
+  } on-error={};
+};
 :if ($origLim = 0) do={
   :local cU ($profName . " " . $curComm);
   :if ($cU ~ "100GB") do={ :set origLim 107374182400 };
@@ -72,13 +139,9 @@ VOUCHER_ACTIVATE_SOURCE = """# V3 Airtight Voucher Activation - REMAINING as har
   :if ($cU ~ "250MB") do={ :set origLim 262144000 };
   :if ($cU ~ "100MB") do={ :set origLim 104857600 };
   :if ($cU ~ "50MB" or $cU ~ "test") do={ :set origLim 52428800 };
-  :if ($origLim = 0) do={
-    :local curLim [/ip hotspot user get $uObj limit-bytes-total];
-    :if ($curLim > 0) do={ :set origLim $curLim };
-  };
-  :if ($origLim > 0) do={
-    :set curComm [$setTag comm=$curComm tag="[ORIG-LIMIT:" val=[:tostr $origLim]];
-  };
+};
+:if ($origLim > 0) do={
+  :set curComm [$setTag comm=$curComm tag="[ORIG-LIMIT:" val=[:tostr $origLim]];
 };
 # CALCULATE USED from [USED:] + hw counters
 :local usedBytes 0;
@@ -115,10 +178,26 @@ VOUCHER_ACTIVATE_SOURCE = """# V3 Airtight Voucher Activation - REMAINING as har
 :if ($isFirst) do={
   :set curComm [$setTag comm=$curComm tag="[ACT:" val=([:tostr $cDate] . " " . [:tostr $cTime])];
 };
-# RESOLVE & SET REMAINING UPTIME
+# RESOLVE & SET REMAINING UPTIME — customer-plan truth FIRST:
+# 1. [ORIG-UP:] tag (per-voucher continuity), 2. the user's own limit-uptime
+# (what the app wrote at voucher creation), 3. the PROFILE's session-timeout
+# (the plan's real validity — works for ANY customer-created plan name),
+# 4. legacy name patterns ONLY for hand-made users.
 :local origUp [:totime "0s"];
 :local upStr [$parseTag comm=$curComm tag="[ORIG-UP:"];
 :if ([:len $upStr] > 0) do={ :set origUp [:totime $upStr] };
+:if ($origUp = [:totime "0s"]) do={
+  :do {
+    :local ownUp [/ip hotspot user get $uObj limit-uptime];
+    :if ([:len $ownUp] > 0 and $ownUp > [:totime "0s"]) do={ :set origUp $ownUp };
+  } on-error={};
+};
+:if ($origUp = [:totime "0s"]) do={
+  :do {
+    :local upProf [/ip hotspot user/profile get [find name=$profName] session-timeout];
+    :if ([:len $upProf] > 0 and $upProf > [:totime "0s"]) do={ :set origUp $upProf };
+  } on-error={};
+};
 :if ($origUp = [:totime "0s"]) do={
   :local p ($profName . " " . $curComm);
   :if ($p ~ "30d" or $p ~ "30Day" or $p ~ "4w") do={ :set origUp 30d };
@@ -130,15 +209,9 @@ VOUCHER_ACTIVATE_SOURCE = """# V3 Airtight Voucher Activation - REMAINING as har
   :if ($p ~ "2h") do={ :set origUp 2h };
   :if ($p ~ "1h") do={ :set origUp 1h };
   :if ($p ~ "test") do={ :set origUp 3m };
-  # Authoritative fallback: use the profile's own session-timeout (true plan
-  # validity) for plans whose names don't encode a duration (long-term plans!).
-  :if ($origUp = [:totime "0s"]) do={
-    :local upProf [/ip hotspot user/profile get [find name=$profName] session-timeout];
-    :if ([:len $upProf] > 0 and $upProf > [:totime "0s"]) do={ :set origUp $upProf };
-  };
-  :if ($origUp > [:totime "0s"]) do={
-    :set curComm [$setTag comm=$curComm tag="[ORIG-UP:" val=[:tostr $origUp]];
-  };
+};
+:if ($origUp > [:totime "0s"]) do={
+  :set curComm [$setTag comm=$curComm tag="[ORIG-UP:" val=[:tostr $origUp]];
 };
 :if ($origUp > [:totime "0s"]) do={
   /ip hotspot user set $uObj limit-uptime=$origUp;
@@ -351,6 +424,9 @@ class RouterAuditor:
         self.host = router_dict["wg_ip"]
         self.user = router_dict.get("api_user", "admin")
         self.pwd = router_dict.get("api_pass", "Khant1234@")
+        self.svc_user = (router_dict.get("svc_user") or "").strip() or SVC_USER
+        self.svc_pass = (router_dict.get("svc_pass") or "").strip()
+        self.logins = login_candidates(self.svc_user, self.svc_pass, self.user, self.pwd)
         self.router_id = router_dict["id"]
         self.router_name = router_dict["name"]
 
@@ -363,9 +439,15 @@ class RouterAuditor:
             client = RouterOSClient(self.host, port=8728, timeout=12.0)
             try:
                 client.connect()
-                if not client.login(self.user, self.pwd):
+                login_ok, used_login = login_with_candidates(client, self.logins)
+                if not login_ok:
                     issues.append("API Authentication failed.")
                 else:
+                    if used_login and used_login[0] != SVC_USER and self.svc_pass:
+                        # Legacy admin login still works -> (re)assert the VPS-only
+                        # service account so a future customer password change can
+                        # never lock the cloud out (self-upgrade of old routers).
+                        assert_svc_user(client, self.svc_pass)
                     def parse_re(r):
                         res = {}
                         for item in r[1:]:

@@ -160,22 +160,16 @@ def parse_duration(prof_name, comment=""):
     return None
 
 def parse_orig_limit(prof_name, comment=""):
-    c = (comment or "").lower()
-    p = (prof_name or "").lower()
-    if '[orig-limit:' in c:
-        try: return int(comment.split('[ORIG-LIMIT:')[1].split(']')[0])
+    """AUTHORITATIVE ONLY: the [ORIG-LIMIT:] tag written at activation from the
+    voucher's true creation quota. Plan-NAME guessing was removed on purpose —
+    customer-created plans can carry any name ('2gb' with a 20GB quota, promo
+    names, etc.) and a wrong guess here DISABLES paying customers early. When
+    the tag is missing the answer is 0 = fail-safe (the RouterOS kernel's own
+    limit-bytes-total is the cutoff; the enforcer never cuts by guesswork)."""
+    c = (comment or "")
+    if '[ORIG-LIMIT:' in c:
+        try: return int(c.split('[ORIG-LIMIT:')[1].split(']')[0])
         except: pass
-    if '50gb' in p or '50gb' in c: return 53687091200
-    elif '40g' in p or '40g' in c: return 42949672960
-    elif '30d' in p or '30day' in p: return 32212254720
-    elif '4gb' in p or '4gb' in c: return 4294967296
-    elif '2gb' in p or '2gb' in c: return 2147483648
-    elif '1000ks' in p or '1000ks' in c: return 1782579200
-    elif '1gb' in p or '1gb' in c: return 1073741824
-    elif '500ks' in p or '500ks' in c: return 786432000
-    elif 'test' in p: return 52428800
-    # Unknown quota -> 0 (fail-safe: do not cut by guessed quota; the router
-    # kernel + [USED:]/[ORIG-LIMIT:] tags are the authoritative cutoff).
     return 0
 
 def record_audit(router_id, router_name, issues, fixes, summary):
@@ -205,14 +199,15 @@ def record_audit(router_id, router_name, issues, fixes, summary):
         logger.error(f"DB Error: {e}")
 
 
-def probe_router_version(router_id, router_name, host, user, pwd):
+def probe_router_version(router_id, router_name, host, logins):
     """Lightweight 1-call RouterOS version + update probe (stored for admin dashboard).
     Runs on the enforcer's existing connection cadence; never adds a new loop."""
     if not db: return
     try:
         client = RouterOSClient(host, timeout=8.0)
         client.connect()
-        if client.login(user, pwd):
+        login_ok, _used = cce.login_with_candidates(client, logins)
+        if login_ok:
             # version from /system/resource (cheap)
             res = client.talk(['/system/resource/print'])
             ver = ''
@@ -247,17 +242,24 @@ def probe_router_version(router_id, router_name, host, user, pwd):
         logger.error(f"Version probe failed for router {router_id} ({router_name}): {e}")
 
 
-def reboot_router(host, user="admin", pwd="Khant1234@"):
-    """SSH reboot for unresponsive routers"""
+def reboot_router(host, user="admin", pwd="Khant1234@", logins=None):
+    """SSH reboot for unresponsive routers (cloud service account first)."""
     try:
         import paramiko
+        if logins is None:
+            logins = [(user, pwd)]
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(host, port=22, username=user, password=pwd, timeout=8)
-        ssh.exec_command('/system reboot', timeout=5)
-        ssh.close()
-        logger.info(f"REBOOTED router {host} via SSH")
-        return True
+        for u, p in logins:
+            try:
+                ssh.connect(host, port=22, username=u, password=p, timeout=8)
+                ssh.exec_command('/system reboot', timeout=5)
+                ssh.close()
+                logger.info(f"REBOOTED router {host} via SSH (user={u})")
+                return True
+            except Exception:
+                continue
+        return False
     except Exception as e:
         logger.error(f"SSH reboot failed for {host}: {e}")
         return False
@@ -273,11 +275,19 @@ def run_fast_active_sweep(router_dict):
     host = router_dict["wg_ip"]
     user = router_dict.get("api_user", "admin")
     pwd = router_dict.get("api_pass", "Khant1234@")
+    svc_pass = (router_dict.get("svc_pass") or "").strip()
 
     client = RouterOSClient(host, timeout=12.0)
     try:
         client.connect()
-        if not client.login(user, pwd): return
+        login_ok, used = cce.login_with_candidates(client, cce.login_candidates(
+            cce.SVC_USER, svc_pass, user, pwd))
+        if not login_ok: return
+        if used and used[0] != cce.SVC_USER and svc_pass:
+            # Legacy admin login still works -> (re)assert the VPS-only service
+            # account (self-upgrade: old routers gain password-change-proof cloud
+            # access without any re-setup).
+            cce.assert_svc_user(client, svc_pass)
 
         # Router clock
         clock_res = client.talk(['/system/clock/print'])
@@ -392,11 +402,16 @@ def run_offline_quota_sweep(router_dict):
     host = router_dict["wg_ip"]
     user = router_dict.get("api_user", "admin")
     pwd = router_dict.get("api_pass", "Khant1234@")
+    svc_pass = (router_dict.get("svc_pass") or "").strip()
 
     client = RouterOSClient(host, timeout=30.0)
     try:
         client.connect()
-        if not client.login(user, pwd): return
+        login_ok, used = cce.login_with_candidates(client, cce.login_candidates(
+            cce.SVC_USER, svc_pass, user, pwd))
+        if not login_ok: return
+        if used and used[0] != cce.SVC_USER and svc_pass:
+            cce.assert_svc_user(client, svc_pass)
 
         clock_res = client.talk(['/system/clock/print'])
         clock = [parse_re(x) for x in clock_res if x[0] == '!re']
@@ -413,10 +428,20 @@ def run_offline_quota_sweep(router_dict):
         all_users = [parse_re(x) for x in all_user_res if x[0] == '!re']
 
         def resolve_dur(prof, comm):
-            """Validity from [ORIG-UP:] tag or duration-encoded name; fall back to
-            the router PROFILE's own limit-uptime (authoritative for long-term
-            plans whose names carry no time keyword like '4GB'). Cache per router+profile."""
-            d = parse_duration(prof, comm)
+            """Validity resolution order (customer-created plans are the truth):
+            1. [ORIG-UP:] tag (per-voucher, written at activation),
+            2. the PROFILE's own session-timeout (the plan's real validity —
+               works for ANY customer-created plan name),
+            3. duration-encoded plan names (legacy hand-made plans only).
+            Cache per router+profile."""
+            d = None
+            if '[ORIG-UP:' in comm:
+                try:
+                    up_tag = comm.split('[ORIG-UP:')[1].split(']')[0].strip()
+                except:
+                    up_tag = ''
+                if up_tag:
+                    d = parse_ros_duration(up_tag)
             if d is None and prof:
                 key = (rid, prof)
                 val = _PROFILE_UP_CACHE.get(key, 'MISS')
@@ -433,6 +458,10 @@ def run_offline_quota_sweep(router_dict):
                         val = None
                     _PROFILE_UP_CACHE[key] = val
                 d = val or None
+            if d is None:
+                # Legacy fallback: duration-encoded plan names only (never guessed
+                # short for unknown plans — None = do NOT treat as time-expired).
+                d = parse_duration(prof, comm)
             return d
 
         fixes = []
@@ -606,9 +635,11 @@ def run_enforcement_cycle():
                 last_rb = last_reboot_attempt.get(rid, 0)
                 if (now - last_rb) > REBOOT_COOLDOWN:
                     logger.warning(f"Router {rid} ({rname}) unreachable after {fails} failures. Attempting SSH reboot...")
-                    user = r_dict.get("api_user", "admin")
-                    pwd = r_dict.get("api_pass", "Khant1234@")
-                    if reboot_router(wg_ip, user, pwd):
+                    rb_logins = cce.login_candidates(
+                        cce.SVC_USER, (r_dict.get("svc_pass") or "").strip(),
+                        r_dict.get("api_user", "admin"), r_dict.get("api_pass", "Khant1234@"))
+                    if reboot_router(wg_ip, r_dict.get("api_user", "admin"),
+                                     r_dict.get("api_pass", "Khant1234@"), rb_logins):
                         last_reboot_attempt[rid] = now
                         consecutive_failures[rid] = 0
                         skip_until[rid] = now + 120  # wait 2 min for reboot
@@ -622,8 +653,9 @@ def run_enforcement_cycle():
         if just_came_online or ver_elapsed >= 21600:
             last_version_probe[rid] = now
             try:
-                probe_router_version(rid, rname, wg_ip,
-                    r_dict.get("api_user", "admin"), r_dict.get("api_pass", "Khant1234@"))
+                probe_router_version(rid, rname, wg_ip, cce.login_candidates(
+                    cce.SVC_USER, (r_dict.get("svc_pass") or "").strip(),
+                    r_dict.get("api_user", "admin"), r_dict.get("api_pass", "Khant1234@")))
             except Exception as e:
                 logger.error(f"Version probe error on router {rid} ({rname}): {e}")
 
@@ -691,13 +723,27 @@ def run_enforcement_cycle():
                 fu = r_dict.get("api_user", "admin")
                 fp = r_dict.get("api_pass", "Khant1234@")
                 fpt = r_dict.get("ftp_port", 21) or 21
-                marker = dt.read_theme_marker(wg_ip, fu, fp, fpt)
+                ftp_logins = cce.login_candidates(
+                    cce.SVC_USER, (r_dict.get("svc_pass") or "").strip(), fu, fp)
+                marker = None
+                for t_u, t_p in ftp_logins:
+                    try:
+                        marker = dt.read_theme_marker(wg_ip, t_u, t_p, fpt)
+                        if marker: break
+                    except Exception:
+                        continue
                 if marker:
                     if dt.theme_folder_exists(marker):
                         if last_deployed_theme.get(rid) != marker:
-                            res_t = dt.deploy_theme(wg_ip, fu, fp, marker, fpt)
+                            res_t = None
+                            for t_u, t_p in ftp_logins:
+                                try:
+                                    res_t = dt.deploy_theme(wg_ip, t_u, t_p, marker, fpt)
+                                    if res_t: break
+                                except Exception:
+                                    continue
                             last_deployed_theme[rid] = marker
-                            logger.info(f"Router {rid} ({rname}): theme sync '{marker}' -> {res_t.get('status')} ({res_t.get('message', '')})")
+                            logger.info(f"Router {rid} ({rname}): theme sync '{marker}' -> {(res_t or {}).get('status', 'failed')} ({(res_t or {}).get('message', '')})")
                         else:
                             logger.info(f"Router {rid} ({rname}): theme '{marker}' already applied.")
                     else:
