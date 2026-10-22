@@ -495,15 +495,49 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
 
     private var pollingJob: Job? = null
 
+    // Factory-default admin passwords tried (in order) when the router rejects
+    // the entered credentials — 0-tech onboarding: the user rarely knows them.
+    private val defaultAdminPasswords = listOf("", "admin", "password", "admin123", "Khant1234@")
+
+    /** Password that actually connected when it differs from the one typed. */
+    val autoConnectedRouterPass = MutableStateFlow<String?>(null)
+
+    /** True when the connection was only possible with a factory-default password. */
+    val connectedWithDefaultPass = MutableStateFlow(false)
+
     fun connectToRouter(ip: String, user: String, pass: String) {
         viewModelScope.launch {
             authState.value = AuthState.Loading
             cloudLoginStatus.value = "Router သို့ ချိတ်ဆက်နေပါသည်..."
             connectionMode.value = "direct"
             activeRouterName.value = ip
-            val result = repository.mikrotikClient.connect(ip, user, pass)
+            connectedWithDefaultPass.value = false
+            var result = repository.mikrotikClient.connect(ip, user, pass)
+            var usedPass = pass
+            // The router ANSWERED but rejected the credentials -> try the
+            // factory-default password chain before giving up.
+            val errMsg = result.exceptionOrNull()?.message ?: ""
+            val authRejected = errMsg.contains("invalid user", ignoreCase = true) ||
+                errMsg.contains("password", ignoreCase = true) ||
+                errMsg.contains("cannot log in", ignoreCase = true) ||
+                errMsg.contains("login failure", ignoreCase = true)
+            if (result.isFailure && authRejected && user.equals("admin", ignoreCase = true)) {
+                for (candidate in defaultAdminPasswords.filter { it != pass }) {
+                    cloudLoginStatus.value = "Router စကားဝှက် စစ်ဆေးနေပါသည်..."
+                    val retry = repository.mikrotikClient.connect(ip, user, candidate)
+                    if (retry.isSuccess) {
+                        result = retry
+                        usedPass = candidate
+                        break
+                    }
+                }
+            }
             cloudLoginStatus.value = null
             if (result.isSuccess) {
+                if (usedPass != pass) {
+                    autoConnectedRouterPass.value = usedPass
+                    connectedWithDefaultPass.value = true
+                }
                 authState.value = AuthState.Success
                 startPolling()
                 fetchHotspotNetworkInfo()

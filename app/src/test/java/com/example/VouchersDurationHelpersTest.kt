@@ -35,7 +35,9 @@ class VouchersDurationHelpersTest {
         assertEquals("23h 59m 59s", formatCompactDuration(86399L))
         assertEquals("1m 30s", formatCompactDuration(90L))
         assertEquals("45s", formatCompactDuration(45L))
-        assertEquals("2d", formatCompactDuration(2L * 86400))
+        assertEquals("2d 0h", formatCompactDuration(2L * 86400))
+        assertEquals("1d 0h", formatCompactDuration(86400L))
+        assertEquals("29d 0h 30m", formatCompactDuration(29L * 86400 + 30L * 60 + 32L))
         assertEquals("0s", formatCompactDuration(0L))
     }
 }

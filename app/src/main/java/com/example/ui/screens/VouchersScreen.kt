@@ -988,7 +988,7 @@ fun VoucherItemCard(
                     else -> ""
                 }
 
-                val remainingQuotaMb = if (limitMb > 0 && usedMb in 1 until limitMb) limitMb - usedMb else 0
+                val remainingQuotaMb = if (limitMb > 0 && usedMb < limitMb) limitMb - usedMb else 0
 
                 val shouldShowConsumption = isOnline || activeUser != null || voucher.isUsed || usedMb > 0 || effectiveUptime.isNotBlank() || effectiveTimeLeft.isNotBlank() || remainingQuotaMb > 0
 
@@ -1004,42 +1004,42 @@ fun VoucherItemCard(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            // Quota line — FULL width on its own row: sharing one Row
+                            // with the time cluster squeezed it into a bare "…" on
+                            // narrow phones, hiding the remaining quota entirely.
+                            // Human units follow the plan-display convention (40 GB,
+                            // never 40960 MB).
+                            val quotaText = when {
+                                limitMb > 0 && remainingQuotaMb > 0 ->
+                                    "${formatMbHuman(usedMb.toDouble())} / ${formatMbHuman(limitMb.toDouble())} • ${formatMbHuman(remainingQuotaMb.toDouble())} left"
+                                limitMb > 0 -> "${formatMbHuman(usedMb.toDouble())} / ${formatMbHuman(limitMb.toDouble())}"
+                                usedMb > 0 -> formatMbHuman(usedMb.toDouble())
+                                else -> ""
+                            }
+                            if (quotaText.isNotBlank()) {
                                 Text(
-                                    text = when {
-                                        limitMb > 0 && remainingQuotaMb > 0 -> "$usedMb / $limitMb MB • ${remainingQuotaMb} MB left"
-                                        limitMb > 0 -> "$usedMb / $limitMb MB"
-                                        usedMb > 0 -> "$usedMb MB"
-                                        else -> ""
-                                    },
+                                    text = quotaText,
                                     fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = containerColor,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
+                                    overflow = TextOverflow.Ellipsis
                                 )
-                                // Time cluster as ONE bounded, ellipsized Text so it can
-                                // never run over the quota numbers.
-                                val timeParts = buildList {
-                                    if (effectiveUptime.isNotBlank()) add("⏱ $effectiveUptime")
-                                    if (effectiveTimeLeft.isNotBlank()) add("⌛ $effectiveTimeLeft")
-                                }
-                                if (timeParts.isNotEmpty()) {
-                                    Text(
-                                        text = timeParts.joinToString("   "),
-                                        fontSize = 9.5.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (effectiveTimeLeft.isNotBlank()) successText() else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.widthIn(max = 150.dp)
-                                    )
-                                }
+                            }
+                            // Time cluster — full-width line below the quota line.
+                            val timeParts = buildList {
+                                if (effectiveUptime.isNotBlank()) add("⏱ $effectiveUptime")
+                                if (effectiveTimeLeft.isNotBlank()) add("⌛ $effectiveTimeLeft")
+                            }
+                            if (timeParts.isNotEmpty()) {
+                                Text(
+                                    text = timeParts.joinToString("   "),
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (effectiveTimeLeft.isNotBlank()) successText() else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                             if (limitMb > 0) {
                                 Spacer(modifier = Modifier.height(3.dp))
@@ -1133,13 +1133,34 @@ fun formatCompactDuration(seconds: Long): String {
     val h = (seconds % 86400) / 3600
     val m = (seconds % 3600) / 60
     val s = seconds % 60
-    return buildString {
-        if (d > 0) append("${d}d")
-        if (h > 0) { if (isNotEmpty()) append(" "); append("${h}h") }
+    return if (d > 0) {
+        // Day scale: ALWAYS show the hours digit (even "0h") so a 30-day plan with
+        // 23h consumed reads "29d 0h 30m" — never the ambiguous "29d 30m 32s"
+        // (seconds are noise at day scale and made the chip too wide).
+        buildString {
+            append("${d}d ${h}h")
+            if (m > 0) append(" ${m}m")
+        }
+    } else buildString {
+        if (h > 0) append("${h}h")
         if (m > 0) { if (isNotEmpty()) append(" "); append("${m}m") }
         if (s > 0) { if (isNotEmpty()) append(" "); append("${s}s") }
         if (isEmpty()) append("0s")
     }
+}
+
+/** Human-readable data size following the plan-display convention: "40 GB", not "40960 MB". */
+fun formatMbHuman(mb: Double): String {
+    if (mb >= 1024.0) {
+        val gb = mb / 1024.0
+        val text = if (gb >= 100.0 || gb == gb.toLong().toDouble()) {
+            "%,.0f".format(java.util.Locale.US, gb)
+        } else {
+            "%.1f".format(java.util.Locale.US, gb).removeSuffix(".0")
+        }
+        return "$text GB"
+    }
+    return if (mb == mb.toLong().toDouble()) "${mb.toLong()} MB" else "%.1f MB".format(java.util.Locale.US, mb)
 }
 
 fun Voucher.isExpired(activeCodes: Set<String> = emptySet()): Boolean =

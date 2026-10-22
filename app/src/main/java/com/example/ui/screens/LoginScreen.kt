@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.remote.CloudApiClient
+import kotlinx.coroutines.launch
 import com.example.ui.components.GlassCard
 import com.example.utils.AppLanguage
 import com.example.utils.LanguageManager
@@ -72,6 +73,35 @@ fun LoginScreen(
     var rememberDirectPassword by remember { mutableStateOf(prefs.getBoolean("remember_password", true)) }
     var isDirectPassVisible by remember { mutableStateOf(false) }
 
+    // ---- Router auto-discovery (0-tech onboarding): when the phone is on the ----
+    // ---- router's Wi-Fi, its DHCP gateway IS the router IP.                  ----
+    var isDetecting by remember { mutableStateOf(false) }
+    var detectedIp by remember { mutableStateOf<String?>(null) }
+    val connectedWithDefaultPass by viewModel.connectedWithDefaultPass.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+
+    fun runRouterDetection() {
+        isDetecting = true
+        scope.launch {
+            try {
+                val found = com.example.utils.RouterDiscovery.detectRouter(context)
+                if (found != null) {
+                    detectedIp = found
+                    // Only switch the field when the entered IP does NOT answer
+                    if (!com.example.utils.RouterDiscovery.apiPortReachable(ip)) ip = found
+                } else {
+                    detectedIp = null
+                }
+            } finally {
+                isDetecting = false
+            }
+        }
+    }
+
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == 1) runRouterDetection()
+    }
+
     LaunchedEffect(authState) {
         if (authState is AuthState.Success) {
             if (selectedTab == 0) {
@@ -86,6 +116,12 @@ fun LoginScreen(
                 }
                 editor.apply()
             } else {
+                // Adopt the default password the view-model auto-connected with so
+                // the remembered credentials are the ones that actually work.
+                viewModel.autoConnectedRouterPass.value?.let { auto ->
+                    pass = auto
+                    viewModel.autoConnectedRouterPass.value = null
+                }
                 val editor = prefs.edit()
                     .putInt("login_tab", 1)
                     .putString("router_ip", ip)
@@ -313,6 +349,51 @@ fun LoginScreen(
                         // ====================================================
                         // TAB 1: DIRECT ROUTEROS LOGIN (IP / Admin User)
                         // ====================================================
+                        // Router auto-discovery status + manual re-scan
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (isDetecting) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = strings.autoFindRouter + "...",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                } else {
+                                    Text(
+                                        text = if (detectedIp != null) "✓ " + strings.routerFoundAt + ": " + detectedIp else strings.routerNotFoundHint,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (detectedIp != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                TextButton(
+                                    onClick = { runRouterDetection() },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(26.dp)
+                                ) {
+                                    Text(
+                                        strings.autoFindRouter,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+
                         OutlinedTextField(
                             value = ip,
                             onValueChange = { ip = it },
@@ -442,6 +523,33 @@ fun LoginScreen(
                                 Text(
                                     text = (authState as AuthState.Error).message,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+
+                    // Default-password notice (auto-connected via factory credentials)
+                    if (selectedTab == 1 && connectedWithDefaultPass) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.tertiary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = strings.defaultPassConnected,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
