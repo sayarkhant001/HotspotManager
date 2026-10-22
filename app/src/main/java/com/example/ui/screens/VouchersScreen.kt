@@ -956,9 +956,11 @@ fun VoucherItemCard(
                 }
 
                 val effectiveUptime: String = when {
-                    activeUser != null && activeUser.uptime.isNotBlank() && activeUser.uptime != "0s" -> activeUser.uptime
+                    // Cumulative/continuous first: the repository already folds [USED-UP:]/[BASE-UP:]
+                    // tags and the continuous elapsed-since-activation time into voucher.uptime.
                     voucher.uptime.isNotBlank() && voucher.uptime != "0s" -> voucher.uptime
                     commentUptime.isNotBlank() && commentUptime != "0s" -> commentUptime
+                    activeUser != null && activeUser.uptime.isNotBlank() && activeUser.uptime != "0s" -> activeUser.uptime
                     else -> ""
                 }
 

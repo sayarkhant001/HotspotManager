@@ -1,7 +1,7 @@
 {
-  "versionName": "1.10.6",
-  "versionCode": 50,
-  "releaseTitle": "Hotspot Manager v1.10.6 - Real Remaining Quota & Time on Used Vouchers",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.10.6.apk",
-  "releaseNotes": "• 📊 REAL USAGE ON USED VOUCHERS: when a customer activates a voucher, uses part of their data/time and leaves the network, the Vouchers card now shows the TRUE numbers instead of the full package — e.g. \"120 / 768 MB • 648 MB left\" and \"⌛ 23h 30m left\" (continuous-countdown remaining time works offline too).\n• 🔍 Customer Quota lookup now also shows the real Time Remaining.\n• ♦️ Truly exhausted vouchers still show 100% consumed.\n• 🔒 v1.10.5 preserved: readable sales hero card, total vouchers card, long-term voucher protection."
+  "versionName": "1.10.7",
+  "versionCode": 51,
+  "releaseTitle": "Hotspot Manager v1.10.7 - Continuous Connected Time + CPU Fix",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.10.7.apk",
+  "releaseNotes": "• ⏱ CONTINUOUS CONNECTED TIME: a 1-day voucher activated yesterday now shows ~20h Connected (elapsed since activation, capped at validity) instead of only the current 38-minute session — the app reads the new [USED-UP:]/[BASE-UP:] tags the router now writes, with an automatic elapsed-time fallback for older vouchers.\n• 🖥 ROUTER CPU FIX: profile Rate Limit is now cleared and bandwidth is shaped by ONE static PCQ queue (10.10.10.0/23) instead of one dynamic Simple Queue per logged-in user — the L009 no longer scales CPU with user count (0 dynamic queues verified on all online routers).\n• 🚦 Lightened router schedulers (quota saver 60s, expire monitor 3m) to cut small-router CPU load.\n• 📊 v1.10.6 preserved: real remaining quota/time on used vouchers, readable sales hero card, long-term voucher protection."
 }

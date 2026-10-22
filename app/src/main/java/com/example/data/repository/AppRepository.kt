@@ -639,7 +639,12 @@ class AppRepository(
             val sessionUpSec = parseUptimeSeconds(u.uptime)
             val existingUpSec = parseUptimeSeconds(existing?.uptime ?: "")
             val baseUpSec = parseBaseUptimeSeconds(u.comment) ?: 0L
-            val totalUpSec = maxOf(usedUpSec, sessionUpSec, existingUpSec, liveUpSec, sessionUpSec + baseUpSec)
+            // Continuous elapsed fallback: when the voucher was activated and its validity is
+            // known, show elapsed-since-activation (capped) even before the router tags exist.
+            val elapsedFallbackSec = if (activatedAt != null && (prof?.durationMinutes ?: 0) > 0 && activatedAt <= System.currentTimeMillis()) {
+                minOf((prof!!.durationMinutes * 60L), (System.currentTimeMillis() - activatedAt) / 1000L)
+            } else 0L
+            val totalUpSec = maxOf(usedUpSec, sessionUpSec, existingUpSec, liveUpSec, sessionUpSec + baseUpSec, elapsedFallbackSec)
             val effectiveUptime = if (totalUpSec > 0) formatUptimeSeconds(totalUpSec) else (activeUser?.uptime ?: u.uptime)
 
             Voucher(
@@ -1370,14 +1375,9 @@ class AppRepository(
             val finalUsedMb = Math.round((exactTotalUsedBytes / (1024.0 * 1024.0)) * 10.0) / 10.0
             val finalRemainingMb = if (quotaTotal > 0) Math.round((exactRemainingBytes / (1024.0 * 1024.0)) * 10.0) / 10.0 else 0.0
 
-            // 3. Resolve continuous cumulative Uptime across reboots
-            val baseUpSec = parseBaseUptimeSeconds(effectiveComment) ?: 0L
-            val usedUpSec = parseUsedUptimeSeconds(effectiveComment) ?: 0L
-            val sessionUpSec = parseUptimeSeconds(u.uptime)
-            val effectiveUpSec = maxOf(usedUpSec, baseUpSec + sessionUpSec, sessionUpSec, parseUptimeSeconds(voucher?.uptime ?: ""))
-            val finalUptime = if (effectiveUpSec > 0) formatUptimeSeconds(effectiveUpSec) else u.uptime
-
-            // 4. Resolve continuous Time Left countdown (deducting all consumed elapsed time)
+            // 3a. Activation + validity (needed for both continuous uptime and countdown).
+            // Duration resolves from the router profile session-timeout first (authoritative),
+            // then the voucher's stored duration, then plan defaults.
             val actTime = parseActivationTimestamp(effectiveComment)
                 ?: voucher?.let { parseActivationTimestamp(it.comment) }
             val durationMinutes = when {
@@ -1386,6 +1386,28 @@ class AppRepository(
                 defaults.third > 0 -> defaults.third * 1440
                 else -> 0
             }
+
+            // 3. Resolve continuous cumulative Uptime across reboots.
+            // Priority: accumulated [USED-UP:] tag > [BASE-UP:]+current session > live session >
+            // stored voucher uptime. When those are missing (legacy vouchers before the tags
+            // existed), fall back to the CONTINUOUS elapsed time since [ACT:] — e.g. a 1-day
+            // voucher activated 20h ago shows 20h used even if the current session is 38m.
+            val baseUpSec = parseBaseUptimeSeconds(effectiveComment) ?: 0L
+            val usedUpSec = parseUsedUptimeSeconds(effectiveComment) ?: 0L
+            val sessionUpSec = parseUptimeSeconds(u.uptime)
+            val actElapsedSec = if (actTime != null && durationMinutes > 0 && actTime <= System.currentTimeMillis()) {
+                minOf(durationMinutes * 60L, (System.currentTimeMillis() - actTime) / 1000L)
+            } else 0L
+            val effectiveUpSec = maxOf(
+                usedUpSec,
+                baseUpSec + sessionUpSec,
+                sessionUpSec,
+                parseUptimeSeconds(voucher?.uptime ?: ""),
+                actElapsedSec
+            )
+            val finalUptime = if (effectiveUpSec > 0) formatUptimeSeconds(effectiveUpSec) else u.uptime
+
+            // 4. Resolve continuous Time Left countdown (deducting all consumed elapsed time)
 
             val calculatedTimeLeft: String = when {
                 actTime != null && durationMinutes > 0 -> {

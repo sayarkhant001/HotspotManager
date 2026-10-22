@@ -1258,7 +1258,7 @@ fun ProfileActivatedVouchersDialog(
                                             )
                                             if (v.uptime.isNotBlank() && v.uptime != "0s") {
                                                 Text(
-                                                    text = "Uptime: ${v.uptime}",
+                                                    text = "Connected: ${v.uptime}",
                                                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -1384,7 +1384,7 @@ fun CustomerQuotaLookupDialog(
                             }
 
                             if (v.uptime.isNotBlank()) {
-                                Text("Uptime: ${v.uptime}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Connected Time: ${v.uptime}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
 
                             // Real remaining TIME (continuous countdown): deadline = activation + original validity

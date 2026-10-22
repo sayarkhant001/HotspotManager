@@ -33,6 +33,18 @@ PROFILE_SESSION_TIMEOUT = {
     'test': '3m',
 }
 
+# CPU-spike fix (PCQ): per-user cap applied via ONE static simple queue instead of
+# one dynamic simple queue per logged-in user. Per router (matches each shop's
+# common plan speed). Leave profiles' rate-limit EMPTY so RouterOS stops creating
+# <hotspot-*> dynamic queues; PCQ divides the aggregate fairly per IP.
+PCQ_PER_USER = {
+    '10.200.0.2': '20M/20M',   # YadanarTun  (plans 10M-20M, common 20M)
+    '10.200.0.4': '20M/20M',   # KyawGyi     (plans 20M-50M, common 20M)
+    '10.200.0.3': '10M/10M',   # AYeikSitt1  (plans 10M)
+    '10.200.0.5': '20M/20M',   # AYeikSitt2  (default)
+}
+PCQ_AGG_LIMIT = '1000M/1000M'  # aggregate ceiling (WAN); per-user governed by PCQ
+
 # Startup self-heal: runs once at boot, no VPS needed
 STARTUP_HEAL = r"""# V3 Startup Self-Heal
 :log info "V3: Startup self-heal running..."
@@ -133,12 +145,19 @@ def deploy_to_router(ip, port=8728):
         print(f"  Script: {name}")
 
     def set_sched(name, interval, event, comment=""):
-        ex = [parse_re(x) for x in c.talk(['/system/scheduler/print', f'?name={name}', '=.proplist=.id']) if x[0]=='!re']
-        if ex and ex[0].get('.id'):
-            c.talk(['/system/scheduler/set', f'=.id={ex[0][".id"]}', f'=interval={interval}', f'=on-event={event}'])
-        else:
-            c.talk(['/system/scheduler/add', f'=name={name}', f'=interval={interval}', f'=on-event={event}', '=start-time=startup', f'=comment={comment}'])
-        print(f"  Scheduler: {name}")
+        for attempt in range(2):
+            ex = [parse_re(x) for x in c.talk(['/system/scheduler/print', f'?name={name}', '=.proplist=.id']) if x[0]=='!re']
+            if ex and ex[0].get('.id'):
+                c.talk(['/system/scheduler/set', f'=.id={ex[0][".id"]}', f'=interval={interval}', f'=on-event={event}'])
+            else:
+                c.talk(['/system/scheduler/add', f'=name={name}', f'=interval={interval}', f'=on-event={event}', '=start-time=startup', f'=comment={comment}'])
+            # Verify the change actually landed; retry once if not
+            chk = [parse_re(x) for x in c.talk(['/system/scheduler/print', f'?name={name}', '=.proplist=interval']) if x[0]=='!re']
+            if chk and chk[0].get('interval') == interval:
+                break
+            if attempt == 0:
+                c.talk(['/system/scheduler/remove', f'?name={name}'])  # clear dup if add raced
+        print(f"  Scheduler: {name} = {interval} (verified)")
 
     # 1. Deploy startup self-heal
     set_script('v3-startup-heal', STARTUP_HEAL, 'V3 Boot Self-Heal')
@@ -155,8 +174,8 @@ def deploy_to_router(ip, port=8728):
         print(f"  WARN: cloud_config_enforcer import failed: {e}")
 
     # 3. Ensure schedulers
-    set_sched('hs-quota-saver', '30s', '/system script run hs-quota-save', 'V3 quota saver')
-    set_sched('hs-continuous-expire-monitor', '1m', '/system script run voucher-expire-check', 'V3 expire monitor')
+    set_sched('hs-quota-saver', '60s', '/system script run hs-quota-save', 'V3 quota saver')
+    set_sched('hs-continuous-expire-monitor', '3m', '/system script run voucher-expire-check', 'V3 expire monitor')
 
     # 4. Fix profile hooks
     on_login = ':global hsUser $user; :do { /system script run voucher-activate } on-error={}'
@@ -168,12 +187,63 @@ def deploy_to_router(ip, port=8728):
             args = ['/ip/hotspot/user/profile/set', f'=.id={p[".id"]}',
                 '=shared-users=1', '=add-mac-cookie=yes', '=mac-cookie-timeout=30d',
                 '=keepalive-timeout=2m', '=idle-timeout=3m',
+                '=rate-limit=',  # EMPTY: stop per-user dynamic simple queues (CPU fix)
                 f'=on-login={on_login}', f'=on-logout={on_logout}']
             if lim_up:
                 args.append(f'=session-timeout={lim_up}')
             c.talk(args)
             if lim_up:
-                print(f"  Profile {prof_name}: session-timeout={lim_up}")
+                print(f"  Profile {prof_name}: session-timeout={lim_up} (rate-limit cleared)")
+
+    # 5. PCQ consolidation: ONE static queue instead of N per-user dynamic queues.
+    #    This is the #1 CPU fix for 100-200 concurrent users on the L009.
+    pcq_rate = PCQ_PER_USER.get(ip, '20M/20M')
+    down_r, up_r = pcq_rate.split('/')
+    try:
+        # Discover the hotspot subnet from the hotspot-bridge interface address
+        target = ''
+        for a in [parse_re(x) for x in c.talk(['/ip/address/print', '?interface=hotspot-bridge', '=.proplist=address']) if x[0]=='!re']:
+            addr = a.get('address', '')
+            if '/' in addr:
+                base, pfx = addr.split('/')
+                pfx = int(pfx)
+                parts = list(map(int, base.split('.')))
+                mask = (0xFFFFFFFF << (32 - pfx)) & 0xFFFFFFFF
+                net = ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) & mask
+                target = f"{'.'.join(str((net >> s) & 0xFF) for s in (24, 16, 8, 0))}/{pfx}"
+                break
+        if not target:
+            target = '10.10.10.0/23'
+        # PCQ queue types (RouterOS v7 fields: pcq-rate per sub-queue, pcq-classifier)
+        for tname, cls, rte in [('pcq-hotspot-down', 'dst-address', down_r),
+                                ('pcq-hotspot-up', 'src-address', up_r)]:
+            qex = [parse_re(x) for x in c.talk(['/queue/type/print', f'?name={tname}', '=.proplist=.id']) if x[0]=='!re']
+            qargs = [f'=kind=pcq', f'=pcq-rate={rte}', f'=pcq-classifier={cls}',
+                     '=pcq-limit=50', '=pcq-total-limit=2000', f'=name={tname}']
+            if qex and qex[0].get('.id'):
+                c.talk(['/queue/type/set', f'=.id={qex[0][".id"]}'] + qargs[1:])
+            else:
+                c.talk(['/queue/type/add'] + qargs)
+        # Remove any stale per-user dynamic queues immediately
+        removed = 0
+        for q in [parse_re(x) for x in c.talk(['/queue/simple/print', '=.proplist=.id,name,dynamic']) if x[0]=='!re']:
+            if q.get('dynamic') == 'true' and str(q.get('name', '')).startswith('<hotspot-'):
+                c.talk(['/queue/simple/remove', f'=.id={q[".id"]}'])
+                removed += 1
+        if removed:
+            print(f"  Removed {removed} per-user dynamic queues (CPU relief).")
+        # ONE static simple queue over the whole hotspot subnet
+        sex = [parse_re(x) for x in c.talk(['/queue/simple/print', '?name=hotspot-pcq', '=.proplist=.id']) if x[0]=='!re']
+        sargs = ['=name=hotspot-pcq', f'=target={target}', f'=max-limit={PCQ_AGG_LIMIT}',
+                 '=queue=pcq-hotspot-up/pcq-hotspot-down',
+                 '=comment=V3 PCQ: per-user cap ' + pcq_rate + ' (CPU fix)']
+        if sex and sex[0].get('.id'):
+            c.talk(['/queue/simple/set', f'=.id={sex[0][".id"]}'] + sargs[1:])
+        else:
+            c.talk(['/queue/simple/add'] + sargs)
+        print(f"  PCQ queue hotspot-pcq: target={target} per-user={pcq_rate} (1 queue, not per-user)")
+    except Exception as qe:
+        print(f"  WARN: PCQ setup failed: {qe}")
     print(f"  Profiles fixed. DONE: {ip}")
     c.close()
     return True

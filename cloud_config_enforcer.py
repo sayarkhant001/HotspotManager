@@ -151,6 +151,9 @@ VOUCHER_ACTIVATE_SOURCE = """# V3 Airtight Voucher Activation - REMAINING as har
 :if ([:len $m] > 0) do={
   :set curComm [$setTag comm=$curComm tag="[MAC:" val=$m];
 };
+# Ensure uptime tracking tags exist (preserve existing accumulated values)
+:if ([:find $curComm "[BASE-UP:"] < 0) do={ :set curComm ($curComm . " [BASE-UP:0]") };
+:if ([:find $curComm "[USED-UP:"] < 0) do={ :set curComm ($curComm . " [USED-UP:0]") };
 /ip hotspot user set $uObj comment=$curComm;
 """
 
@@ -203,6 +206,25 @@ HS_QUOTA_SAVE_SOURCE = """# V3 Lightweight Quota Saver - writes only when delta 
         } else={ :set nC ($nC . " [USED:" . [:tostr $totalUsed] . "]") };
         /ip hotspot user set $u disabled=yes limit-bytes-total=1 comment=($nC . " [EXHAUSTED:DATA]");
       } else={
+        # Accumulate session uptime into [USED-UP:]
+        :local hwUpSec [:totime [/ip hotspot active get $a uptime]];
+        :local baseUpSec 0;
+        :local bUpIdx [:find $comm "[BASE-UP:"];
+        :if ($bUpIdx >= 0) do={
+          :local bUpR [:pick $comm ($bUpIdx + 8) [:len $comm]];
+          :local bUpE [:find $bUpR "]"];
+          :if ($bUpE >= 0) do={ :set bUpR [:pick $bUpR 0 $bUpE] };
+          :set baseUpSec [:tonum $bUpR];
+        };
+        :local totalUpSec ($baseUpSec + $hwUpSec);
+        :local uuIdx [:find $comm "[USED-UP:"];
+        :if ($uuIdx >= 0) do={
+          :local eI [:find $comm "]" $uuIdx];
+          :local px [:pick $comm 0 $uuIdx];
+          :local sx "";
+          :if ($eI >= 0) do={ :set sx [:pick $comm ($eI+1) [:len $comm]] };
+          :set comm ($px . "[USED-UP:" . [:tostr $totalUpSec] . "]" . $sx);
+        } else={ :set comm ($comm . " [USED-UP:" . [:tostr $totalUpSec] . "]") };
         # Only write to flash if delta >= 5MB (5242880 bytes)
         :local delta ($totalUsed - $curUsed);
         :if ($delta < 0) do={ :set delta (0 - $delta) };
@@ -217,6 +239,8 @@ HS_QUOTA_SAVE_SOURCE = """# V3 Lightweight Quota Saver - writes only when delta 
             :set nC ($px . "[USED:" . [:tostr $totalUsed] . "]" . $sx);
           } else={ :set nC ($nC . " [USED:" . [:tostr $totalUsed] . "]") };
           /ip hotspot user set $u comment=$nC;
+        } else={
+          /ip hotspot user set $u comment=$comm;
         };
       };
     };
@@ -287,6 +311,34 @@ HS_ON_LOGOUT_SOURCE = """# V3 On-Logout: Save final bytes to [USED:] and [BASE:]
       :if ($eI >= 0) do={ :set sx [:pick $comm ($eI+1) [:len $comm]] };
       :set comm ($px . "[BASE:" . [:tostr $total] . "]" . $sx);
     } else={ :set comm ($comm . " [BASE:" . [:tostr $total] . "]") };
+    # Accumulate final uptime into [USED-UP:] and update [BASE-UP:] for next session
+    :local hwUp [/ip hotspot user get $uObj uptime];
+    :local baseUpSec 0;
+    :local bUpIdx [:find $comm "[BASE-UP:"];
+    :if ($bUpIdx >= 0) do={
+      :local bUpR [:pick $comm ($bUpIdx + 8) [:len $comm]];
+      :local bUpE [:find $bUpR "]"];
+      :if ($bUpE >= 0) do={ :set bUpR [:pick $bUpR 0 $bUpE] };
+      :set baseUpSec [:tonum $bUpR];
+    };
+    :local sessionUpSec [:totime $hwUp];
+    :local totalUpSec ($baseUpSec + $sessionUpSec);
+    :local uuIdx [:find $comm "[USED-UP:"];
+    :if ($uuIdx >= 0) do={
+      :local eI [:find $comm "]" $uuIdx];
+      :local px [:pick $comm 0 $uuIdx];
+      :local sx "";
+      :if ($eI >= 0) do={ :set sx [:pick $comm ($eI+1) [:len $comm]] };
+      :set comm ($px . "[USED-UP:" . [:tostr $totalUpSec] . "]" . $sx);
+    } else={ :set comm ($comm . " [USED-UP:" . [:tostr $totalUpSec] . "]") };
+    :local bbIdx [:find $comm "[BASE-UP:"];
+    :if ($bbIdx >= 0) do={
+      :local eI2 [:find $comm "]" $bbIdx];
+      :local px2 [:pick $comm 0 $bbIdx];
+      :local sx2 "";
+      :if ($eI2 >= 0) do={ :set sx2 [:pick $comm ($eI2+1) [:len $comm]] };
+      :set comm ($px2 . "[BASE-UP:" . [:tostr $totalUpSec] . "]" . $sx2);
+    } else={ :set comm ($comm . " [BASE-UP:" . [:tostr $totalUpSec] . "]") };
     /ip hotspot user set $uObj comment=$comm;
   };
 };
