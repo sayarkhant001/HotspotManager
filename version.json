@@ -1,7 +1,13 @@
 {
-  "versionName": "1.10.7",
-  "versionCode": 51,
-  "releaseTitle": "Hotspot Manager v1.10.7 - Continuous Connected Time + CPU Fix",
-  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.10.7.apk",
-  "releaseNotes": "• ⏱ CONTINUOUS CONNECTED TIME: a 1-day voucher activated yesterday now shows ~20h Connected (elapsed since activation, capped at validity) instead of only the current 38-minute session — the app reads the new [USED-UP:]/[BASE-UP:] tags the router now writes, with an automatic elapsed-time fallback for older vouchers.\n• 🖥 ROUTER CPU FIX: profile Rate Limit is now cleared and bandwidth is shaped by ONE static PCQ queue (10.10.10.0/23) instead of one dynamic Simple Queue per logged-in user — the L009 no longer scales CPU with user count (0 dynamic queues verified on all online routers).\n• 🚦 Lightened router schedulers (quota saver 60s, expire monitor 3m) to cut small-router CPU load.\n• 📊 v1.10.6 preserved: real remaining quota/time on used vouchers, readable sales hero card, long-term voucher protection."
+  "versionName": "1.10.8",
+  "versionCode": 52,
+  "releaseTitle": "Hotspot Manager v1.10.8 - Multi-WAN Uplinks + Password-Proof Cloud + Live Portal",
+  "downloadUrl": "https://github.com/sayarkhant001/HotspotManager/raw/main/HotspotManager-v1.10.8.apk",
+  "releaseNotes": "• 🌐 MULTI-WAN UPLINKS (new tab, appears on Dual/Triple WAN routers): deploy Load Balancing (PCC bandwidth weights, e.g. 2:1) or Failover Priority in one tap — per-uplink routing tables + check-gateway + NAT + automatic failover, live per-uplink ↓↑ traffic, one-tap cleanup. 100% app-side, no VPS.
+• 🛡 PASSWORD-CHANGE-PROOF CLOUD: routers get a VPS-only cloud service account locked to the WireGuard tunnel — customers can change their own router password freely and cloud enforcement NEVER breaks; the app pushes changed passwords to the cloud automatically.
+• 📋 CUSTOMER-PLAN TRUTH: voucher activation + the cloud enforcer resolve quota/validity from the ACTUAL voucher/profile values first — customer-created plans with any name are cut exactly as configured.
+• 🔄 PLAN PROPAGATION: profile edits (quota/speeds/validity/price) apply IMMEDIATELY to ALL active + unused vouchers — remaining = new plan − used, instant cut-off, deadline = activation + new validity.
+• 📡 LIVE PORTAL DATA: the captive portal shows the router's real SSID as the brand + 🔥 Hot Plans price cards built from the actual profiles (plans.js written by the app — no VPS).
+• 🔍 EASY ONBOARDING: auto-Find Router (Wi-Fi gateway detection) + factory-password fallback; profile speeds always display the configured plan.
+• 🎫 Voucher card fixes: remaining-quota chip no longer squeezed into '…', human GB units ('40 GB'), unambiguous '29d 0h 30m' remaining time, unused vouchers show their full quota."
 }
