@@ -118,6 +118,15 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     val pppoeActiveSessions = MutableStateFlow<List<PppoeActiveSession>>(emptyList())
     val isPppoeLoading = MutableStateFlow(false)
 
+    // ── Multi-WAN Uplinks / Load Balancing State ───────────────────────────
+    /** True when the router has >= 2 WAN-capable interfaces or LB is deployed
+     *  — drives the conditional Uplinks bottom nav tab (like PPPoE). */
+    val uplinksEnabled = MutableStateFlow(false)
+    val uplinks = MutableStateFlow<List<com.example.domain.models.UplinkInfo>>(emptyList())
+    val uplinkTraffic = MutableStateFlow<Map<String, com.example.domain.models.UplinkTraffic>>(emptyMap())
+    val lbDeployed = MutableStateFlow(false)
+    val isUplinkLoading = MutableStateFlow(false)
+
     // Network Topology & Whitelisting State
     val networkTopology = MutableStateFlow(NetworkTopologyData())
     val isTopologyLoading = MutableStateFlow(false)
@@ -1178,6 +1187,7 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 // Check PPPoE enabled on this router (every 6th cycle ~72s, or on first load)
                 if (pollCycleCount % 6 == 0 || pollCycleCount == 1) {
                     try { checkPppoeEnabled() } catch (_: Exception) {}
+                    try { checkUplinksEnabled() } catch (_: Exception) {}
                 }
             } catch (t: Throwable) {
                 t.printStackTrace()
@@ -1644,6 +1654,85 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 // Also check if PPPoE server is configured even with 0 users
                 val serverResult = repository.checkPppoeServerExists()
                 pppoeEnabled.value = serverResult
+            }
+        }
+    }
+
+    /** Check WAN-capable interfaces + LB status (drives the Uplinks nav tab). */
+    fun checkUplinksEnabled() {
+        viewModelScope.launch(exceptionHandler) {
+            try {
+                val list = repository.getUplinks().getOrNull() ?: return@launch
+                uplinks.value = list
+                val deployed = repository.getLoadBalanceDeployed()
+                lbDeployed.value = deployed
+                uplinksEnabled.value = list.size >= 2 || deployed
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun fetchUplinks() {
+        viewModelScope.launch(exceptionHandler) {
+            isUplinkLoading.value = true
+            try {
+                repository.getUplinks().onSuccess { list ->
+                    uplinks.value = list
+                    val deployed = repository.getLoadBalanceDeployed()
+                    lbDeployed.value = deployed
+                    uplinksEnabled.value = list.size >= 2 || deployed
+                    refreshUplinkTraffic()
+                }
+            } finally {
+                isUplinkLoading.value = false
+            }
+        }
+    }
+
+    fun refreshUplinkTraffic() {
+        viewModelScope.launch(exceptionHandler) {
+            val ifaces = uplinks.value.map { it.iface }
+            if (ifaces.isEmpty()) return@launch
+            try {
+                uplinkTraffic.value = repository.getUplinkTraffic(ifaces)
+            } catch (_: Exception) {}
+        }
+    }
+
+    /** Deploy the multi-WAN plan as one RSC script (PCC weights or failover). */
+    fun deployLoadBalancing(plan: com.example.domain.models.LoadBalancePlan) {
+        viewModelScope.launch(exceptionHandler) {
+            isUplinkLoading.value = true
+            try {
+                val rsc = com.example.utils.UniversalLbHelper.generateDeployScript(plan)
+                val res = repository.executeRscScript(rsc)
+                if (res.success) {
+                    userMessage.value = "✓ Load Balancing deployed (${plan.strategy}, ${plan.uplinks.size} uplinks)!"
+                    checkUplinksEnabled()
+                    refreshUplinkTraffic()
+                } else {
+                    userMessage.value = "✗ LB deploy failed: ${res.outputLog.takeLast(160)}"
+                }
+            } finally {
+                isUplinkLoading.value = false
+            }
+        }
+    }
+
+    /** Remove exactly the LB-MANAGED rules — the shop's own rules are untouched. */
+    fun removeLoadBalancing() {
+        viewModelScope.launch(exceptionHandler) {
+            isUplinkLoading.value = true
+            try {
+                val res = repository.executeRscScript(com.example.utils.UniversalLbHelper.generateCleanupScript())
+                if (res.success) {
+                    userMessage.value = "✓ Load Balancing removed"
+                    checkUplinksEnabled()
+                    refreshUplinkTraffic()
+                } else {
+                    userMessage.value = "✗ LB cleanup failed: ${res.outputLog.takeLast(160)}"
+                }
+            } finally {
+                isUplinkLoading.value = false
             }
         }
     }

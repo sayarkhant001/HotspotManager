@@ -4,6 +4,8 @@ import com.example.domain.models.ActiveUser
 import com.example.domain.models.AccessPointDevice
 import com.example.domain.models.IpBinding
 import com.example.domain.models.NetworkTopologyData
+import com.example.domain.models.UplinkInfo
+import com.example.domain.models.UplinkTraffic
 import com.example.domain.models.Voucher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -2791,6 +2793,112 @@ class MikrotikClient {
                 ok
             } catch (e: Exception) {
                 handleApiError(e)
+                false
+            }
+        }
+    }
+
+    // ── Multi-WAN Uplinks / Load Balancing ────────────────────────────────────
+
+    private val uplinkLastSample = java.util.concurrent.ConcurrentHashMap<String, Triple<Long, Long, Long>>()
+
+    /**
+     * WAN-capable interfaces: ether ports NOT bridged into the hotspot LAN, and
+     * pppoe-out client interfaces. Aggregates addresses, dhcp-client state,
+     * pppoe-client state and default-route ownership — all in ~5 API calls.
+     */
+    suspend fun getUplinks(): Result<List<UplinkInfo>> = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withLock Result.failure(Exception("Not connected to router"))
+                val ifaces = conn.execute("/interface/print", "?.proplist=name,type,disabled,running")
+                val bridged = try {
+                    conn.execute("/interface/bridge/port/print", "?.proplist=interface")
+                        .mapNotNull { it["interface"] }.toSet()
+                } catch (_: Exception) { emptySet<String>() }
+                val addrs = conn.execute("/ip/address/print", "?.proplist=interface,address")
+                val addrByIf = addrs.groupBy({ it["interface"] ?: "" }) { it["address"] ?: "" }
+                val dhcp = try { conn.execute("/ip/dhcp-client/print", "?.proplist=interface,status,disabled") } catch (_: Exception) { emptyList<Map<String, String>>() }
+                val pppoeClients = try { conn.execute("/interface/pppoe-client/print", "?.proplist=name,disabled,status") } catch (_: Exception) { emptyList<Map<String, String>>() }
+                val routes = try {
+                    conn.execute("/ip/route/print", "?.proplist=dst-address,gateway,active")
+                        .filter { (it["dst-address"] ?: "").startsWith("0.0.0.0") }
+                } catch (_: Exception) { emptyList<Map<String, String>>() }
+
+                val out = mutableListOf<UplinkInfo>()
+                for (i in ifaces) {
+                    val name = i["name"] ?: continue
+                    val type = i["type"] ?: ""
+                    val isPppoe = type.contains("pppoe")
+                    val isEther = type == "ether"
+                    if (!isEther && !isPppoe) continue
+                    if (name in bridged) continue
+                    val addr = addrByIf[name]?.firstOrNull() ?: ""
+                    val dhcpRow = dhcp.firstOrNull { it["interface"] == name }
+                    val pppoeRow = pppoeClients.firstOrNull { it["name"] == name }
+                    val route = routes.firstOrNull { r ->
+                        val gw = (r["gateway"] ?: "").substringBefore('%')
+                        gw == name || addrByIf[name]?.any { a -> a.substringBefore('/') == gw } == true
+                    }
+                    out += UplinkInfo(
+                        iface = name,
+                        kind = if (isPppoe) "pppoe" else "ether",
+                        address = addr,
+                        gateway = route?.get("gateway") ?: "",
+                        dhcpBound = dhcpRow?.get("status") == "bound",
+                        pppoeConnected = (pppoeRow?.get("status") ?: "").contains("connected", true) ||
+                            (isPppoe && i["running"] == "true"),
+                        disabled = i["disabled"] == "true" || pppoeRow?.get("disabled") == "true",
+                        hasDefaultRoute = route != null && route["active"] == "true"
+                    )
+                }
+                Result.success(out)
+            } catch (e: Exception) {
+                handleApiError(e)
+                Result.failure(e)
+            }
+        }
+    }
+
+    /** Live rx/tx speed (delta-based) + total counters per uplink interface. */
+    suspend fun getUplinkTraffic(ifaces: List<String>): Map<String, UplinkTraffic> = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            val out = mutableMapOf<String, UplinkTraffic>()
+            try {
+                val conn = ensureConnectedInternal() ?: return@withLock out
+                val res = conn.execute("/interface/print", "?.proplist=name,rx-byte,tx-byte")
+                val now = System.currentTimeMillis()
+                for (row in res) {
+                    val name = row["name"] ?: continue
+                    if (name !in ifaces) continue
+                    val rx = row["rx-byte"]?.toLongOrNull() ?: 0L
+                    val tx = row["tx-byte"]?.toLongOrNull() ?: 0L
+                    val prev = uplinkLastSample[name]
+                    var rxBps = 0L; var txBps = 0L
+                    if (prev != null && now > prev.third && rx >= prev.first && tx >= prev.second) {
+                        val dt = (now - prev.third) / 1000.0
+                        if (dt > 0) { rxBps = ((rx - prev.first) / dt).toLong(); txBps = ((tx - prev.second) / dt).toLong() }
+                    }
+                    uplinkLastSample[name] = Triple(rx, tx, now)
+                    out[name] = UplinkTraffic(rxBps, txBps, rx, tx)
+                }
+            } catch (e: Exception) {
+                handleApiError(e)
+            }
+            out
+        }
+    }
+
+    /** True when a previous load-balancing deployment is still on the router. */
+    suspend fun getLoadBalanceDeployed(): Boolean = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withLock false
+                conn.execute("/ip/firewall/mangle/print", "?.proplist=comment")
+                    .any { (it["comment"] ?: "").contains("LB-MANAGED") } ||
+                    conn.execute("/route/print", "?.proplist=comment")
+                        .any { (it["comment"] ?: "").contains("LB-MANAGED") }
+            } catch (_: Exception) {
                 false
             }
         }

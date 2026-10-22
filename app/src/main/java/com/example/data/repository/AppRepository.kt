@@ -70,6 +70,16 @@ class AppRepository(
         }
     }
 
+    // ── Multi-WAN Uplinks / Load Balancing (app-only, no VPS) ────────────────
+
+    suspend fun getUplinks(): Result<List<com.example.domain.models.UplinkInfo>> =
+        mikrotikClient.getUplinks()
+
+    suspend fun getUplinkTraffic(ifaces: List<String>): Map<String, com.example.domain.models.UplinkTraffic> =
+        mikrotikClient.getUplinkTraffic(ifaces)
+
+    suspend fun getLoadBalanceDeployed(): Boolean = mikrotikClient.getLoadBalanceDeployed()
+
     suspend fun getHotspotLoginUrl(): String {
         val detected = try {
             mikrotikClient.getHotspotServerDnsName()

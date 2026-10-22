@@ -42,6 +42,7 @@ sealed class BottomNavDest(val route: String, val label: String, val icon: Image
     object Vouchers  : BottomNavDest("vouchers",  "Vouchers",    Icons.Default.ConfirmationNumber)
     object Sessions  : BottomNavDest("sessions",  "Sessions",    Icons.Default.People)
     object PPPoE     : BottomNavDest("pppoe",     "PPPoE",       Icons.Default.Router)
+    object Uplinks   : BottomNavDest("uplinks",   "Uplinks",     Icons.Default.AltRoute)
     object Settings  : BottomNavDest("settings",  "Settings",    Icons.Default.Settings)
 }
 
@@ -52,6 +53,7 @@ private fun localizedNavLabel(route: String, strings: com.example.utils.AppStrin
     "sessions"  -> strings.navSessions
     "settings"  -> strings.navSettings
     "pppoe"     -> strings.navPppoe
+    "uplinks"   -> strings.navUplinks
     else        -> route
 }
 
@@ -64,7 +66,7 @@ private val coreNavItems = listOf(
 )
 
 /** Routes that should show the bottom navigation bar */
-private val bottomNavRoutes = setOf("dashboard", "vouchers", "sessions", "pppoe", "settings")
+private val bottomNavRoutes = setOf("dashboard", "vouchers", "sessions", "pppoe", "uplinks", "settings")
 
 // ── Root Navigation ─────────────────────────────────────────────────────────
 @Composable
@@ -75,6 +77,7 @@ fun AppNavigation(repository: AppRepository, startRoute: String? = null) {
     // PPPoE tab: only shown when active router has PPPoE server configured.
     // ViewModel checks /ppp/secret count on router switch — 0 = hidden, ≥1 or server present = shown.
     val pppoeEnabled by viewModel.pppoeEnabled.collectAsStateWithLifecycle()
+    val uplinksEnabled by viewModel.uplinksEnabled.collectAsStateWithLifecycle()
     val activeUsers by viewModel.activeUsers.collectAsStateWithLifecycle()
     val strings = LanguageManager.strings
 
@@ -83,9 +86,12 @@ fun AppNavigation(repository: AppRepository, startRoute: String? = null) {
     val showBottomBar = currentRoute in bottomNavRoutes
 
     // Dynamically build the nav item list: insert PPPoE before Settings when enabled
-    val navItems = remember(pppoeEnabled) {
+    val navItems = remember(pppoeEnabled, uplinksEnabled) {
         buildList {
             addAll(coreNavItems)
+            if (uplinksEnabled) {
+                add(size - 1, BottomNavDest.Uplinks) // before Settings
+            }
             if (pppoeEnabled) {
                 add(size - 1, BottomNavDest.PPPoE) // before Settings
             }
@@ -195,6 +201,11 @@ fun AppNavigation(repository: AppRepository, startRoute: String? = null) {
                     // so deeplinks or programmatic navigation still work
                     PppoeScreen(viewModel = viewModel, navController = navController)
                 }
+                composable(BottomNavDest.Uplinks.route) {
+                    // Registered even when hidden from the nav bar so programmatic
+                    // navigation still works (same pattern as PPPoE)
+                    UplinkScreen(viewModel = viewModel, navController = navController)
+                }
                 composable(BottomNavDest.Settings.route) {
                     SettingsScreen(viewModel = viewModel, navController = navController)
                 }
@@ -220,6 +231,15 @@ fun AppNavigation(repository: AppRepository, startRoute: String? = null) {
     // automatically navigate them back to dashboard
     LaunchedEffect(pppoeEnabled) {
         if (!pppoeEnabled && currentRoute == "pppoe") {
+            navController.navigate("dashboard") {
+                popUpTo("dashboard") { inclusive = false }
+            }
+        }
+    }
+    // If user is on Uplinks screen and the tab disappears (router switched to a
+    // single-WAN router), navigate back to dashboard
+    LaunchedEffect(uplinksEnabled) {
+        if (!uplinksEnabled && currentRoute == "uplinks") {
             navController.navigate("dashboard") {
                 popUpTo("dashboard") { inclusive = false }
             }

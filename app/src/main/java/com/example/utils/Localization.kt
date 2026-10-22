@@ -102,6 +102,7 @@ data class AppStrings(
     val navSessions: String,
     val navSettings: String,
     val navPppoe: String,
+    val navUplinks: String,
 
     // Update Dialog
     val updateAvailable: String,
@@ -365,6 +366,7 @@ val MyanmarStrings = AppStrings(
     navSessions = "အသုံးပြုသူ",
     navSettings = "ဆက်တင်",
     navPppoe = "PPPoE",
+    navUplinks = "Uplinks",
 
     // Update Dialog
     updateAvailable = "ဗားရှင်းအသစ် ရရှိနေပါပြီ!",
@@ -628,6 +630,7 @@ val EnglishStrings = AppStrings(
     navSessions = "Sessions",
     navSettings = "Settings",
     navPppoe = "PPPoE",
+    navUplinks = "Uplinks",
 
     // Update Dialog
     updateAvailable = "Update Available!",
