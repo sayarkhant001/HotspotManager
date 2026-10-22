@@ -52,6 +52,24 @@ class AppRepository(
         return mikrotikClient.changeUserPassword(oldPass, newPass)
     }
 
+    /**
+     * Pushes the captive portal's LIVE data to the router as `plans.js` —
+     * 100% app-side, no VPS: brand = the router's real SSID, Hot Plans cards =
+     * the ACTUAL synced profiles (name, quota, validity, speed, price). The
+     * login page loads plans.js and renders with the theme's own CSS variables.
+     * @return true when the file was written to the router
+     */
+    suspend fun pushPortalData(): Boolean {
+        if (!ensureConnected()) return false
+        return try {
+            val ssid = try { getHotspotSsid() } catch (_: Exception) { null }
+            val js = com.example.utils.PortalDataHelper.buildPlansJs(ssid ?: "", dao.getAllProfilesSync())
+            mikrotikClient.writeRouterFile("plans.js", js)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     suspend fun getHotspotLoginUrl(): String {
         val detected = try {
             mikrotikClient.getHotspotServerDnsName()
@@ -152,6 +170,8 @@ class AppRepository(
             dao.insertProfile(profile)
         }
         syncMetadataToRouter(dao.getAllProfilesSync())
+        // Portal plans.js refresh: the new plan appears on the captive portal instantly
+        pushPortalData()
         return Result.success(Unit)
     }
 
@@ -310,6 +330,7 @@ class AppRepository(
         dao.deleteProfileByName(profileName)
         dao.deleteVouchersByProfile(profileName)
         syncMetadataToRouter(dao.getAllProfilesSync())
+        pushPortalData()
         return Result.success(Unit)
     }
 
@@ -369,6 +390,9 @@ class AppRepository(
             price = profile.price
         )
         syncMetadataToRouter(dao.getAllProfilesSync())
+        // Portal plans.js refresh: edited plan (price/quota/validity/speed) is
+        // live on the captive portal instantly
+        pushPortalData()
         return Result.success(Unit)
     }
 

@@ -2764,6 +2764,38 @@ class MikrotikClient {
         }
     }
 
+    /**
+     * Writes a single text file into the router's hotspot directory (both
+     * `hotspot/` and `flash/hotspot/` targets) via the API — no FTP, no VPS.
+     * Existing files with the same path are replaced first (idempotent).
+     */
+    suspend fun writeRouterFile(relPath: String, contents: String): Boolean = withContext(Dispatchers.IO) {
+        apiMutex.withLock {
+            try {
+                val conn = ensureConnectedInternal() ?: return@withLock false
+                var ok = false
+                for (tPath in listOf("hotspot/$relPath", "flash/hotspot/$relPath")) {
+                    try {
+                        val existing = conn.execute("/file/print", "?.proplist=.id,name")
+                        existing.filter { it["name"] == tPath }.forEach { f ->
+                            f[".id"]?.let { fid ->
+                                try { conn.execute("/file/remove", ".id=$fid") } catch (_: Exception) {}
+                            }
+                        }
+                    } catch (_: Exception) {}
+                    try {
+                        conn.execute("/file/add", "name=$tPath", "contents=$contents")
+                        ok = true
+                    } catch (_: Exception) {}
+                }
+                ok
+            } catch (e: Exception) {
+                handleApiError(e)
+                false
+            }
+        }
+    }
+
     // ── Generic RouterOS API Wrappers (used by PPPoE & other features) ────────
 
     /** Runs any RouterOS command path (e.g. "/ppp/secret/print") and returns result rows.

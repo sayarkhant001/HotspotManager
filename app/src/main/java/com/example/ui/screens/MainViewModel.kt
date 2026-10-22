@@ -549,6 +549,8 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                         repository.syncVouchersFromRouter()
                         val topo = repository.getNetworkTopology()
                         networkTopology.value = topo
+                        // Keep the portal's brand + Hot Plans fresh on every connect
+                        repository.pushPortalData()
                     } catch (e: Exception) {
                         e.printStackTrace()
                     } finally {
@@ -650,6 +652,8 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                         repository.syncVouchersFromRouter()
                         val topo = repository.getNetworkTopology()
                         networkTopology.value = topo
+                        // Keep the portal's brand + Hot Plans fresh on every connect
+                        repository.pushPortalData()
                     } catch (e: Exception) {
                         e.printStackTrace()
                     } finally {
@@ -836,6 +840,8 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
                 // the VPS enforcer picks it up on its next audit and uploads the
                 // matching template folder (portal_templates/<id>/) to /flash/hotspot.
                 val written = repository.writePortalThemeMarker(theme.id)
+                // Push the router-live brand + Hot Plans cards (100% app-side)
+                repository.pushPortalData()
                 userMessage.value = if (written) {
                     "✓ Theme '${theme.name}' selected — will be deployed on next sync"
                 } else {
