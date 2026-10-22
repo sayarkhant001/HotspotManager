@@ -1874,7 +1874,10 @@ class MikrotikClient {
         sharedUsers: Int = 1,
         sessionTimeout: String = "",
         limitBytesTotal: Long = 0L,
-        limitUptime: String = ""
+        limitUptime: String = "",
+        propagateQuotaBytes: Long = 0L,
+        propagateUpSec: Long = 0L,
+        propagatePriceKs: Long = 0L
     ): Result<Unit> = withContext(Dispatchers.IO) {
         apiMutex.withLock {
             try {
@@ -1953,6 +1956,104 @@ class MikrotikClient {
 
                     }
                 } catch (_: Exception) {}
+
+                // 3b. PLAN PROPAGATION: every user of this profile gets the edited
+                // plan IMMEDIATELY - unused re-stamped; activated get remaining =
+                // new plan - used (instant cut-off, deadline = act + validity).
+                if (propagateQuotaBytes > 0L || propagateUpSec > 0L || propagatePriceKs > 0L) {
+                    try {
+                        val propRsc = """# Plan propagation: profile "__PNAME__"
+:local pName "__PNAME__";
+:local newQuota __QUOTA__;
+:local newUpSec __UPSEC__;
+:local newPrice __PRICE__;
+:foreach u in=[/ip hotspot user find profile=${'$'}pName] do={
+  :local uObj [:pick ${'$'}u 0];
+  :local uName [/ip hotspot user get ${'$'}uObj name];
+  :local comm [/ip hotspot user get ${'$'}uObj comment];
+  :local isDis [/ip hotspot user get ${'$'}uObj disabled];
+  :if (${'$'}isDis != true and [:find ${'$'}comm "[EXHAUSTED:"] < 0 and [:find ${'$'}comm "[EXPIRED:"] < 0) do={
+    :local hasAct ([:find ${'$'}comm "[ACT:"] >= 0);
+    :local usedB 0;
+    :local uI [:find ${'$'}comm "[USED:"];
+    :if (${'$'}uI >= 0) do={
+      :local uR [:pick ${'$'}comm (${'$'}uI + 6) [:len ${'$'}comm]];
+      :local uE [:find ${'$'}uR "]"];
+      :if (${'$'}uE >= 0) do={ :set uR [:pick ${'$'}uR 0 ${'$'}uE] };
+      :set usedB [:tonum ${'$'}uR];
+    };
+    :local usedUpSec 0;
+    :local uuI [:find ${'$'}comm "[USED-UP:"];
+    :if (${'$'}uuI >= 0) do={
+      :local uuR [:pick ${'$'}comm (${'$'}uuI + 9) [:len ${'$'}comm]];
+      :local uuE [:find ${'$'}uuR "]"];
+      :if (${'$'}uuE >= 0) do={ :set uuR [:pick ${'$'}uuR 0 ${'$'}uuE] };
+      :set usedUpSec [:tonum ${'$'}uuR];
+    };
+    :if (${'$'}newQuota > 0) do={
+      :local remQ (${'$'}newQuota - ${'$'}usedB);
+      :if (${'$'}hasAct and ${'$'}remQ < 1048576) do={
+        /ip hotspot active remove [find user=${'$'}uName];
+        /ip hotspot user set ${'$'}uObj disabled=yes limit-bytes-total=1 limit-uptime=1s comment=(${'$'}comm . " [EXHAUSTED:DATA]");
+      } else={
+        :local oI [:find ${'$'}comm "[ORIG-LIMIT:"];
+        :if (${'$'}oI >= 0) do={
+          :local oE [:find ${'$'}comm "]" ${'$'}oI];
+          :local px [:pick ${'$'}comm 0 ${'$'}oI];
+          :local sx "";
+          :if (${'$'}oE >= 0) do={ :set sx [:pick ${'$'}comm (${'$'}oE + 1) [:len ${'$'}comm]] };
+          :set comm (${'$'}px . "[ORIG-LIMIT:" . [:tostr ${'$'}newQuota] . "]" . ${'$'}sx);
+        } else={ :set comm (${'$'}comm . " [ORIG-LIMIT:" . [:tostr ${'$'}newQuota] . "]") };
+        /ip hotspot user set ${'$'}uObj limit-bytes-total=${'$'}remQ comment=${'$'}comm;
+      };
+    };
+    :if (${'$'}newUpSec > 0) do={
+      :local remU (${'$'}newUpSec - ${'$'}usedUpSec);
+      :if (${'$'}remU <= 0) do={
+        /ip hotspot active remove [find user=${'$'}uName];
+        :local c2 [/ip hotspot user get ${'$'}uObj comment];
+        :if ([:find ${'$'}c2 "[EXPIRED:"] < 0) do={
+          /ip hotspot user set ${'$'}uObj disabled=yes limit-bytes-total=1 limit-uptime=1s comment=(${'$'}c2 . " [EXPIRED:TIME_OVERDUE]");
+        };
+      } else={
+        :local c3 [/ip hotspot user get ${'$'}uObj comment];
+        :local oU [:find ${'$'}c3 "[ORIG-UP:"];
+        :if (${'$'}oU >= 0) do={
+          :local oE2 [:find ${'$'}c3 "]" ${'$'}oU];
+          :local p2 [:pick ${'$'}c3 0 ${'$'}oU];
+          :local s2 "";
+          :if (${'$'}oE2 >= 0) do={ :set s2 [:pick ${'$'}c3 (${'$'}oE2 + 1) [:len ${'$'}c3]] };
+          :set c3 (${'$'}p2 . "[ORIG-UP:" . [:tostr ${'$'}newUpSec] . "s]" . ${'$'}s2);
+        } else={ :set c3 (${'$'}c3 . " [ORIG-UP:" . [:tostr ${'$'}newUpSec] . "s]") };
+        /ip hotspot user set ${'$'}uObj limit-uptime=([:tostr ${'$'}remU] . "s") comment=${'$'}c3;
+      };
+    };
+    :if (${'$'}newPrice > 0) do={
+      :local c4 [/ip hotspot user get ${'$'}uObj comment];
+      :local pI [:find ${'$'}c4 "Price:"];
+      :if (${'$'}pI >= 0) do={
+        :local pE [:find ${'$'}c4 "Ks" ${'$'}pI];
+        :local px [:pick ${'$'}c4 0 ${'$'}pI];
+        :local sx "";
+        :if (${'$'}pE >= 0) do={ :set sx [:pick ${'$'}c4 (${'$'}pE + 2) [:len ${'$'}c4]] };
+        :set c4 (${'$'}px . "Price:" . [:tostr ${'$'}newPrice] . "Ks" . ${'$'}sx);
+        /ip hotspot user set ${'$'}uObj comment=${'$'}c4;
+      } else={
+        /ip hotspot user set ${'$'}uObj comment=(${'$'}c4 . " Price:" . [:tostr ${'$'}newPrice] . "Ks");
+      };
+    };
+  };
+}"""
+                            .replace("__PNAME__", targetName)
+                            .replace("__QUOTA__", propagateQuotaBytes.toString())
+                            .replace("__UPSEC__", propagateUpSec.toString())
+                            .replace("__PRICE__", propagatePriceKs.toString())
+                        val scriptName = "tmp_prop_${System.currentTimeMillis() % 10000}"
+                        conn.execute("/system/script/add", "name=$scriptName", "source=$propRsc")
+                        conn.execute("/system/script/run", "number=$scriptName")
+                        conn.execute("/system/script/remove", "numbers=$scriptName")
+                    } catch (_: Exception) {}
+                }
 
                 // Update cached users in memory
                 cachedHotspotUsers = cachedHotspotUsers.map { u ->

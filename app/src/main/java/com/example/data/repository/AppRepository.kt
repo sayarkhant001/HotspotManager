@@ -328,7 +328,13 @@ class AppRepository(
             sharedUsers = profile.sharedUsers,
             sessionTimeout = sessionTimeout,
             limitBytesTotal = limitBytesTotal,
-            limitUptime = limitUptime
+            limitUptime = limitUptime,
+            // Plan propagation: every active + unused voucher of this profile gets
+            // the new plan IMMEDIATELY (quota remaining = new − used with instant
+            // cut-off, deadline = activation + new validity, price tags refreshed).
+            propagateQuotaBytes = limitBytesTotal,
+            propagateUpSec = profile.durationMinutes * 60L + profile.validityDays * 86400L,
+            propagatePriceKs = profile.price.toLong()
         )
         if (res.isFailure) {
             return res
