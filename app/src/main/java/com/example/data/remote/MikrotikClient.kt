@@ -1969,6 +1969,18 @@ class MikrotikClient {
 :local newQuota __QUOTA__;
 :local newUpSec __UPSEC__;
 :local newPrice __PRICE__;
+:local setTag do={
+  :local idx [:find ${'$'}comm ${'$'}tag];
+  :if (${'$'}idx >= 0) do={
+    :local endIdx [:find ${'$'}comm "]" ${'$'}idx];
+    :local pfx [:pick ${'$'}comm 0 ${'$'}idx];
+    :local sfx "";
+    :if (${'$'}endIdx >= 0) do={ :set sfx [:pick ${'$'}comm (${'$'}endIdx + 1) [:len ${'$'}comm]] };
+    :return (${'$'}pfx . ${'$'}tag . ${'$'}val . "]" . ${'$'}sfx);
+  } else={
+    :return (${'$'}comm . " " . ${'$'}tag . ${'$'}val . "]");
+  };
+};
 :foreach u in=[/ip hotspot user find profile=${'$'}pName] do={
   :local uObj [:pick ${'$'}u 0];
   :local uName [/ip hotspot user get ${'$'}uObj name];
@@ -1992,6 +2004,7 @@ class MikrotikClient {
       :if (${'$'}uuE >= 0) do={ :set uuR [:pick ${'$'}uuR 0 ${'$'}uuE] };
       :set usedUpSec [:tonum ${'$'}uuR];
     };
+    :local doReset false;
     :if (${'$'}newQuota > 0) do={
       :local remQ (${'$'}newQuota - ${'$'}usedB);
       :if (${'$'}hasAct and ${'$'}remQ < 1048576) do={
@@ -2007,6 +2020,10 @@ class MikrotikClient {
           :set comm (${'$'}px . "[ORIG-LIMIT:" . [:tostr ${'$'}newQuota] . "]" . ${'$'}sx);
         } else={ :set comm (${'$'}comm . " [ORIG-LIMIT:" . [:tostr ${'$'}newQuota] . "]") };
         /ip hotspot user set ${'$'}uObj limit-bytes-total=${'$'}remQ comment=${'$'}comm;
+        :set ${'$'}comm [${'$'}setTag comm=${'$'}comm tag="[BASE:" val=[:tostr ${'$'}usedB]];
+        :set ${'$'}comm [${'$'}setTag comm=${'$'}comm tag="[USED:" val=[:tostr ${'$'}usedB]];
+        /ip hotspot user set ${'$'}uObj comment=${'$'}comm;
+        :set ${'$'}doReset true;
       };
     };
     :if (${'$'}newUpSec > 0) do={
@@ -2027,7 +2044,10 @@ class MikrotikClient {
           :if (${'$'}oE2 >= 0) do={ :set s2 [:pick ${'$'}c3 (${'$'}oE2 + 1) [:len ${'$'}c3]] };
           :set c3 (${'$'}p2 . "[ORIG-UP:" . [:tostr ${'$'}newUpSec] . "s]" . ${'$'}s2);
         } else={ :set c3 (${'$'}c3 . " [ORIG-UP:" . [:tostr ${'$'}newUpSec] . "s]") };
+        :set c3 [${'$'}setTag comm=${'$'}c3 tag="[BASE-UP:" val=[:tostr ${'$'}usedUpSec]];
+        :set c3 [${'$'}setTag comm=${'$'}c3 tag="[USED-UP:" val=[:tostr ${'$'}usedUpSec]];
         /ip hotspot user set ${'$'}uObj limit-uptime=([:tostr ${'$'}remU] . "s") comment=${'$'}c3;
+        :set ${'$'}doReset true;
       };
     };
     :if (${'$'}newPrice > 0) do={
@@ -2044,6 +2064,7 @@ class MikrotikClient {
         /ip hotspot user set ${'$'}uObj comment=(${'$'}c4 . " Price:" . [:tostr ${'$'}newPrice] . "Ks");
       };
     };
+    :if (${'$'}doReset) do={ /ip hotspot user reset-counters ${'$'}uObj };
   };
 }"""
                             .replace("__PNAME__", targetName)

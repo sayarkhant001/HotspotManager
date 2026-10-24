@@ -114,6 +114,7 @@ VOUCHER_ACTIVATE_SOURCE = """# V3 Airtight Voucher Activation - REMAINING as har
 :local origLim 0;
 :local lStr [$parseTag comm=$curComm tag="[ORIG-LIMIT:"];
 :if ([:len $lStr] > 0) do={ :set origLim [:tonum $lStr] };
+:local limFromName false;
 :if ($origLim = 0) do={
   :do {
     :local curLim [/ip hotspot user get $uObj limit-bytes-total];
@@ -121,6 +122,7 @@ VOUCHER_ACTIVATE_SOURCE = """# V3 Airtight Voucher Activation - REMAINING as har
   } on-error={};
 };
 :if ($origLim = 0) do={
+  :local limFromName true;
   :local cU ($profName . " " . $curComm);
   :if ($cU ~ "100GB") do={ :set origLim 107374182400 };
   :if ($cU ~ "50GB") do={ :set origLim 53687091200 };
@@ -140,20 +142,23 @@ VOUCHER_ACTIVATE_SOURCE = """# V3 Airtight Voucher Activation - REMAINING as har
   :if ($cU ~ "100MB") do={ :set origLim 104857600 };
   :if ($cU ~ "50MB" or $cU ~ "test") do={ :set origLim 52428800 };
 };
-:if ($origLim > 0) do={
+# Stamp only exact sources (tag / the voucher's real creation quota) — a name
+# guess must never become the recorded "truth" (an unlimited voucher named
+# "2GB Promo" must not be canonized as 2GB).
+:if ($origLim > 0 and !$limFromName) do={
   :set curComm [$setTag comm=$curComm tag="[ORIG-LIMIT:" val=[:tostr $origLim]];
 };
-# CALCULATE USED from [USED:] + hw counters
+# CALCULATE USED — TRUST [USED:] (maintained by hs-quota-save / hs-on-logout).
+# NEVER add the hardware counters here: they persist across sessions, so
+# BASE + hw DOUBLE-COUNTED the finished session at every re-login and then
+# permanently inflated [BASE:]/[USED:] (quota burned ~2x for multi-login users).
 :local usedBytes 0;
 :local udStr [$parseTag comm=$curComm tag="[USED:"];
 :if ([:len $udStr] > 0) do={ :set usedBytes [:tonum $udStr] };
-:local hwIn [/ip hotspot user get $uObj bytes-in];
-:local hwOut [/ip hotspot user get $uObj bytes-out];
 :local baseBytes 0;
 :local bStr [$parseTag comm=$curComm tag="[BASE:"];
 :if ([:len $bStr] > 0) do={ :set baseBytes [:tonum $bStr] };
-:local hwTotal ($baseBytes + $hwIn + $hwOut);
-:if ($hwTotal > $usedBytes) do={ :set usedBytes $hwTotal };
+:if ($baseBytes > $usedBytes) do={ :set usedBytes $baseBytes };
 # REJECT if exhausted
 :if ($origLim > 0 and $usedBytes >= $origLim) do={
   /ip hotspot active remove [find user=$u];
@@ -168,7 +173,6 @@ VOUCHER_ACTIVATE_SOURCE = """# V3 Airtight Voucher Activation - REMAINING as har
 :if ($origLim > 0) do={
   :local remBytes ($origLim - $usedBytes);
   /ip hotspot user set $uObj limit-bytes-total=$remBytes;
-  /ip hotspot user reset-counters $uObj;
 };
 # ACTIVATION TIME (first login = continuous countdown start)
 :local cDate [/system clock get date];
@@ -177,6 +181,9 @@ VOUCHER_ACTIVATE_SOURCE = """# V3 Airtight Voucher Activation - REMAINING as har
 :if ([:find $curComm "[ACT:"] >= 0) do={ :set isFirst false };
 :if ($isFirst) do={
   :set curComm [$setTag comm=$curComm tag="[ACT:" val=([:tostr $cDate] . " " . [:tostr $cTime])];
+  :do {
+    :set curComm [$setTag comm=$curComm tag="[ACT-EPOCH:" val=[:tostr [:tonum [:timestamp]]]];
+  } on-error={};
 };
 # RESOLVE & SET REMAINING UPTIME — customer-plan truth FIRST:
 # 1. [ORIG-UP:] tag (per-voucher continuity), 2. the user's own limit-uptime
@@ -213,9 +220,51 @@ VOUCHER_ACTIVATE_SOURCE = """# V3 Airtight Voucher Activation - REMAINING as har
 :if ($origUp > [:totime "0s"]) do={
   :set curComm [$setTag comm=$curComm tag="[ORIG-UP:" val=[:tostr $origUp]];
 };
-:if ($origUp > [:totime "0s"]) do={
-  /ip hotspot user set $uObj limit-uptime=$origUp;
+# UPTIME used so far (seconds; hs-quota-save / hs-on-logout maintain it)
+:local usedUpSec 0;
+:local uuStr [$parseTag comm=$curComm tag="[USED-UP:"];
+:if ([:len $uuStr] > 0) do={
+  :set usedUpSec [:tonum $uuStr];
+  :if ($usedUpSec = 0) do={
+    :do {
+      :local tUv [:totime $uuStr];
+      :if ($tUv > [:totime "0s"]) do={ :set usedUpSec [:tonum $tUv] };
+    } on-error={};
+  };
 };
+# WALL-CLOCK DEADLINE (router-side; blocks voucher reuse even when the VPS is
+# unreachable — e.g. the WireGuard tunnel is down).
+:if (!$isFirst) do={
+  :local epS [$parseTag comm=$curComm tag="[ACT-EPOCH:"];
+  :if ([:len $epS] > 0) do={
+    :do {
+      :local upSecs [:tonum $origUp];
+      :if ($upSecs > 0 and ([:tonum [:timestamp]] - [:tonum $epS]) >= $upSecs) do={
+        :set curComm ($curComm . " [EXPIRED:TIME_OVERDUE]");
+        /ip hotspot user set $uObj disabled=yes limit-bytes-total=1 limit-uptime=1s comment=$curComm;
+        :do { /ip hotspot active remove [find user=$u] } on-error={};
+        :do { /ip hotspot cookie remove [find user=$u] } on-error={};
+        :return "";
+      };
+    } on-error={};
+  };
+};
+:if ($origUp > [:totime "0s"]) do={
+  :local remUp ($origUp - [:totime ($usedUpSec . "s")]);
+  :if ($remUp <= [:totime "0s"]) do={
+    :set curComm ($curComm . " [EXPIRED:TIME_OVERDUE]");
+    /ip hotspot user set $uObj disabled=yes limit-bytes-total=1 limit-uptime=1s comment=$curComm;
+    :do { /ip hotspot active remove [find user=$u] } on-error={};
+    :do { /ip hotspot cookie remove [find user=$u] } on-error={};
+    :return "";
+  };
+  /ip hotspot user set $uObj limit-uptime=$remUp;
+};
+# Anchor uptime bookkeeping to the login boundary + reset BOTH counters so
+# the kernel counts THIS session from zero against the remaining limits.
+:set curComm [$setTag comm=$curComm tag="[BASE-UP:" val=[:tostr $usedUpSec]];
+:set curComm [$setTag comm=$curComm tag="[USED-UP:" val=[:tostr $usedUpSec]];
+/ip hotspot user reset-counters $uObj;
 # RECORD MAC for roaming (don't lock user mac-address)
 :local m "";
 :foreach a in=[/ip hotspot active find user=$u] do={

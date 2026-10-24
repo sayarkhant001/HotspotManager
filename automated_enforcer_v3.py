@@ -487,6 +487,12 @@ def run_offline_quota_sweep(router_dict):
             #   - [ACT:]+known validity OR duration-encoded name => time NOT elapsed,
             #   - [ORIG-LIMIT:]/[USED:] show quota NOT exhausted.
             if is_dis:
+                # Data exhaustion is kernel-proven (the RouterOS limit cut the
+                # session). A stale [USED:] tag (quota-saver window) must never
+                # trigger a restore — that would repeatedly re-arm an exhausted
+                # voucher for free.
+                if '[EXHAUSTED:' in comm:
+                    continue
                 try:
                     act_dt = None
                     if '[ACT:' in comm:
@@ -557,7 +563,10 @@ def run_offline_quota_sweep(router_dict):
             if '[BASE:' in comm:
                 try: base_bytes = int(comm.split('[BASE:')[1].split(']')[0])
                 except: pass
-            total_used = max(stored_used, base_bytes + hw_used)
+            # [USED:] is the authoritative accumulator (maintained by the router's
+            # quota-saver / on-logout). Hardware counters persist across sessions,
+            # so base + hw DOUBLE-COUNTS the finished session for idle users.
+            total_used = max(stored_used, base_bytes)
             orig_lim = parse_orig_limit(prof, comm)
 
             is_time_exp = False
