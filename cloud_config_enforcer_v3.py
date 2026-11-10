@@ -262,7 +262,11 @@ HS_QUOTA_SAVE_SOURCE = """# V3 Lightweight Quota Saver - writes only when delta 
         } else={ :set nC ($nC . " [USED:" . [:tostr $totalUsed] . "]") };
         /ip hotspot user set $u disabled=yes limit-bytes-total=1 comment=($nC . " [EXHAUSTED:DATA]");
       } else={
-        # Accumulate session uptime into [USED-UP:]
+        # Accumulate session uptime into [USED-UP:] — FLASH-WEAR OPTIMIZED:
+        # the comment is persisted only when it actually changed enough to
+        # matter — bytes moved >= 5MB, OR accumulated uptime advanced >= 5m
+        # (300s) since the stored tag. An identical 'set' is skipped entirely
+        # (no flash write). Logout still persists the final uptime exactly.
         :local hwUpSec [:totime [/ip hotspot active get $a uptime]];
         :local baseUpSec 0;
         :local bUpIdx [:find $comm "[BASE-UP:"];
@@ -273,29 +277,48 @@ HS_QUOTA_SAVE_SOURCE = """# V3 Lightweight Quota Saver - writes only when delta 
           :set baseUpSec [:tonum $bUpR];
         };
         :local totalUpSec ($baseUpSec + $hwUpSec);
-        :local uuIdx [:find $comm "[USED-UP:"];
-        :if ($uuIdx >= 0) do={
-          :local eI [:find $comm "]" $uuIdx];
-          :local px [:pick $comm 0 $uuIdx];
-          :local sx "";
-          :if ($eI >= 0) do={ :set sx [:pick $comm ($eI+1) [:len $comm]] };
-          :set comm ($px . "[USED-UP:" . [:tostr $totalUpSec] . "]" . $sx);
-        } else={ :set comm ($comm . " [USED-UP:" . [:tostr $totalUpSec] . "]") };
-        # Only write to flash if delta >= 5MB (5242880 bytes)
+        # Stored [USED-UP:] (handles digits and 00:29:03-style values alike)
+        :local oldUpSec 0;
+        :local oIdx [:find $comm "[USED-UP:"];
+        :if ($oIdx >= 0) do={
+          :local oR [:pick $comm ($oIdx + 9) [:len $comm]];
+          :local oE [:find $oR "]"];
+          :if ($oE >= 0) do={ :set oR [:pick $oR 0 $oE] };
+          :do {
+            :set oldUpSec [:tonum $oR];
+            :if ($oldUpSec = 0) do={
+              :local oT [:totime $oR];
+              :if ($oT > [:totime "0s"]) do={ :set oldUpSec [:tonum $oT] };
+            };
+          } on-error={};
+        };
+        :local upDirty ([:tonum $totalUpSec] - $oldUpSec);
+        :if ($upDirty < 0) do={ :set upDirty (0 - $upDirty) };
+        # Byte delta since the stored [USED:]
         :local delta ($totalUsed - $curUsed);
         :if ($delta < 0) do={ :set delta (0 - $delta) };
-        :if ($delta > 5242880) do={
-          :local nC $comm;
-          :local ui [:find $nC "[USED:"];
-          :if ($ui >= 0) do={
-            :local eI [:find $nC "]" $ui];
-            :local px [:pick $nC 0 $ui];
+        # Persist only when it matters: bytes >= 5MB OR uptime advanced >= 5m
+        :if (($delta > 5242880) or ($upDirty >= 300)) do={
+          :local uuIdx [:find $comm "[USED-UP:"];
+          :if ($uuIdx >= 0) do={
+            :local eI [:find $comm "]" $uuIdx];
+            :local px [:pick $comm 0 $uuIdx];
             :local sx "";
-            :if ($eI >= 0) do={ :set sx [:pick $nC ($eI+1) [:len $nC]] };
-            :set nC ($px . "[USED:" . [:tostr $totalUsed] . "]" . $sx);
-          } else={ :set nC ($nC . " [USED:" . [:tostr $totalUsed] . "]") };
-          /ip hotspot user set $u comment=$nC;
-        } else={
+            :if ($eI >= 0) do={ :set sx [:pick $comm ($eI+1) [:len $comm]] };
+            :set comm ($px . "[USED-UP:" . [:tostr $totalUpSec] . "]" . $sx);
+          } else={ :set comm ($comm . " [USED-UP:" . [:tostr $totalUpSec] . "]") };
+          :if ($delta > 5242880) do={
+            :local nC $comm;
+            :local ui [:find $nC "[USED:"];
+            :if ($ui >= 0) do={
+              :local eI [:find $nC "]" $ui];
+              :local px [:pick $nC 0 $ui];
+              :local sx "";
+              :if ($eI >= 0) do={ :set sx [:pick $nC ($eI+1) [:len $nC]] };
+              :set nC ($px . "[USED:" . [:tostr $totalUsed] . "]" . $sx);
+            } else={ :set nC ($nC . " [USED:" . [:tostr $totalUsed] . "]") };
+            :set comm $nC;
+          };
           /ip hotspot user set $u comment=$comm;
         };
       };
