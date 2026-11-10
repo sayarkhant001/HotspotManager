@@ -28,6 +28,7 @@ FILES_TO_HASH = [
     "automated_enforcer_v3.py",
     "cloud_config_enforcer_v3.py",
     "cloud_config_enforcer.py",
+    "deploy_v3_to_router.py",
     "deploy_theme.py",
 ]
 
@@ -124,13 +125,43 @@ for ip, nm in routers:
             if name == 'voucher-activate':
                 extra = f" upProf_fallback={'upProf' in got}"
             print(f"     {name}: {'MATCH' if ok else 'MISMATCH'} len={len(got)}{extra}")
-        scheds = {s.get('name', '') for s in talk(c, '/system/scheduler', 'name,interval')}
-        for n in sorted({'hs-quota-saver', 'hs-continuous-expire-monitor', 'v3-startup-heal'}):
-            print(f"     scheduler {n}: {'OK' if n in scheds else 'MISSING'}")
-        profs = talk(c, '/ip/hotspot/user/profile', 'name,on-login,on-logout')
+        scheds = {s.get('name', ''): s.get('interval', '') for s in talk(c, '/system/scheduler', 'name,interval')}
+
+        def ivs(v):
+            # RouterOS interval -> seconds ('1m'==60s; '3m'==180; '4w2d' etc.)
+            try:
+                units = {'w': 604800, 'd': 86400, 'h': 3600, 'm': 60, 's': 1}
+                total, num = 0, ''
+                for ch in (v or ''):
+                    if ch.isdigit():
+                        num += ch
+                    elif ch in units and num:
+                        total += int(num) * units[ch]
+                        num = ''
+                return total
+            except Exception:
+                return -1
+
+        for n, want in (('hs-quota-saver', 60), ('hs-continuous-expire-monitor', 180), ('v3-startup-heal', None)):
+            have = scheds.get(n, 'MISSING')
+            ok = have != 'MISSING' and (want is None or ivs(have) == want)
+            print(f"     scheduler {n}: {'OK' if ok else 'REGRESSED'} interval={have}"
+                  + (f" (want {want}s)" if want is not None and not ok else ''))
+        profs = talk(c, '/ip/hotspot/user/profile', 'name,on-login,on-logout,rate-limit,session-timeout')
         ol_ok = sum(1 for p in profs if 'voucher-activate' in p.get('on-login', ''))
         ol = sum(1 for p in profs if 'hs-on-logout' in p.get('on-logout', ''))
+        bad_rl = [p.get('name') for p in profs
+                  if (p.get('rate-limit') or '').strip() and p.get('name') != 'default']
         print(f"     profiles={len(profs)} on-login(voucher-activate)={ol_ok} on-logout(hs-on-logout)={ol}")
+        print(f"     rate-limit cleared: {'YES' if not bad_rl else 'NO -> ' + ','.join(bad_rl)}")
+        qs = talk(c, '/queue/simple', 'name,dynamic')
+        dyn = sum(1 for q_ in qs if q_.get('dynamic') == 'true')
+        pcq = [q_ for q_ in qs if q_.get('name') == 'hotspot-pcq']
+        print(f"     queues: dynamic={dyn} (want 0) hotspot-pcq={'present' if pcq else 'MISSING'}")
+        ntp = talk(c, '/system/ntp/client', 'enabled,status,servers')
+        if ntp:
+            n = ntp[0]
+            print(f"     ntp: enabled={n.get('enabled')} status={n.get('status')} servers={n.get('servers')}")
         c.close()
     except Exception as e:
         print(f"     ERR {e}")

@@ -19,6 +19,7 @@ PASS = 'Khant1234@'
 # every plan is time-cut EXACTLY at its real deadline. Approved shop mapping:
 #   1-day plans: 2GB, 4GB (AYeikSitt1/YadanarTun), 500Ks, 1000Ks (KyawGyi)
 #   long-term:   30Day, 40G_30D, 50GB-30000  (30 days)
+#   hourly:      1GB_1H (1 hour)
 #   test:        3 minutes
 # NOTE: profiles expose the time limit as session-timeout; limit-uptime is a
 # per-user property and is REJECTED on profiles (!trap unknown parameter).
@@ -30,24 +31,22 @@ PROFILE_SESSION_TIMEOUT = {
     '30day': '30d',
     '40g_30d': '30d',
     '50gb-30000': '30d',
+    '1gb_1h': '1h',
     'test': '3m',
 }
 
-# Auto-Hybrid Speed Enforcement:
-#   PROFILE mode (default)  - every profile carries its plan rate-limit, so
-#                             RouterOS shapes each user with its own dynamic
-#                             queue (exact plan speeds, cheap at low load).
-#   PCQ mode (peak, auto)   - router-side monitor clears profile rate-limits and
-#                             enables ONE static PCQ queue (pcq-rate=0 => equal
-#                             share of the real WAN) to save CPU under load.
-# PROFILE_RATE_DEFAULT only seeds profiles whose rate-limit is currently EMPTY
-# (cleared by the v1.10.7 all-PCQ fix). The router persists each profile's true
-# speed in a [RATE:x] comment tag from then on (app edits included).
+# ALL-PCQ REGIME (v1.10.7+, permanent):
+#   Profile rate-limits are ALWAYS cleared — per-user bandwidth is shaped by the
+#   ONE static hotspot-pcq simple queue (pcq-rate = this router's common plan
+#   speed), so router CPU no longer scales with the number of logged-in users.
+#   The discovered plan speed is preserved as a [RATE:x] profile comment tag
+#   (record / future manual restore) but is NEVER re-applied to rate-limit.
+#   Values below are the per-user PCQ caps (down/up common plan speed).
 PROFILE_RATE_DEFAULT = {
-    '10.200.0.2': '20M/20M',   # YadanarTun  (plans 10M-20M, common 20M)
-    '10.200.0.4': '20M/20M',   # KyawGyi     (plans 20M-50M, common 20M)
-    '10.200.0.3': '10M/10M',   # AYeikSitt1  (plans 10M)
-    '10.200.0.5': '20M/20M',   # AYeikSitt2  (default)
+    '10.200.0.2': '20M',   # YadanarTun  (plans 10M-20M, common 20M)
+    '10.200.0.4': '20M',   # KyawGyi     (plans 20M-50M, common 20M)
+    '10.200.0.3': '10M',   # AYeikSitt1  (plans 10M)
+    '10.200.0.5': '20M',   # AYeikSitt2  (default)
 }
 WAN_BPS = 1000000000  # real WAN bandwidth (bps): PCQ aggregate ceiling + utilization math
 
@@ -379,14 +378,14 @@ def deploy_to_router(ip, port=8728):
     set_sched('hs-quota-saver', '60s', '/system script run hs-quota-save', 'V3 quota saver')
     set_sched('hs-continuous-expire-monitor', '3m', '/system script run voucher-expire-check', 'V3 expire monitor')
 
-    # 4. Fix profile hooks + per-profile speed limits (PROFILE MODE is the default).
-    #    Every profile carries its plan rate-limit, so RouterOS shapes each user
-    #    with its own dynamic queue (exact plan speeds). The authoritative speed
-    #    is ALSO persisted as a [RATE:x] comment tag so the pcq-mode-switch
-    #    monitor can restore it after every PCQ-mode cycle (and after reboots).
+    # 4. Fix profile hooks + session-timeout. ALL-PCQ REGIME (permanent):
+    #    rate-limits are ALWAYS cleared so per-user dynamic queues never return;
+    #    bandwidth is shaped by the single hotspot-pcq queue (step 5). The
+    #    discovered plan speed (live rate-limit > [RATE:] tag > router default)
+    #    is persisted as a [RATE:x] comment tag for the record only.
     on_login = ':global hsUser $user; :do { /system script run voucher-activate } on-error={}'
     on_logout = ':do { /system script run hs-on-logout } on-error={}'
-    default_rate = PROFILE_RATE_DEFAULT.get(ip, '20M/20M')
+    default_rate = PROFILE_RATE_DEFAULT.get(ip, '20M')
     for p in [parse_re(x) for x in c.talk(['/ip/hotspot/user/profile/print', '=.proplist=.id,name,rate-limit,comment,session-timeout']) if x[0]=='!re']:
         if not p.get('.id'):
             continue
@@ -394,21 +393,19 @@ def deploy_to_router(ip, port=8728):
         lim_up = PROFILE_SESSION_TIMEOUT.get(prof_name.strip().lower(), '')
         rl = (p.get('rate-limit') or '').strip()
         cm = (p.get('comment') or '')
-        # Authoritative speed: live rate-limit > [RATE:] tag > per-router default
-        if not rl:
+        # Record the authoritative plan speed: live rate-limit > [RATE:] tag > default
+        if rl:
+            keep_rate = rl.split('/')[0]
+        else:
             ti = cm.find('[RATE:')
-            if ti >= 0:
-                rl = cm[ti + 6:].split(']')[0].strip()
-            else:
-                rl = default_rate
-        # Persist the authoritative speed as a comment tag (idempotent)
+            keep_rate = cm[ti + 6:].split(']')[0].strip() if ti >= 0 else default_rate
         if '[RATE:' not in cm:
-            cm = (cm + ' ' if cm else '') + f'[RATE:{rl}]'
+            cm = (cm + ' ' if cm else '') + f'[RATE:{keep_rate}]'
             c.talk(['/ip/hotspot/user/profile/set', f'=.id={p[".id"]}', f'=comment={cm}'])
         args = ['/ip/hotspot/user/profile/set', f'=.id={p[".id"]}',
             '=shared-users=1', '=add-mac-cookie=yes', '=mac-cookie-timeout=30d',
             '=keepalive-timeout=2m', '=idle-timeout=3m',
-            f'=rate-limit={rl}',  # PROFILE MODE: per-profile speed is the truth
+            '=rate-limit=',  # ALL-PCQ: cleared, so per-user dynamic queues never return
             f'=on-login={on_login}', f'=on-logout={on_logout}']
         # NEVER override an existing session-timeout: customer-created plans own
         # their validity. The known-plan map only FILLS empty ones.
@@ -422,10 +419,9 @@ def deploy_to_router(ip, port=8728):
         else:
             print(f"  Profile {prof_name}: rate={rl} (validity kept: {cur_st or 'unlimited'})")
 
-    # 5. PCQ peak-mode assets (installed DISABLED).
-    #    pcq-rate=0 => each active IP gets an EQUAL SHARE of the real WAN
-    #    (never exceeding the WAN ceiling). The pcq-mode-switch monitor (1m)
-    #    enables this queue + clears profile rate-limits only under high load.
+    # 5. PCQ assets (ALL-PCQ: the static queue is the ACTIVE shaper).
+    #    pcq-rate = this router's common plan speed => each active IP is capped
+    #    at plan speed while sharing the real WAN; router CPU stays flat.
     pcq_max = f'{WAN_BPS}/{WAN_BPS}'
     try:
         # Discover the hotspot subnet from the hotspot-bridge interface address
@@ -442,28 +438,28 @@ def deploy_to_router(ip, port=8728):
                 break
         if not target:
             target = '10.10.10.0/23'
-        # PCQ queue types - equal share of the real WAN (pcq-rate=0)
+        # PCQ queue types - per-user cap at the common plan speed
         for tname, cls in [('pcq-hotspot-down', 'dst-address'),
                            ('pcq-hotspot-up', 'src-address')]:
             qex = [parse_re(x) for x in c.talk(['/queue/type/print', f'?name={tname}', '=.proplist=.id']) if x[0]=='!re']
-            qargs = ['=kind=pcq', '=pcq-rate=0', f'=pcq-classifier={cls}',
+            qargs = ['=kind=pcq', f'=pcq-rate={default_rate}', f'=pcq-classifier={cls}',
                      '=pcq-limit=50', '=pcq-total-limit=2000', f'=name={tname}']
             if qex and qex[0].get('.id'):
                 c.talk(['/queue/type/set', f'=.id={qex[0][".id"]}'] + qargs[1:])
             else:
                 c.talk(['/queue/type/add'] + qargs)
-        # ONE static simple queue over the whole hotspot subnet (installed DISABLED;
-        # per-user dynamic queues from profile rate-limits are the PROFILE-mode truth)
+        # ONE static simple queue over the whole hotspot subnet (ENABLED - this
+        # is the permanent per-user shaper; profile rate-limits stay cleared)
         sex = [parse_re(x) for x in c.talk(['/queue/simple/print', '?name=hotspot-pcq', '=.proplist=.id']) if x[0]=='!re']
         sargs = ['=name=hotspot-pcq', f'=target={target}', f'=max-limit={pcq_max}',
-                 '=queue=pcq-hotspot-up/pcq-hotspot-down', '=disabled=yes',
-                 '=comment=V3 PCQ equal-share aggregate (auto peak mode)']
+                 '=queue=pcq-hotspot-up/pcq-hotspot-down', '=disabled=no',
+                 '=comment=V3 PCQ all-mode per-user shaper (profile rate-limits cleared)']
         if sex and sex[0].get('.id'):
             c.talk(['/queue/simple/set', f'=.id={sex[0][".id"]}'] + sargs[1:])
         else:
             c.talk(['/queue/simple/add'] + sargs)
-        print(f"  PCQ aggregate hotspot-pcq: target={target} max={pcq_max} (installed DISABLED)")
-        # WAN capacity for the monitor's utilization math (bps)
+        print(f"  PCQ hotspot-pcq ENABLED: target={target} max={pcq_max} pcq-rate={default_rate}")
+        # WAN capacity environment value (kept for compatibility with old monitor)
         env = [parse_re(x) for x in c.talk(['/system/script/environment/print', '?name=pcqWanBps', '=.proplist=.id']) if x[0]=='!re']
         if env and env[0].get('.id'):
             c.talk(['/system/script/environment/set', f'=.id={env[0][".id"]}', f'=value={WAN_BPS}'])
@@ -471,9 +467,23 @@ def deploy_to_router(ip, port=8728):
             c.talk(['/system/script/environment/add', '=name=pcqWanBps', f'=value={WAN_BPS}'])
     except Exception as qe:
         print(f"  WARN: PCQ setup failed: {qe}")
-    # 6. Router-side mode switch: auto PROFILE <-> PCQ (works with no VPS/app)
-    set_script('pcq-mode-switch', PCQ_MODE_SWITCH, 'V3 auto Profile<->PCQ')
-    set_sched('pcq-mode-switch', '1m', '/system script run pcq-mode-switch', 'V3 auto PCQ<->Profile')
+    # 6. Retire the old profile<->PCQ auto-switch monitor (all-PCQ is permanent;
+    #    the monitor would re-seed profile rate-limits and bring CPU back).
+    for sx in [parse_re(x) for x in c.talk(['/system/scheduler/print', '?name=pcq-mode-switch', '=.proplist=.id']) if x[0]=='!re']:
+        if sx.get('.id'):
+            c.talk(['/system/scheduler/remove', f'=.id={sx[".id"]}'])
+            print('  Removed stale pcq-mode-switch scheduler')
+    # 7. Time integrity (migration-spec alignment): redundant NTP servers so the
+    #    wall-clock validity deadlines ([ACT-EPOCH:]) survive router reboots.
+    #    Deliberately fail-OPEN (no BootGuard hotspot-disable): if NTP is
+    #    unreachable the hotspot MUST still come up; enforcer-side conservative
+    #    repair covers implausible clocks instead.
+    try:
+        c.talk(['/system/ntp/client/set', '=enabled=yes',
+                '=servers=pool.ntp.org,time.cloudflare.com'])
+        print('  NTP client: enabled (pool.ntp.org + time.cloudflare.com)')
+    except Exception as ne:
+        print(f'  WARN: NTP set failed: {ne}')
     print(f"  Profiles fixed. DONE: {ip}")
     c.close()
     return True

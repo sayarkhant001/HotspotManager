@@ -459,8 +459,8 @@ class RouterAuditor:
                         else:
                             client.talk(['/system/scheduler/add', f'=name={name}', f'=interval={interval}', f'=on-event={on_event}', '=start-time=startup', f'=comment={comment}'])
 
-                    ensure_scheduler('hs-quota-saver', '30s', '/system script run hs-quota-save', 'V3 quota saver')
-                    ensure_scheduler('hs-continuous-expire-monitor', '1m', '/system script run voucher-expire-check', 'V3 expire monitor')
+                    ensure_scheduler('hs-quota-saver', '60s', '/system script run hs-quota-save', 'V3 quota saver')
+                    ensure_scheduler('hs-continuous-expire-monitor', '3m', '/system script run voucher-expire-check', 'V3 expire monitor')
 
                     # 3. Set profile hooks: on-login → voucher-activate, on-logout → on-logout saver
                     on_login = ':global hsUser $user; :do { /system script run voucher-activate } on-error={}'
